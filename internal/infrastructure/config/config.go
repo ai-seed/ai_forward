@@ -21,7 +21,6 @@ type Config struct {
 	Database     dbConfig           `mapstructure:"database"`
 	Logging      LoggingConfig      `mapstructure:"logging"`
 	RateLimit    RateLimitConfig    `mapstructure:"rate_limiting"`
-	Providers    ProvidersConfig    `mapstructure:"providers"`
 	LoadBalance  LoadBalanceConfig  `mapstructure:"load_balancer"`
 	Monitoring   MonitoringConfig   `mapstructure:"monitoring"`
 	Billing      BillingConfig      `mapstructure:"billing"`
@@ -50,23 +49,6 @@ type RateLimitConfig struct {
 	DefaultRequestsPerMinute int `mapstructure:"default_requests_per_minute"`
 	DefaultRequestsPerHour   int `mapstructure:"default_requests_per_hour"`
 	DefaultRequestsPerDay    int `mapstructure:"default_requests_per_day"`
-}
-
-// ProviderConfig 提供商配置
-type ProviderConfig struct {
-	Name                string        `mapstructure:"name"`
-	BaseURL             string        `mapstructure:"base_url"`
-	Enabled             bool          `mapstructure:"enabled"`
-	Priority            int           `mapstructure:"priority"`
-	Timeout             time.Duration `mapstructure:"timeout"`
-	RetryAttempts       int           `mapstructure:"retry_attempts"`
-	HealthCheckInterval time.Duration `mapstructure:"health_check_interval"`
-}
-
-// ProvidersConfig 提供商配置集合
-type ProvidersConfig struct {
-	OpenAI    ProviderConfig `mapstructure:"openai"`
-	Anthropic ProviderConfig `mapstructure:"anthropic"`
 }
 
 // LoadBalanceConfig 负载均衡配置

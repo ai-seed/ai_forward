@@ -11,7 +11,7 @@ database:
   # 数据库驱动: sqlite 或 postgres
   driver: "postgres"
   # PostgreSQL连接字符串
-  dsn: "host=47.76.73.118 port=5432 user=proxy password=pPhnbrlIKfYA dbname=ai sslmode=disable"
+  dsn: "host=101.33.221.222 port=35432 user=user_4cWfeb password=MKwiCfe4RipTK63t dbname=ai sslmode=disable"
   # 连接池配置
   max_open_conns: 25
   max_idle_conns: 5
@@ -26,29 +26,6 @@ rate_limiting:
   default_requests_per_minute: 60
   default_requests_per_hour: 1000
   default_requests_per_day: 10000
-
-providers:
-  openai:
-    name: "OpenAI"
-    base_url: "https://api.openai.com/v1"
-    # api_key: "your_real_openai_api_key"  # 取消注释并填入真实密钥
-    enabled: true
-    priority: 1
-    timeout: 30s
-    retry_attempts: 3
-    health_check_interval: 60s
-    mock_mode: true  # 启用模拟模式用于测试
-
-  anthropic:
-    name: "Anthropic"
-    base_url: "https://api.anthropic.com/v1"
-    # api_key: "your_real_anthropic_api_key"  # 取消注释并填入真实密钥
-    enabled: true
-    priority: 2
-    timeout: 30s
-    retry_attempts: 3
-    health_check_interval: 60s
-    mock_mode: true  # 启用模拟模式用于测试
 
 load_balancer:
   strategy: "round_robin" # round_robin, weighted, least_connections
@@ -69,9 +46,9 @@ billing:
 
 redis:
   # Redis服务器地址
-  addr: "47.76.73.118:6379"
+  addr: "101.33.221.222:16380"
   # Redis密码（如果有的话）
-  password: "QmpyOuWdwAHE"
+  password: "pJKXt2HajdpjYRcw"
   # Redis数据库编号
   db: 5
   # 连接池大小

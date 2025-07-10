@@ -49,39 +49,13 @@ curl -X POST \
 
 ## ⚙️ 配置提供商API密钥
 
-要让网关实际调用AI提供商，您需要配置真实的API密钥。
+要让网关实际调用AI提供商，您需要通过管理界面或API配置提供商信息和API密钥。
 
-### 方法1: 环境变量
-```bash
-export OPENAI_API_KEY="your_openai_api_key"
-export ANTHROPIC_API_KEY="your_anthropic_api_key"
-```
+提供商信息现在存储在数据库中，可以通过以下方式管理：
 
-### 方法2: 修改配置文件
-编辑 `configs/config.yaml`：
-
-```yaml
-providers:
-  openai:
-    name: "OpenAI"
-    base_url: "https://api.openai.com/v1"
-    api_key: "your_openai_api_key"  # 添加这行
-    enabled: true
-    priority: 1
-    timeout: 30s
-    retry_attempts: 3
-    health_check_interval: 60s
-  
-  anthropic:
-    name: "Anthropic"
-    base_url: "https://api.anthropic.com/v1"
-    api_key: "your_anthropic_api_key"  # 添加这行
-    enabled: true
-    priority: 2
-    timeout: 30s
-    retry_attempts: 3
-    health_check_interval: 60s
-```
+1. **通过管理界面**: 访问管理界面添加和配置提供商
+2. **通过API**: 使用提供商管理API添加、更新提供商信息
+3. **数据库初始化**: 系统启动时会自动创建默认的OpenAI和Anthropic提供商
 
 ## 📊 管理API
 
