@@ -220,30 +220,8 @@ func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entiti
 	}
 
 	// 发送请求
-	fmt.Println("-------------------")
-	fmt.Println("URL:", url)
-	fmt.Println("Request struct:", request)
-
-	// 序列化请求体查看实际JSON
-	if jsonBytes, err := json.Marshal(request); err == nil {
-		fmt.Println("Request JSON:", string(jsonBytes))
-	}
-
-	if provider.APIKeyEncrypted != nil {
-		fmt.Printf("API Key: %s\n", *provider.APIKeyEncrypted)
-	} else {
-		fmt.Println("API Key: nil")
-	}
-
-	for k, v := range headers {
-		fmt.Printf("%s: %s\n", k, v)
-	}
-	fmt.Println("-------------------")
 	resp, err := c.httpClient.Post(ctx, url, request, headers)
 	if err != nil {
-		fmt.Println("------------")
-		fmt.Println(resp)
-		fmt.Println("------------")
 		return nil, fmt.Errorf("failed to send request to provider %s: %w", provider.Name, err)
 	}
 
@@ -384,26 +362,6 @@ func (c *aiProviderClientImpl) SendStreamRequest(ctx context.Context, provider *
 		url = fmt.Sprintf("%s/messages", provider.BaseURL)
 	}
 
-	// 打印流式请求信息
-	fmt.Println("=== SENDING STREAM REQUEST ===")
-	fmt.Println("URL:", url)
-	fmt.Println("Request struct:", request)
-
-	if jsonBytes, err := json.Marshal(request); err == nil {
-		fmt.Println("Request JSON:", string(jsonBytes))
-	}
-
-	if provider.APIKeyEncrypted != nil {
-		fmt.Printf("API Key: %s\n", *provider.APIKeyEncrypted)
-	} else {
-		fmt.Println("API Key: nil")
-	}
-
-	for k, v := range headers {
-		fmt.Printf("%s: %s\n", k, v)
-	}
-	fmt.Println("===============================")
-
 	// 发送流式请求
 	return c.sendStreamRequestToProvider(ctx, url, request, headers, streamChan)
 }
@@ -424,7 +382,6 @@ func (c *aiProviderClientImpl) sendStreamRequestToProvider(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	fmt.Println("Request JSON:", string(requestBody))
 
 	// 创建HTTP请求
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
@@ -480,17 +437,14 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 
 			// 检查是否是结束标记
 			if data == "[DONE]" {
-				fmt.Println("Stream completed with [DONE] marker")
 				return nil
 			}
 
 			// 解析JSON数据
 			var sseData map[string]interface{}
 			if err := json.Unmarshal([]byte(data), &sseData); err != nil {
-				fmt.Printf("Failed to parse SSE data: %s, error: %v\n", data, err)
 				continue
 			}
-			fmt.Printf("Received SSE data: %s\n", sseData)
 
 			// 提取内容
 			content := ""
@@ -516,7 +470,6 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 			// 发送数据块
 			select {
 			case streamChan <- chunk:
-				fmt.Printf("Received and forwarded chunk: %s\n", content)
 			case <-ctx.Done():
 				return ctx.Err()
 			}
