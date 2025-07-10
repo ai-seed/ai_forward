@@ -106,14 +106,7 @@ func (r *Router) SetupRoutes() {
 	quotaHandler := handlers.NewQuotaHandler(r.serviceFactory.QuotaService(), r.logger)
 
 	// 健康检查路由（无需认证）
-	health := r.engine.Group("/health")
-	{
-		health.GET("/", healthHandler.HealthCheck)
-		health.GET("/ready", healthHandler.ReadinessCheck)
-		health.GET("/live", healthHandler.LivenessCheck)
-		health.GET("/stats", healthHandler.GetStats)
-		health.GET("/version", healthHandler.GetVersion)
-	}
+	r.engine.GET("/health", healthHandler.HealthCheck)
 
 	// 认证路由（无需认证）
 	auth := r.engine.Group("/auth")
@@ -131,9 +124,6 @@ func (r *Router) SetupRoutes() {
 			authProtected.POST("/recharge", authHandler.Recharge)
 		}
 	}
-
-	// 监控指标路由（无需认证）
-	r.engine.GET("/metrics", healthHandler.GetMetrics)
 
 	// Swagger文档路由（无需认证）
 	swaggerGroup := r.engine.Group("/swagger")

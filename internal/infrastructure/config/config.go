@@ -60,8 +60,6 @@ type LoadBalanceConfig struct {
 
 // MonitoringConfig 监控配置
 type MonitoringConfig struct {
-	MetricsEnabled  bool   `mapstructure:"metrics_enabled"`
-	MetricsPort     int    `mapstructure:"metrics_port"`
 	HealthCheckPath string `mapstructure:"health_check_path"`
 }
 
@@ -171,8 +169,6 @@ func setDefaults() {
 	viper.SetDefault("load_balancer.failover_enabled", true)
 
 	// 监控默认值
-	viper.SetDefault("monitoring.metrics_enabled", true)
-	viper.SetDefault("monitoring.metrics_port", 9090)
 	viper.SetDefault("monitoring.health_check_path", "/health")
 
 	// 计费默认值
@@ -232,9 +228,4 @@ func validateConfig(config *Config) error {
 // GetAddress 获取服务器地址
 func (c *ServerConfig) GetAddress() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
-}
-
-// GetMetricsAddress 获取监控地址
-func (c *MonitoringConfig) GetMetricsAddress() string {
-	return fmt.Sprintf(":%d", c.MetricsPort)
 }

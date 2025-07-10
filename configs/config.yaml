@@ -33,8 +33,6 @@ load_balancer:
   failover_enabled: true
 
 monitoring:
-  metrics_enabled: true
-  metrics_port: 9090
   health_check_path: "/health"
 
 billing:
