@@ -9,7 +9,12 @@ import (
 
 type dbConfig struct {
 	Driver          string        `mapstructure:"driver"`
-	DSN             string        `mapstructure:"dsn"`
+	Host            string        `mapstructure:"host"`
+	Port            int           `mapstructure:"port"`
+	User            string        `mapstructure:"user"`
+	Password        string        `mapstructure:"password"`
+	DBName          string        `mapstructure:"dbname"`
+	SSLMode         string        `mapstructure:"sslmode"`
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
@@ -148,7 +153,6 @@ func setDefaults() {
 
 	// 数据库默认值
 	viper.SetDefault("database.driver", "sqlite")
-	viper.SetDefault("database.dsn", "./data/gateway.db")
 	viper.SetDefault("database.max_open_conns", 25)
 	viper.SetDefault("database.max_idle_conns", 5)
 	viper.SetDefault("database.conn_max_lifetime", "300s")
@@ -200,10 +204,6 @@ func validateConfig(config *Config) error {
 	// 验证数据库配置
 	if config.Database.Driver == "" {
 		return fmt.Errorf("database driver is required")
-	}
-
-	if config.Database.DSN == "" {
-		return fmt.Errorf("database dsn is required")
 	}
 
 	// 验证日志配置

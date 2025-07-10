@@ -7,19 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
 )
 
 // usageLogRepositoryGorm GORM使用日志仓储实现
 type usageLogRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewUsageLogRepositoryGorm 创建GORM使用日志仓储
-func NewUsageLogRepositoryGorm(db *gorm.DB) repositories.UsageLogRepository {
+func NewUsageLogRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.UsageLogRepository {
 	return &usageLogRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -399,13 +402,15 @@ func (r *usageLogRepositoryGorm) CleanupOldLogs(ctx context.Context, before time
 
 // billingRecordRepositoryGorm GORM计费记录仓储实现
 type billingRecordRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewBillingRecordRepositoryGorm 创建GORM计费记录仓储
-func NewBillingRecordRepositoryGorm(db *gorm.DB) repositories.BillingRecordRepository {
+func NewBillingRecordRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.BillingRecordRepository {
 	return &billingRecordRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 

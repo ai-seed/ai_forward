@@ -7,19 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
 )
 
 // providerModelSupportRepositoryGorm GORM提供商模型支持仓储实现
 type providerModelSupportRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewProviderModelSupportRepositoryGorm 创建GORM提供商模型支持仓储
-func NewProviderModelSupportRepositoryGorm(db *gorm.DB) repositories.ProviderModelSupportRepository {
+func NewProviderModelSupportRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.ProviderModelSupportRepository {
 	return &providerModelSupportRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 

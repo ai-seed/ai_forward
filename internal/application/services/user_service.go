@@ -104,29 +104,10 @@ func (s *userServiceImpl) hashPassword(password string) (string, error) {
 
 // GetUser 获取用户
 func (s *userServiceImpl) GetUser(ctx context.Context, id int64) (*dto.UserResponse, error) {
-	// 尝试从缓存获取用户
-	if s.cache != nil {
-		var cachedUser entities.User
-		cacheKey := fmt.Sprintf("user:%d", id)
-		err := s.cache.Get(ctx, cacheKey, &cachedUser)
-		if err == nil {
-			// 缓存命中
-			return (&dto.UserResponse{}).FromEntity(&cachedUser), nil
-		}
-		// 缓存未命中，继续从数据库查询
-	}
-
-	// 从数据库获取用户
+	// 从数据库获取用户（缓存逻辑已移到repository层）
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-
-	// 将用户信息缓存5分钟
-	if s.cache != nil {
-		cacheKey := fmt.Sprintf("user:%d", id)
-		// 使用5分钟的缓存时间
-		s.cache.Set(ctx, cacheKey, user, 5*60*1000000000) // 5分钟的纳秒数
 	}
 
 	return (&dto.UserResponse{}).FromEntity(user), nil
@@ -134,32 +115,10 @@ func (s *userServiceImpl) GetUser(ctx context.Context, id int64) (*dto.UserRespo
 
 // GetUserByUsername 根据用户名获取用户
 func (s *userServiceImpl) GetUserByUsername(ctx context.Context, username string) (*dto.UserResponse, error) {
-	// 尝试从缓存获取用户
-	if s.cache != nil {
-		var cachedUser entities.User
-		cacheKey := fmt.Sprintf("user:username:%s", username)
-		err := s.cache.Get(ctx, cacheKey, &cachedUser)
-		if err == nil {
-			// 缓存命中
-			return (&dto.UserResponse{}).FromEntity(&cachedUser), nil
-		}
-		// 缓存未命中，继续从数据库查询
-	}
-
-	// 从数据库获取用户
+	// 从数据库获取用户（缓存逻辑已移到repository层）
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return nil, err
-	}
-
-	// 将用户信息缓存5分钟
-	if s.cache != nil {
-		cacheKey := fmt.Sprintf("user:username:%s", username)
-		s.cache.Set(ctx, cacheKey, user, 5*60*1000000000) // 5分钟
-
-		// 同时缓存用户ID索引
-		userIDCacheKey := fmt.Sprintf("user:%d", user.ID)
-		s.cache.Set(ctx, userIDCacheKey, user, 5*60*1000000000) // 5分钟
 	}
 
 	return (&dto.UserResponse{}).FromEntity(user), nil
@@ -208,24 +167,9 @@ func (s *userServiceImpl) UpdateUser(ctx context.Context, id int64, req *dto.Upd
 		user.Status = *req.Status
 	}
 
-	// 使用UpdateProfile方法，只更新用户资料，不影响密码
+	// 使用UpdateProfile方法，只更新用户资料，不影响密码（缓存清除逻辑已移到repository层）
 	if err := s.userRepo.UpdateProfile(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
-	}
-
-	// 清除相关缓存
-	if s.cache != nil {
-		// 清除用户ID缓存
-		userIDCacheKey := fmt.Sprintf("user:%d", user.ID)
-		s.cache.Delete(ctx, userIDCacheKey)
-
-		// 清除用户名缓存
-		usernameCacheKey := fmt.Sprintf("user:username:%s", user.Username)
-		s.cache.Delete(ctx, usernameCacheKey)
-
-		// 如果邮箱有缓存，也清除
-		emailCacheKey := fmt.Sprintf("user:email:%s", user.Email)
-		s.cache.Delete(ctx, emailCacheKey)
 	}
 
 	return (&dto.UserResponse{}).FromEntity(user), nil

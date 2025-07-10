@@ -7,18 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
+
 	"gorm.io/gorm"
 )
 
 // quotaRepositoryGorm GORM配额仓储实现
 type quotaRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewQuotaRepositoryGorm 创建GORM配额仓储
-func NewQuotaRepositoryGorm(db *gorm.DB) repositories.QuotaRepository {
+func NewQuotaRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.QuotaRepository {
 	return &quotaRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -58,13 +62,13 @@ func (r *quotaRepositoryGorm) GetByAPIKeyID(ctx context.Context, apiKeyID int64)
 func (r *quotaRepositoryGorm) GetByAPIKeyAndType(ctx context.Context, apiKeyID int64, quotaType entities.QuotaType, period *entities.QuotaPeriod) (*entities.Quota, error) {
 	var quota entities.Quota
 	query := r.db.WithContext(ctx).Where("api_key_id = ? AND quota_type = ?", apiKeyID, quotaType)
-	
+
 	if period == nil {
 		query = query.Where("period IS NULL")
 	} else {
 		query = query.Where("period = ?", *period)
 	}
-	
+
 	if err := query.First(&quota).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, entities.ErrQuotaNotFound
@@ -77,16 +81,16 @@ func (r *quotaRepositoryGorm) GetByAPIKeyAndType(ctx context.Context, apiKeyID i
 // Update 更新配额
 func (r *quotaRepositoryGorm) Update(ctx context.Context, quota *entities.Quota) error {
 	quota.UpdatedAt = time.Now()
-	
+
 	result := r.db.WithContext(ctx).Save(quota)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update quota: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrQuotaNotFound
 	}
-	
+
 	return nil
 }
 
@@ -96,11 +100,11 @@ func (r *quotaRepositoryGorm) Delete(ctx context.Context, id int64) error {
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete quota: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrQuotaNotFound
 	}
-	
+
 	return nil
 }
 
@@ -140,13 +144,15 @@ func (r *quotaRepositoryGorm) GetActiveQuotas(ctx context.Context, apiKeyID int6
 
 // quotaUsageRepositoryGorm GORM配额使用仓储实现
 type quotaUsageRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewQuotaUsageRepositoryGorm 创建GORM配额使用仓储
-func NewQuotaUsageRepositoryGorm(db *gorm.DB) repositories.QuotaUsageRepository {
+func NewQuotaUsageRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.QuotaUsageRepository {
 	return &quotaUsageRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -174,7 +180,7 @@ func (r *quotaUsageRepositoryGorm) GetByID(ctx context.Context, id int64) (*enti
 func (r *quotaUsageRepositoryGorm) GetByQuotaAndPeriod(ctx context.Context, apiKeyID, quotaID int64, periodStart, periodEnd *time.Time) (*entities.QuotaUsage, error) {
 	var usage entities.QuotaUsage
 	query := r.db.WithContext(ctx).Where("api_key_id = ? AND quota_id = ?", apiKeyID, quotaID)
-	
+
 	if periodStart == nil && periodEnd == nil {
 		// 总限额查询
 		query = query.Where("period_start IS NULL AND period_end IS NULL")
@@ -182,7 +188,7 @@ func (r *quotaUsageRepositoryGorm) GetByQuotaAndPeriod(ctx context.Context, apiK
 		// 周期限额查询
 		query = query.Where("period_start = ? AND period_end = ?", periodStart, periodEnd)
 	}
-	
+
 	if err := query.First(&usage).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, entities.ErrQuotaUsageNotFound
@@ -195,10 +201,10 @@ func (r *quotaUsageRepositoryGorm) GetByQuotaAndPeriod(ctx context.Context, apiK
 // GetCurrentUsage 获取当前周期的使用情况
 func (r *quotaUsageRepositoryGorm) GetCurrentUsage(ctx context.Context, apiKeyID int64, quotaID int64, at time.Time) (*entities.QuotaUsage, error) {
 	var usage entities.QuotaUsage
-	
+
 	// 对于周期配额，查找包含指定时间的周期记录
 	if err := r.db.WithContext(ctx).
-		Where("api_key_id = ? AND quota_id = ? AND ((period_start IS NULL AND period_end IS NULL) OR (period_start <= ? AND period_end > ?))", 
+		Where("api_key_id = ? AND quota_id = ? AND ((period_start IS NULL AND period_end IS NULL) OR (period_start <= ? AND period_end > ?))",
 			apiKeyID, quotaID, at, at).
 		First(&usage).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -212,16 +218,16 @@ func (r *quotaUsageRepositoryGorm) GetCurrentUsage(ctx context.Context, apiKeyID
 // Update 更新配额使用记录
 func (r *quotaUsageRepositoryGorm) Update(ctx context.Context, usage *entities.QuotaUsage) error {
 	usage.UpdatedAt = time.Now()
-	
+
 	result := r.db.WithContext(ctx).Save(usage)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update quota usage: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrQuotaUsageNotFound
 	}
-	
+
 	return nil
 }
 
@@ -231,13 +237,13 @@ func (r *quotaUsageRepositoryGorm) IncrementUsage(ctx context.Context, apiKeyID,
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var usage entities.QuotaUsage
 		query := tx.Where("api_key_id = ? AND quota_id = ?", apiKeyID, quotaID)
-		
+
 		if periodStart == nil && periodEnd == nil {
 			query = query.Where("period_start IS NULL AND period_end IS NULL")
 		} else {
 			query = query.Where("period_start = ? AND period_end = ?", periodStart, periodEnd)
 		}
-		
+
 		err := query.First(&usage).Error
 		if err == gorm.ErrRecordNotFound {
 			// 创建新记录
@@ -254,7 +260,7 @@ func (r *quotaUsageRepositoryGorm) IncrementUsage(ctx context.Context, apiKeyID,
 		} else if err != nil {
 			return fmt.Errorf("failed to get quota usage: %w", err)
 		}
-		
+
 		// 更新现有记录
 		usage.UsedValue += value
 		usage.UpdatedAt = time.Now()
@@ -268,11 +274,11 @@ func (r *quotaUsageRepositoryGorm) Delete(ctx context.Context, id int64) error {
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete quota usage: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrQuotaUsageNotFound
 	}
-	
+
 	return nil
 }
 
@@ -331,10 +337,10 @@ func (r *quotaUsageRepositoryGorm) CleanupExpiredUsage(ctx context.Context, befo
 	result := r.db.WithContext(ctx).
 		Where("period_end IS NOT NULL AND period_end < ?", before).
 		Delete(&entities.QuotaUsage{})
-	
+
 	if result.Error != nil {
 		return fmt.Errorf("failed to cleanup expired quota usage: %w", result.Error)
 	}
-	
+
 	return nil
 }

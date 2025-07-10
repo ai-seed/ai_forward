@@ -240,34 +240,13 @@ func (s *apiKeyServiceImpl) ValidateAPIKey(ctx context.Context, keyString string
 		return nil, nil, entities.ErrAPIKeyInvalid
 	}
 
-	// 尝试从缓存获取API密钥
-	var apiKey *entities.APIKey
-	if s.cache != nil {
-		var cachedAPIKey entities.APIKey
-		cacheKey := fmt.Sprintf("api_key:%s", keyString)
-		err := s.cache.Get(ctx, cacheKey, &cachedAPIKey)
-		if err == nil {
-			// 缓存命中
-			apiKey = &cachedAPIKey
+	// 从数据库获取API密钥（缓存逻辑已移到repository层）
+	apiKey, err := s.apiKeyRepo.GetByKey(ctx, keyString)
+	if err != nil {
+		if err == entities.ErrAPIKeyNotFound {
+			return nil, nil, entities.ErrAPIKeyInvalid
 		}
-	}
-
-	// 如果缓存未命中，从数据库查询
-	if apiKey == nil {
-		var err error
-		apiKey, err = s.apiKeyRepo.GetByKey(ctx, keyString)
-		if err != nil {
-			if err == entities.ErrAPIKeyNotFound {
-				return nil, nil, entities.ErrAPIKeyInvalid
-			}
-			return nil, nil, err
-		}
-
-		// 将API密钥缓存10分钟
-		if s.cache != nil {
-			cacheKey := fmt.Sprintf("api_key:%s", keyString)
-			s.cache.Set(ctx, cacheKey, apiKey, 10*60*1000000000) // 10分钟
-		}
+		return nil, nil, err
 	}
 
 	// 检查API密钥状态

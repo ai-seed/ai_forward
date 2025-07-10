@@ -7,19 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
 )
 
 // userRepositoryGorm GORM用户仓储实现
 type userRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewUserRepositoryGorm 创建GORM用户仓储
-func NewUserRepositoryGorm(db *gorm.DB) repositories.UserRepository {
+func NewUserRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.UserRepository {
 	return &userRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -33,6 +36,14 @@ func (r *userRepositoryGorm) Create(ctx context.Context, user *entities.User) er
 
 // GetByID 根据ID获取用户
 func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.User, error) {
+	// 尝试从缓存获取用户
+	if r.cache != nil {
+		if cachedUser, err := r.cache.GetUser(ctx, id); err == nil {
+			return cachedUser, nil
+		}
+	}
+
+	// 从数据库获取用户
 	var user entities.User
 	if err := r.db.WithContext(ctx).First(&user, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -40,11 +51,25 @@ func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.U
 		}
 		return nil, fmt.Errorf("failed to get user by id: %w", err)
 	}
+
+	// 缓存用户信息
+	if r.cache != nil {
+		r.cache.SetUser(ctx, &user)
+	}
+
 	return &user, nil
 }
 
 // GetByUsername 根据用户名获取用户
 func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string) (*entities.User, error) {
+	// 尝试从缓存获取用户
+	if r.cache != nil {
+		if cachedUser, err := r.cache.GetUserByUsername(ctx, username); err == nil {
+			return cachedUser, nil
+		}
+	}
+
+	// 从数据库获取用户
 	var user entities.User
 	if err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -52,11 +77,27 @@ func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string)
 		}
 		return nil, fmt.Errorf("failed to get user by username: %w", err)
 	}
+
+	// 缓存用户信息
+	if r.cache != nil {
+		r.cache.SetUserByUsername(ctx, username, &user)
+		// 同时缓存用户ID索引
+		r.cache.SetUser(ctx, &user)
+	}
+
 	return &user, nil
 }
 
 // GetByEmail 根据邮箱获取用户
 func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*entities.User, error) {
+	// 尝试从缓存获取用户
+	if r.cache != nil {
+		if cachedUser, err := r.cache.GetUserByEmail(ctx, email); err == nil {
+			return cachedUser, nil
+		}
+	}
+
+	// 从数据库获取用户
 	var user entities.User
 	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -64,6 +105,14 @@ func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*ent
 		}
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
+
+	// 缓存用户信息
+	if r.cache != nil {
+		r.cache.SetUserByEmail(ctx, email, &user)
+		// 同时缓存用户ID索引
+		r.cache.SetUser(ctx, &user)
+	}
+
 	return &user, nil
 }
 
@@ -78,6 +127,14 @@ func (r *userRepositoryGorm) Update(ctx context.Context, user *entities.User) er
 
 	if result.RowsAffected == 0 {
 		return entities.ErrUserNotFound
+	}
+
+	// 清除相关缓存
+	if r.cache != nil {
+		r.cache.DeleteUser(ctx, user.ID)
+		// 清除用户名和邮箱缓存
+		r.cache.Delete(ctx, fmt.Sprintf("user:username:%s", user.Username))
+		r.cache.Delete(ctx, fmt.Sprintf("user:email:%s", user.Email))
 	}
 
 	return nil
@@ -252,6 +309,14 @@ func (r *userRepositoryGorm) UpdateProfile(ctx context.Context, user *entities.U
 
 	if result.RowsAffected == 0 {
 		return entities.ErrUserNotFound
+	}
+
+	// 清除相关缓存
+	if r.cache != nil {
+		r.cache.DeleteUser(ctx, user.ID)
+		// 清除用户名和邮箱缓存
+		r.cache.Delete(ctx, fmt.Sprintf("user:username:%s", user.Username))
+		r.cache.Delete(ctx, fmt.Sprintf("user:email:%s", user.Email))
 	}
 
 	return nil

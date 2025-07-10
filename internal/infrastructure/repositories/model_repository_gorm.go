@@ -7,18 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
+
 	"gorm.io/gorm"
 )
 
 // modelRepositoryGorm GORM模型仓储实现
 type modelRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewModelRepositoryGorm 创建GORM模型仓储
-func NewModelRepositoryGorm(db *gorm.DB) repositories.ModelRepository {
+func NewModelRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.ModelRepository {
 	return &modelRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -57,16 +61,16 @@ func (r *modelRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*enti
 // Update 更新模型
 func (r *modelRepositoryGorm) Update(ctx context.Context, model *entities.Model) error {
 	model.UpdatedAt = time.Now()
-	
+
 	result := r.db.WithContext(ctx).Save(model)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update model: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrModelNotFound
 	}
-	
+
 	return nil
 }
 
@@ -76,11 +80,11 @@ func (r *modelRepositoryGorm) Delete(ctx context.Context, id int64) error {
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete model: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrModelNotFound
 	}
-	
+
 	return nil
 }
 
@@ -144,13 +148,15 @@ func (r *modelRepositoryGorm) GetAvailableModels(ctx context.Context) ([]*entiti
 
 // modelPricingRepositoryGorm GORM模型定价仓储实现
 type modelPricingRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewModelPricingRepositoryGorm 创建GORM模型定价仓储
-func NewModelPricingRepositoryGorm(db *gorm.DB) repositories.ModelPricingRepository {
+func NewModelPricingRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.ModelPricingRepository {
 	return &modelPricingRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -190,9 +196,9 @@ func (r *modelPricingRepositoryGorm) GetByModelID(ctx context.Context, modelID i
 func (r *modelPricingRepositoryGorm) GetCurrentPricing(ctx context.Context, modelID int64) ([]*entities.ModelPricing, error) {
 	var pricings []*entities.ModelPricing
 	now := time.Now()
-	
+
 	if err := r.db.WithContext(ctx).
-		Where("model_id = ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)", 
+		Where("model_id = ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)",
 			modelID, now, now).
 		Order("pricing_type ASC").
 		Find(&pricings).Error; err != nil {
@@ -207,11 +213,11 @@ func (r *modelPricingRepositoryGorm) Update(ctx context.Context, pricing *entiti
 	if result.Error != nil {
 		return fmt.Errorf("failed to update model pricing: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrModelPricingNotFound
 	}
-	
+
 	return nil
 }
 
@@ -221,11 +227,11 @@ func (r *modelPricingRepositoryGorm) Delete(ctx context.Context, id int64) error
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete model pricing: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrModelPricingNotFound
 	}
-	
+
 	return nil
 }
 
@@ -255,9 +261,9 @@ func (r *modelPricingRepositoryGorm) Count(ctx context.Context) (int64, error) {
 func (r *modelPricingRepositoryGorm) GetPricingByType(ctx context.Context, modelID int64, pricingType entities.PricingType) (*entities.ModelPricing, error) {
 	var pricing entities.ModelPricing
 	now := time.Now()
-	
+
 	if err := r.db.WithContext(ctx).
-		Where("model_id = ? AND pricing_type = ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)", 
+		Where("model_id = ? AND pricing_type = ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)",
 			modelID, pricingType, now, now).
 		Order("effective_from DESC").
 		First(&pricing).Error; err != nil {

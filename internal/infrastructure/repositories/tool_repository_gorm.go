@@ -6,19 +6,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
 )
 
 // toolRepositoryGorm GORM工具仓储实现
 type toolRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewToolRepositoryGorm 创建GORM工具仓储
-func NewToolRepositoryGorm(db *gorm.DB) repositories.ToolRepository {
+func NewToolRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.ToolRepository {
 	return &toolRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 

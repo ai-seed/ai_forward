@@ -7,19 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
 )
 
 // apiKeyRepositoryGorm GORM API密钥仓储实现
 type apiKeyRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewAPIKeyRepositoryGorm 创建GORM API密钥仓储
-func NewAPIKeyRepositoryGorm(db *gorm.DB) repositories.APIKeyRepository {
+func NewAPIKeyRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.APIKeyRepository {
 	return &apiKeyRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -45,6 +48,14 @@ func (r *apiKeyRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities
 
 // GetByKey 根据密钥获取API密钥
 func (r *apiKeyRepositoryGorm) GetByKey(ctx context.Context, key string) (*entities.APIKey, error) {
+	// 尝试从缓存获取API密钥
+	if r.cache != nil {
+		if cachedAPIKey, err := r.cache.GetAPIKey(ctx, key); err == nil {
+			return cachedAPIKey, nil
+		}
+	}
+
+	// 从数据库获取API密钥
 	var apiKey entities.APIKey
 	if err := r.db.WithContext(ctx).Where("key = ?", key).First(&apiKey).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -52,6 +63,12 @@ func (r *apiKeyRepositoryGorm) GetByKey(ctx context.Context, key string) (*entit
 		}
 		return nil, fmt.Errorf("failed to get api key by key: %w", err)
 	}
+
+	// 缓存API密钥信息
+	if r.cache != nil {
+		r.cache.SetAPIKey(ctx, &apiKey)
+	}
+
 	return &apiKey, nil
 }
 
@@ -75,6 +92,11 @@ func (r *apiKeyRepositoryGorm) Update(ctx context.Context, apiKey *entities.APIK
 
 	if result.RowsAffected == 0 {
 		return entities.ErrAPIKeyNotFound
+	}
+
+	// 清除API密钥缓存
+	if r.cache != nil {
+		r.cache.DeleteAPIKey(ctx, apiKey.Key)
 	}
 
 	return nil
@@ -103,6 +125,15 @@ func (r *apiKeyRepositoryGorm) UpdateLastUsed(ctx context.Context, id int64) err
 
 // UpdateStatus 更新状态
 func (r *apiKeyRepositoryGorm) UpdateStatus(ctx context.Context, id int64, status entities.APIKeyStatus) error {
+	// 先获取API密钥信息以便清除缓存
+	var apiKey entities.APIKey
+	if err := r.db.WithContext(ctx).Select("key").First(&apiKey, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return entities.ErrAPIKeyNotFound
+		}
+		return fmt.Errorf("failed to get api key for cache invalidation: %w", err)
+	}
+
 	result := r.db.WithContext(ctx).Model(&entities.APIKey{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
@@ -116,6 +147,11 @@ func (r *apiKeyRepositoryGorm) UpdateStatus(ctx context.Context, id int64, statu
 
 	if result.RowsAffected == 0 {
 		return entities.ErrAPIKeyNotFound
+	}
+
+	// 清除API密钥缓存
+	if r.cache != nil {
+		r.cache.DeleteAPIKey(ctx, apiKey.Key)
 	}
 
 	return nil

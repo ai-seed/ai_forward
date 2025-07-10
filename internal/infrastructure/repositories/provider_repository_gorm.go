@@ -7,18 +7,22 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/redis"
+
 	"gorm.io/gorm"
 )
 
 // providerRepositoryGorm GORM提供商仓储实现
 type providerRepositoryGorm struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *redis.CacheService
 }
 
 // NewProviderRepositoryGorm 创建GORM提供商仓储
-func NewProviderRepositoryGorm(db *gorm.DB) repositories.ProviderRepository {
+func NewProviderRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.ProviderRepository {
 	return &providerRepositoryGorm{
-		db: db,
+		db:    db,
+		cache: cache,
 	}
 }
 
@@ -57,16 +61,16 @@ func (r *providerRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*e
 // Update 更新服务提供商
 func (r *providerRepositoryGorm) Update(ctx context.Context, provider *entities.Provider) error {
 	provider.UpdatedAt = time.Now()
-	
+
 	result := r.db.WithContext(ctx).Save(provider)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update provider: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderNotFound
 	}
-	
+
 	return nil
 }
 
@@ -76,19 +80,19 @@ func (r *providerRepositoryGorm) UpdateHealthStatus(ctx context.Context, id int6
 	result := r.db.WithContext(ctx).Model(&entities.Provider{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"health_status":      status,
+			"health_status":     status,
 			"last_health_check": &now,
 			"updated_at":        now,
 		})
-	
+
 	if result.Error != nil {
 		return fmt.Errorf("failed to update provider health status: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderNotFound
 	}
-	
+
 	return nil
 }
 
@@ -98,11 +102,11 @@ func (r *providerRepositoryGorm) Delete(ctx context.Context, id int64) error {
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete provider: %w", result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderNotFound
 	}
-	
+
 	return nil
 }
 
@@ -144,8 +148,8 @@ func (r *providerRepositoryGorm) GetActiveProviders(ctx context.Context) ([]*ent
 func (r *providerRepositoryGorm) GetAvailableProviders(ctx context.Context) ([]*entities.Provider, error) {
 	var providers []*entities.Provider
 	if err := r.db.WithContext(ctx).
-		Where("status = ? AND health_status = ?", 
-			entities.ProviderStatusActive, 
+		Where("status = ? AND health_status = ?",
+			entities.ProviderStatusActive,
 			entities.HealthStatusHealthy).
 		Order("priority ASC").
 		Find(&providers).Error; err != nil {
@@ -170,16 +174,16 @@ func (r *providerRepositoryGorm) GetProvidersByPriority(ctx context.Context) ([]
 func (r *providerRepositoryGorm) GetProvidersNeedingHealthCheck(ctx context.Context) ([]*entities.Provider, error) {
 	var providers []*entities.Provider
 	now := time.Now()
-	
+
 	// 查询需要健康检查的提供商：
 	// 1. 从未进行过健康检查的（last_health_check IS NULL）
 	// 2. 距离上次检查时间超过检查间隔的
 	if err := r.db.WithContext(ctx).
-		Where("status = ? AND (last_health_check IS NULL OR last_health_check + INTERVAL health_check_interval SECOND < ?)", 
+		Where("status = ? AND (last_health_check IS NULL OR last_health_check + INTERVAL health_check_interval SECOND < ?)",
 			entities.ProviderStatusActive, now).
 		Find(&providers).Error; err != nil {
 		return nil, fmt.Errorf("failed to get providers needing health check: %w", err)
 	}
-	
+
 	return providers, nil
 }

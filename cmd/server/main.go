@@ -45,12 +45,12 @@ func main() {
 
 	// 初始化GORM数据库连接
 	gormConfig := database.GormConfig{
-		Host:     "47.76.73.118",
-		Port:     5432,
-		User:     "proxy",
-		Password: "pPhnbrlIKfYA",
-		DBName:   "ai",
-		SSLMode:  "disable",
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		DBName:   cfg.Database.DBName,
+		SSLMode:  cfg.Database.SSLMode,
 		TimeZone: "UTC",
 	}
 
@@ -67,11 +67,9 @@ func main() {
 
 	log.Info("PostgreSQL connection established with GORM")
 
-	// 创建仓储工厂（全部使用GORM）
-	repoFactory := repositories.NewRepositoryFactory(gormDB)
-
 	// 创建Redis工厂（可选）
 	var redisFactory *redis.RedisFactory
+	var cacheService *redis.CacheService
 	if viper.GetBool("cache.enabled") || viper.GetBool("distributed_lock.enabled") {
 		var err error
 		redisFactory, err = redis.NewRedisFactory(log)
@@ -80,7 +78,18 @@ func main() {
 				"error": err.Error(),
 			}).Warn("Failed to initialize Redis, continuing without cache and distributed locks")
 			redisFactory = nil
+		} else {
+			// 获取缓存服务
+			cacheService = redisFactory.GetCacheService()
 		}
+	}
+
+	// 创建仓储工厂（全部使用GORM，如果有缓存则使用带缓存的版本）
+	var repoFactory *repositories.RepositoryFactory
+	if cacheService != nil {
+		repoFactory = repositories.NewRepositoryFactoryWithCache(gormDB, cacheService)
+	} else {
+		repoFactory = repositories.NewRepositoryFactory(gormDB)
 	}
 
 	// 创建服务工厂
