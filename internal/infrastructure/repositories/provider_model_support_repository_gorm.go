@@ -36,6 +36,16 @@ func (r *providerModelSupportRepositoryGorm) Create(ctx context.Context, support
 
 // GetByID 根据ID获取提供商模型支持
 func (r *providerModelSupportRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.ProviderModelSupport, error) {
+	// 尝试从缓存获取提供商模型支持
+	if r.cache != nil {
+		cacheKey := GetProviderModelSupportCacheKey(id)
+		var cachedSupport entities.ProviderModelSupport
+		if err := r.cache.Get(ctx, cacheKey, &cachedSupport); err == nil {
+			return &cachedSupport, nil
+		}
+	}
+
+	// 从数据库获取提供商模型支持
 	var support entities.ProviderModelSupport
 	if err := r.db.WithContext(ctx).First(&support, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -43,11 +53,33 @@ func (r *providerModelSupportRepositoryGorm) GetByID(ctx context.Context, id int
 		}
 		return nil, fmt.Errorf("failed to get provider model support by id: %w", err)
 	}
+
+	// 缓存提供商模型支持信息（配置数据基本不变，缓存30分钟）
+	if r.cache != nil {
+		cacheKey := GetProviderModelSupportCacheKey(id)
+		ttl := 30 * time.Minute
+		r.cache.Set(ctx, cacheKey, &support, ttl)
+
+		// 同时缓存提供商-模型索引
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(support.ProviderID, support.ModelSlug)
+		r.cache.Set(ctx, providerModelCacheKey, &support, ttl)
+	}
+
 	return &support, nil
 }
 
 // GetByProviderAndModel 根据提供商和模型获取支持信息
 func (r *providerModelSupportRepositoryGorm) GetByProviderAndModel(ctx context.Context, providerID int64, modelSlug string) (*entities.ProviderModelSupport, error) {
+	// 尝试从缓存获取提供商模型支持
+	if r.cache != nil {
+		cacheKey := GetProviderModelSupportByProviderModelCacheKey(providerID, modelSlug)
+		var cachedSupport entities.ProviderModelSupport
+		if err := r.cache.Get(ctx, cacheKey, &cachedSupport); err == nil {
+			return &cachedSupport, nil
+		}
+	}
+
+	// 从数据库获取提供商模型支持
 	var support entities.ProviderModelSupport
 	if err := r.db.WithContext(ctx).
 		Where("provider_id = ? AND model_slug = ?", providerID, modelSlug).
@@ -57,11 +89,34 @@ func (r *providerModelSupportRepositoryGorm) GetByProviderAndModel(ctx context.C
 		}
 		return nil, fmt.Errorf("failed to get provider model support: %w", err)
 	}
+
+	// 缓存提供商模型支持信息
+	if r.cache != nil {
+		ttl := 30 * time.Minute
+
+		// 缓存提供商-模型索引
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(providerID, modelSlug)
+		r.cache.Set(ctx, providerModelCacheKey, &support, ttl)
+
+		// 同时缓存ID索引
+		idCacheKey := GetProviderModelSupportCacheKey(support.ID)
+		r.cache.Set(ctx, idCacheKey, &support, ttl)
+	}
+
 	return &support, nil
 }
 
 // GetSupportingProviders 获取支持指定模型的提供商列表
 func (r *providerModelSupportRepositoryGorm) GetSupportingProviders(ctx context.Context, modelSlug string) ([]*entities.ModelSupportInfo, error) {
+	// 尝试从缓存获取支持提供商列表
+	if r.cache != nil {
+		cacheKey := GetSupportingProvidersCacheKey(modelSlug)
+		var cachedResults []*entities.ModelSupportInfo
+		if err := r.cache.Get(ctx, cacheKey, &cachedResults); err == nil {
+			return cachedResults, nil
+		}
+	}
+
 	var results []*entities.ModelSupportInfo
 
 	// 使用原生SQL查询来获取关联数据
@@ -128,11 +183,29 @@ func (r *providerModelSupportRepositoryGorm) GetSupportingProviders(ctx context.
 	}
 
 	fmt.Printf("DEBUG: Total rows processed: %d, results count: %d\n", rowCount, len(results))
+
+	// 缓存支持提供商列表（配置数据变化不频繁，缓存20分钟）
+	if r.cache != nil {
+		cacheKey := GetSupportingProvidersCacheKey(modelSlug)
+		ttl := 20 * time.Minute
+		r.cache.Set(ctx, cacheKey, results, ttl)
+	}
+
 	return results, nil
 }
 
 // GetProviderSupportedModels 获取提供商支持的模型列表
 func (r *providerModelSupportRepositoryGorm) GetProviderSupportedModels(ctx context.Context, providerID int64) ([]*entities.ProviderModelSupport, error) {
+	// 尝试从缓存获取提供商支持的模型列表
+	if r.cache != nil {
+		cacheKey := GetProviderSupportedModelsCacheKey(providerID)
+		var cachedSupports []*entities.ProviderModelSupport
+		if err := r.cache.Get(ctx, cacheKey, &cachedSupports); err == nil {
+			return cachedSupports, nil
+		}
+	}
+
+	// 从数据库获取提供商支持的模型列表
 	var supports []*entities.ProviderModelSupport
 	if err := r.db.WithContext(ctx).
 		Where("provider_id = ?", providerID).
@@ -140,6 +213,14 @@ func (r *providerModelSupportRepositoryGorm) GetProviderSupportedModels(ctx cont
 		Find(&supports).Error; err != nil {
 		return nil, fmt.Errorf("failed to get provider supported models: %w", err)
 	}
+
+	// 缓存提供商支持的模型列表
+	if r.cache != nil {
+		cacheKey := GetProviderSupportedModelsCacheKey(providerID)
+		ttl := 20 * time.Minute // 配置数据变化不频繁，缓存20分钟
+		r.cache.Set(ctx, cacheKey, supports, ttl)
+	}
+
 	return supports, nil
 }
 
@@ -156,11 +237,39 @@ func (r *providerModelSupportRepositoryGorm) Update(ctx context.Context, support
 		return entities.ErrProviderModelSupportNotFound
 	}
 
+	// 清除提供商模型支持相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetProviderModelSupportCacheKey(support.ID)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除提供商-模型索引缓存
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(support.ProviderID, support.ModelSlug)
+		r.cache.Delete(ctx, providerModelCacheKey)
+
+		// 清除支持提供商列表缓存
+		supportingProvidersCacheKey := GetSupportingProvidersCacheKey(support.ModelSlug)
+		r.cache.Delete(ctx, supportingProvidersCacheKey)
+
+		// 清除提供商支持的模型列表缓存
+		providerSupportedModelsCacheKey := GetProviderSupportedModelsCacheKey(support.ProviderID)
+		r.cache.Delete(ctx, providerSupportedModelsCacheKey)
+	}
+
 	return nil
 }
 
 // Delete 删除提供商模型支持
 func (r *providerModelSupportRepositoryGorm) Delete(ctx context.Context, id int64) error {
+	// 先获取支持信息以便清除缓存
+	var support entities.ProviderModelSupport
+	if err := r.db.WithContext(ctx).Select("provider_id, model_slug").First(&support, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return entities.ErrProviderModelSupportNotFound
+		}
+		return fmt.Errorf("failed to get provider model support for cache invalidation: %w", err)
+	}
+
 	result := r.db.WithContext(ctx).Delete(&entities.ProviderModelSupport{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete provider model support: %w", result.Error)
@@ -168,6 +277,25 @@ func (r *providerModelSupportRepositoryGorm) Delete(ctx context.Context, id int6
 
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderModelSupportNotFound
+	}
+
+	// 清除提供商模型支持相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetProviderModelSupportCacheKey(id)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除提供商-模型索引缓存
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(support.ProviderID, support.ModelSlug)
+		r.cache.Delete(ctx, providerModelCacheKey)
+
+		// 清除支持提供商列表缓存
+		supportingProvidersCacheKey := GetSupportingProvidersCacheKey(support.ModelSlug)
+		r.cache.Delete(ctx, supportingProvidersCacheKey)
+
+		// 清除提供商支持的模型列表缓存
+		providerSupportedModelsCacheKey := GetProviderSupportedModelsCacheKey(support.ProviderID)
+		r.cache.Delete(ctx, providerSupportedModelsCacheKey)
 	}
 
 	return nil
@@ -190,6 +318,21 @@ func (r *providerModelSupportRepositoryGorm) EnableSupport(ctx context.Context, 
 		return entities.ErrProviderModelSupportNotFound
 	}
 
+	// 清除提供商模型支持相关缓存
+	if r.cache != nil {
+		// 清除提供商-模型索引缓存
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(providerID, modelSlug)
+		r.cache.Delete(ctx, providerModelCacheKey)
+
+		// 清除支持提供商列表缓存
+		supportingProvidersCacheKey := GetSupportingProvidersCacheKey(modelSlug)
+		r.cache.Delete(ctx, supportingProvidersCacheKey)
+
+		// 清除提供商支持的模型列表缓存
+		providerSupportedModelsCacheKey := GetProviderSupportedModelsCacheKey(providerID)
+		r.cache.Delete(ctx, providerSupportedModelsCacheKey)
+	}
+
 	return nil
 }
 
@@ -208,6 +351,21 @@ func (r *providerModelSupportRepositoryGorm) DisableSupport(ctx context.Context,
 
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderModelSupportNotFound
+	}
+
+	// 清除提供商模型支持相关缓存
+	if r.cache != nil {
+		// 清除提供商-模型索引缓存
+		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(providerID, modelSlug)
+		r.cache.Delete(ctx, providerModelCacheKey)
+
+		// 清除支持提供商列表缓存
+		supportingProvidersCacheKey := GetSupportingProvidersCacheKey(modelSlug)
+		r.cache.Delete(ctx, supportingProvidersCacheKey)
+
+		// 清除提供商支持的模型列表缓存
+		providerSupportedModelsCacheKey := GetProviderSupportedModelsCacheKey(providerID)
+		r.cache.Delete(ctx, providerSupportedModelsCacheKey)
 	}
 
 	return nil

@@ -36,6 +36,16 @@ func (r *providerRepositoryGorm) Create(ctx context.Context, provider *entities.
 
 // GetByID 根据ID获取服务提供商
 func (r *providerRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.Provider, error) {
+	// 尝试从缓存获取提供商
+	if r.cache != nil {
+		cacheKey := GetProviderCacheKey(id)
+		var cachedProvider entities.Provider
+		if err := r.cache.Get(ctx, cacheKey, &cachedProvider); err == nil {
+			return &cachedProvider, nil
+		}
+	}
+
+	// 从数据库获取提供商
 	var provider entities.Provider
 	if err := r.db.WithContext(ctx).First(&provider, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -43,11 +53,33 @@ func (r *providerRepositoryGorm) GetByID(ctx context.Context, id int64) (*entiti
 		}
 		return nil, fmt.Errorf("failed to get provider by id: %w", err)
 	}
+
+	// 缓存提供商信息（提供商配置基本不变，缓存30分钟）
+	if r.cache != nil {
+		cacheKey := GetProviderCacheKey(id)
+		ttl := 30 * time.Minute
+		r.cache.Set(ctx, cacheKey, &provider, ttl)
+
+		// 同时缓存slug索引
+		slugCacheKey := GetProviderBySlugCacheKey(provider.Slug)
+		r.cache.Set(ctx, slugCacheKey, &provider, ttl)
+	}
+
 	return &provider, nil
 }
 
 // GetBySlug 根据slug获取服务提供商
 func (r *providerRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*entities.Provider, error) {
+	// 尝试从缓存获取提供商
+	if r.cache != nil {
+		cacheKey := GetProviderBySlugCacheKey(slug)
+		var cachedProvider entities.Provider
+		if err := r.cache.Get(ctx, cacheKey, &cachedProvider); err == nil {
+			return &cachedProvider, nil
+		}
+	}
+
+	// 从数据库获取提供商
 	var provider entities.Provider
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&provider).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -55,6 +87,20 @@ func (r *providerRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*e
 		}
 		return nil, fmt.Errorf("failed to get provider by slug: %w", err)
 	}
+
+	// 缓存提供商信息
+	if r.cache != nil {
+		ttl := 30 * time.Minute
+
+		// 缓存slug索引
+		slugCacheKey := GetProviderBySlugCacheKey(slug)
+		r.cache.Set(ctx, slugCacheKey, &provider, ttl)
+
+		// 同时缓存ID索引
+		idCacheKey := GetProviderCacheKey(provider.ID)
+		r.cache.Set(ctx, idCacheKey, &provider, ttl)
+	}
+
 	return &provider, nil
 }
 
@@ -69,6 +115,22 @@ func (r *providerRepositoryGorm) Update(ctx context.Context, provider *entities.
 
 	if result.RowsAffected == 0 {
 		return entities.ErrProviderNotFound
+	}
+
+	// 清除提供商相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetProviderCacheKey(provider.ID)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除slug索引缓存
+		slugCacheKey := GetProviderBySlugCacheKey(provider.Slug)
+		r.cache.Delete(ctx, slugCacheKey)
+
+		// 清除提供商列表缓存
+		r.cache.Delete(ctx, CacheKeyActiveProviders)
+		r.cache.Delete(ctx, CacheKeyAvailableProviders)
+		r.cache.Delete(ctx, CacheKeyProvidersByPriority)
 	}
 
 	return nil
@@ -134,6 +196,16 @@ func (r *providerRepositoryGorm) Count(ctx context.Context) (int64, error) {
 
 // GetActiveProviders 获取活跃的服务提供商列表
 func (r *providerRepositoryGorm) GetActiveProviders(ctx context.Context) ([]*entities.Provider, error) {
+	// 尝试从缓存获取活跃提供商列表
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveProviders
+		var cachedProviders []*entities.Provider
+		if err := r.cache.Get(ctx, cacheKey, &cachedProviders); err == nil {
+			return cachedProviders, nil
+		}
+	}
+
+	// 从数据库获取活跃提供商列表
 	var providers []*entities.Provider
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.ProviderStatusActive).
@@ -141,11 +213,29 @@ func (r *providerRepositoryGorm) GetActiveProviders(ctx context.Context) ([]*ent
 		Find(&providers).Error; err != nil {
 		return nil, fmt.Errorf("failed to get active providers: %w", err)
 	}
+
+	// 缓存活跃提供商列表（提供商列表变化不频繁，缓存15分钟）
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveProviders
+		ttl := 15 * time.Minute
+		r.cache.Set(ctx, cacheKey, providers, ttl)
+	}
+
 	return providers, nil
 }
 
 // GetAvailableProviders 获取可用的服务提供商列表（活跃且健康）
 func (r *providerRepositoryGorm) GetAvailableProviders(ctx context.Context) ([]*entities.Provider, error) {
+	// 尝试从缓存获取可用提供商列表
+	if r.cache != nil {
+		cacheKey := CacheKeyAvailableProviders
+		var cachedProviders []*entities.Provider
+		if err := r.cache.Get(ctx, cacheKey, &cachedProviders); err == nil {
+			return cachedProviders, nil
+		}
+	}
+
+	// 从数据库获取可用提供商列表
 	var providers []*entities.Provider
 	if err := r.db.WithContext(ctx).
 		Where("status = ? AND health_status = ?",
@@ -155,6 +245,14 @@ func (r *providerRepositoryGorm) GetAvailableProviders(ctx context.Context) ([]*
 		Find(&providers).Error; err != nil {
 		return nil, fmt.Errorf("failed to get available providers: %w", err)
 	}
+
+	// 缓存可用提供商列表
+	if r.cache != nil {
+		cacheKey := CacheKeyAvailableProviders
+		ttl := 5 * time.Minute // 可用性状态变化较快，缓存5分钟
+		r.cache.Set(ctx, cacheKey, providers, ttl)
+	}
+
 	return providers, nil
 }
 

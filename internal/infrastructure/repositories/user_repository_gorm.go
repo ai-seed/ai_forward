@@ -9,6 +9,7 @@ import (
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/redis"
 
+	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
 
@@ -38,8 +39,10 @@ func (r *userRepositoryGorm) Create(ctx context.Context, user *entities.User) er
 func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.User, error) {
 	// 尝试从缓存获取用户
 	if r.cache != nil {
-		if cachedUser, err := r.cache.GetUser(ctx, id); err == nil {
-			return cachedUser, nil
+		cacheKey := GetUserCacheKey(id)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
 		}
 	}
 
@@ -54,7 +57,12 @@ func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.U
 
 	// 缓存用户信息
 	if r.cache != nil {
-		r.cache.SetUser(ctx, &user)
+		cacheKey := GetUserCacheKey(id)
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+		r.cache.Set(ctx, cacheKey, &user, ttl)
 	}
 
 	return &user, nil
@@ -64,8 +72,10 @@ func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.U
 func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string) (*entities.User, error) {
 	// 尝试从缓存获取用户
 	if r.cache != nil {
-		if cachedUser, err := r.cache.GetUserByUsername(ctx, username); err == nil {
-			return cachedUser, nil
+		cacheKey := GetUserByUsernameCacheKey(username)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
 		}
 	}
 
@@ -80,9 +90,18 @@ func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string)
 
 	// 缓存用户信息
 	if r.cache != nil {
-		r.cache.SetUserByUsername(ctx, username, &user)
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+
+		// 缓存用户名索引
+		usernameCacheKey := GetUserByUsernameCacheKey(username)
+		r.cache.Set(ctx, usernameCacheKey, &user, ttl)
+
 		// 同时缓存用户ID索引
-		r.cache.SetUser(ctx, &user)
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Set(ctx, userIDCacheKey, &user, ttl)
 	}
 
 	return &user, nil
@@ -92,8 +111,10 @@ func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string)
 func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*entities.User, error) {
 	// 尝试从缓存获取用户
 	if r.cache != nil {
-		if cachedUser, err := r.cache.GetUserByEmail(ctx, email); err == nil {
-			return cachedUser, nil
+		cacheKey := GetUserByEmailCacheKey(email)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
 		}
 	}
 
@@ -108,9 +129,18 @@ func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*ent
 
 	// 缓存用户信息
 	if r.cache != nil {
-		r.cache.SetUserByEmail(ctx, email, &user)
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+
+		// 缓存邮箱索引
+		emailCacheKey := GetUserByEmailCacheKey(email)
+		r.cache.Set(ctx, emailCacheKey, &user, ttl)
+
 		// 同时缓存用户ID索引
-		r.cache.SetUser(ctx, &user)
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Set(ctx, userIDCacheKey, &user, ttl)
 	}
 
 	return &user, nil
@@ -131,10 +161,17 @@ func (r *userRepositoryGorm) Update(ctx context.Context, user *entities.User) er
 
 	// 清除相关缓存
 	if r.cache != nil {
-		r.cache.DeleteUser(ctx, user.ID)
-		// 清除用户名和邮箱缓存
-		r.cache.Delete(ctx, fmt.Sprintf("user:username:%s", user.Username))
-		r.cache.Delete(ctx, fmt.Sprintf("user:email:%s", user.Email))
+		// 清除用户ID缓存
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Delete(ctx, userIDCacheKey)
+
+		// 清除用户名缓存
+		usernameCacheKey := GetUserByUsernameCacheKey(user.Username)
+		r.cache.Delete(ctx, usernameCacheKey)
+
+		// 清除邮箱缓存
+		emailCacheKey := GetUserByEmailCacheKey(user.Email)
+		r.cache.Delete(ctx, emailCacheKey)
 	}
 
 	return nil
@@ -313,10 +350,17 @@ func (r *userRepositoryGorm) UpdateProfile(ctx context.Context, user *entities.U
 
 	// 清除相关缓存
 	if r.cache != nil {
-		r.cache.DeleteUser(ctx, user.ID)
-		// 清除用户名和邮箱缓存
-		r.cache.Delete(ctx, fmt.Sprintf("user:username:%s", user.Username))
-		r.cache.Delete(ctx, fmt.Sprintf("user:email:%s", user.Email))
+		// 清除用户ID缓存
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Delete(ctx, userIDCacheKey)
+
+		// 清除用户名缓存
+		usernameCacheKey := GetUserByUsernameCacheKey(user.Username)
+		r.cache.Delete(ctx, usernameCacheKey)
+
+		// 清除邮箱缓存
+		emailCacheKey := GetUserByEmailCacheKey(user.Email)
+		r.cache.Delete(ctx, emailCacheKey)
 	}
 
 	return nil

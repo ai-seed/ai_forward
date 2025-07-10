@@ -36,6 +36,16 @@ func (r *quotaRepositoryGorm) Create(ctx context.Context, quota *entities.Quota)
 
 // GetByID 根据ID获取配额
 func (r *quotaRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.Quota, error) {
+	// 尝试从缓存获取配额
+	if r.cache != nil {
+		cacheKey := GetQuotaCacheKey(id)
+		var cachedQuota entities.Quota
+		if err := r.cache.Get(ctx, cacheKey, &cachedQuota); err == nil {
+			return &cachedQuota, nil
+		}
+	}
+
+	// 从数据库获取配额
 	var quota entities.Quota
 	if err := r.db.WithContext(ctx).First(&quota, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -43,11 +53,29 @@ func (r *quotaRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.
 		}
 		return nil, fmt.Errorf("failed to get quota by id: %w", err)
 	}
+
+	// 缓存配额信息（配额配置基本不变，缓存20分钟）
+	if r.cache != nil {
+		cacheKey := GetQuotaCacheKey(id)
+		ttl := 20 * time.Minute
+		r.cache.Set(ctx, cacheKey, &quota, ttl)
+	}
+
 	return &quota, nil
 }
 
 // GetByAPIKeyID 根据API Key ID获取配额列表
 func (r *quotaRepositoryGorm) GetByAPIKeyID(ctx context.Context, apiKeyID int64) ([]*entities.Quota, error) {
+	// 尝试从缓存获取配额列表
+	if r.cache != nil {
+		cacheKey := GetQuotasByAPIKeyCacheKey(apiKeyID)
+		var cachedQuotas []*entities.Quota
+		if err := r.cache.Get(ctx, cacheKey, &cachedQuotas); err == nil {
+			return cachedQuotas, nil
+		}
+	}
+
+	// 从数据库获取配额列表
 	var quotas []*entities.Quota
 	if err := r.db.WithContext(ctx).
 		Where("api_key_id = ?", apiKeyID).
@@ -55,11 +83,37 @@ func (r *quotaRepositoryGorm) GetByAPIKeyID(ctx context.Context, apiKeyID int64)
 		Find(&quotas).Error; err != nil {
 		return nil, fmt.Errorf("failed to get quotas by api key id: %w", err)
 	}
+
+	// 缓存配额列表
+	if r.cache != nil {
+		cacheKey := GetQuotasByAPIKeyCacheKey(apiKeyID)
+		ttl := 15 * time.Minute // 配额列表缓存15分钟
+		r.cache.Set(ctx, cacheKey, quotas, ttl)
+	}
+
 	return quotas, nil
 }
 
 // GetByAPIKeyAndType 根据API Key ID和配额类型获取配额
 func (r *quotaRepositoryGorm) GetByAPIKeyAndType(ctx context.Context, apiKeyID int64, quotaType entities.QuotaType, period *entities.QuotaPeriod) (*entities.Quota, error) {
+	// 构建缓存key
+	var periodStr string
+	if period == nil {
+		periodStr = "none"
+	} else {
+		periodStr = string(*period)
+	}
+
+	// 尝试从缓存获取配额
+	if r.cache != nil {
+		cacheKey := GetQuotaByAPIKeyAndTypeCacheKey(apiKeyID, string(quotaType), periodStr)
+		var cachedQuota entities.Quota
+		if err := r.cache.Get(ctx, cacheKey, &cachedQuota); err == nil {
+			return &cachedQuota, nil
+		}
+	}
+
+	// 从数据库获取配额
 	var quota entities.Quota
 	query := r.db.WithContext(ctx).Where("api_key_id = ? AND quota_type = ?", apiKeyID, quotaType)
 
@@ -75,6 +129,18 @@ func (r *quotaRepositoryGorm) GetByAPIKeyAndType(ctx context.Context, apiKeyID i
 		}
 		return nil, fmt.Errorf("failed to get quota by api key and type: %w", err)
 	}
+
+	// 缓存配额信息
+	if r.cache != nil {
+		cacheKey := GetQuotaByAPIKeyAndTypeCacheKey(apiKeyID, string(quotaType), periodStr)
+		ttl := 20 * time.Minute // 特定配额查询缓存20分钟
+		r.cache.Set(ctx, cacheKey, &quota, ttl)
+
+		// 同时缓存ID索引
+		idCacheKey := GetQuotaCacheKey(quota.ID)
+		r.cache.Set(ctx, idCacheKey, &quota, ttl)
+	}
+
 	return &quota, nil
 }
 
@@ -91,11 +157,45 @@ func (r *quotaRepositoryGorm) Update(ctx context.Context, quota *entities.Quota)
 		return entities.ErrQuotaNotFound
 	}
 
+	// 清除配额相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetQuotaCacheKey(quota.ID)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除API Key配额列表缓存
+		apiKeyCacheKey := GetQuotasByAPIKeyCacheKey(quota.APIKeyID)
+		r.cache.Delete(ctx, apiKeyCacheKey)
+
+		// 清除活跃配额列表缓存
+		activeCacheKey := GetActiveQuotasCacheKey(quota.APIKeyID)
+		r.cache.Delete(ctx, activeCacheKey)
+
+		// 清除特定类型配额缓存
+		var periodStr string
+		if quota.Period == nil {
+			periodStr = "none"
+		} else {
+			periodStr = string(*quota.Period)
+		}
+		typeCacheKey := GetQuotaByAPIKeyAndTypeCacheKey(quota.APIKeyID, string(quota.QuotaType), periodStr)
+		r.cache.Delete(ctx, typeCacheKey)
+	}
+
 	return nil
 }
 
 // Delete 删除配额
 func (r *quotaRepositoryGorm) Delete(ctx context.Context, id int64) error {
+	// 先获取配额信息以便清除缓存
+	var quota entities.Quota
+	if err := r.db.WithContext(ctx).Select("api_key_id, quota_type, period").First(&quota, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return entities.ErrQuotaNotFound
+		}
+		return fmt.Errorf("failed to get quota for cache invalidation: %w", err)
+	}
+
 	result := r.db.WithContext(ctx).Delete(&entities.Quota{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete quota: %w", result.Error)
@@ -103,6 +203,31 @@ func (r *quotaRepositoryGorm) Delete(ctx context.Context, id int64) error {
 
 	if result.RowsAffected == 0 {
 		return entities.ErrQuotaNotFound
+	}
+
+	// 清除配额相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetQuotaCacheKey(id)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除API Key配额列表缓存
+		apiKeyCacheKey := GetQuotasByAPIKeyCacheKey(quota.APIKeyID)
+		r.cache.Delete(ctx, apiKeyCacheKey)
+
+		// 清除活跃配额列表缓存
+		activeCacheKey := GetActiveQuotasCacheKey(quota.APIKeyID)
+		r.cache.Delete(ctx, activeCacheKey)
+
+		// 清除特定类型配额缓存
+		var periodStr string
+		if quota.Period == nil {
+			periodStr = "none"
+		} else {
+			periodStr = string(*quota.Period)
+		}
+		typeCacheKey := GetQuotaByAPIKeyAndTypeCacheKey(quota.APIKeyID, string(quota.QuotaType), periodStr)
+		r.cache.Delete(ctx, typeCacheKey)
 	}
 
 	return nil
@@ -166,6 +291,16 @@ func (r *quotaUsageRepositoryGorm) Create(ctx context.Context, usage *entities.Q
 
 // GetByID 根据ID获取配额使用记录
 func (r *quotaUsageRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.QuotaUsage, error) {
+	// 尝试从缓存获取配额使用记录
+	if r.cache != nil {
+		cacheKey := GetQuotaUsageCacheKey(id)
+		var cachedUsage entities.QuotaUsage
+		if err := r.cache.Get(ctx, cacheKey, &cachedUsage); err == nil {
+			return &cachedUsage, nil
+		}
+	}
+
+	// 从数据库获取配额使用记录
 	var usage entities.QuotaUsage
 	if err := r.db.WithContext(ctx).First(&usage, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -173,6 +308,14 @@ func (r *quotaUsageRepositoryGorm) GetByID(ctx context.Context, id int64) (*enti
 		}
 		return nil, fmt.Errorf("failed to get quota usage by id: %w", err)
 	}
+
+	// 缓存配额使用记录（使用记录变化较快，缓存5分钟）
+	if r.cache != nil {
+		cacheKey := GetQuotaUsageCacheKey(id)
+		ttl := 5 * time.Minute
+		r.cache.Set(ctx, cacheKey, &usage, ttl)
+	}
+
 	return &usage, nil
 }
 
@@ -200,6 +343,15 @@ func (r *quotaUsageRepositoryGorm) GetByQuotaAndPeriod(ctx context.Context, apiK
 
 // GetCurrentUsage 获取当前周期的使用情况
 func (r *quotaUsageRepositoryGorm) GetCurrentUsage(ctx context.Context, apiKeyID int64, quotaID int64, at time.Time) (*entities.QuotaUsage, error) {
+	// 尝试从缓存获取当前使用情况
+	if r.cache != nil {
+		cacheKey := GetCurrentQuotaUsageCacheKey(apiKeyID, quotaID)
+		var cachedUsage entities.QuotaUsage
+		if err := r.cache.Get(ctx, cacheKey, &cachedUsage); err == nil {
+			return &cachedUsage, nil
+		}
+	}
+
 	var usage entities.QuotaUsage
 
 	// 对于周期配额，查找包含指定时间的周期记录
@@ -212,6 +364,14 @@ func (r *quotaUsageRepositoryGorm) GetCurrentUsage(ctx context.Context, apiKeyID
 		}
 		return nil, fmt.Errorf("failed to get current quota usage: %w", err)
 	}
+
+	// 缓存当前使用情况（使用情况变化频繁，缓存2分钟）
+	if r.cache != nil {
+		cacheKey := GetCurrentQuotaUsageCacheKey(apiKeyID, quotaID)
+		ttl := 2 * time.Minute
+		r.cache.Set(ctx, cacheKey, &usage, ttl)
+	}
+
 	return &usage, nil
 }
 
@@ -228,13 +388,34 @@ func (r *quotaUsageRepositoryGorm) Update(ctx context.Context, usage *entities.Q
 		return entities.ErrQuotaUsageNotFound
 	}
 
+	// 清除配额使用相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetQuotaUsageCacheKey(usage.ID)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除当前使用情况缓存
+		currentCacheKey := GetCurrentQuotaUsageCacheKey(usage.APIKeyID, usage.QuotaID)
+		r.cache.Delete(ctx, currentCacheKey)
+
+		// 清除周期使用情况缓存
+		var periodStr string
+		if usage.PeriodStart != nil && usage.PeriodEnd != nil {
+			periodStr = usage.PeriodStart.Format("2006-01-02") + "_" + usage.PeriodEnd.Format("2006-01-02")
+		} else {
+			periodStr = "total"
+		}
+		periodCacheKey := GetQuotaUsageByQuotaPeriodCacheKey(usage.APIKeyID, usage.QuotaID, periodStr)
+		r.cache.Delete(ctx, periodCacheKey)
+	}
+
 	return nil
 }
 
 // IncrementUsage 增加使用量
 func (r *quotaUsageRepositoryGorm) IncrementUsage(ctx context.Context, apiKeyID, quotaID int64, value float64, periodStart, periodEnd *time.Time) error {
 	// 使用事务确保原子性
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var usage entities.QuotaUsage
 		query := tx.Where("api_key_id = ? AND quota_id = ?", apiKeyID, quotaID)
 
@@ -266,6 +447,25 @@ func (r *quotaUsageRepositoryGorm) IncrementUsage(ctx context.Context, apiKeyID,
 		usage.UpdatedAt = time.Now()
 		return tx.Save(&usage).Error
 	})
+
+	// 事务成功后清除缓存
+	if err == nil && r.cache != nil {
+		// 清除当前使用情况缓存
+		currentCacheKey := GetCurrentQuotaUsageCacheKey(apiKeyID, quotaID)
+		r.cache.Delete(ctx, currentCacheKey)
+
+		// 清除周期使用情况缓存
+		var periodStr string
+		if periodStart != nil && periodEnd != nil {
+			periodStr = periodStart.Format("2006-01-02") + "_" + periodEnd.Format("2006-01-02")
+		} else {
+			periodStr = "total"
+		}
+		periodCacheKey := GetQuotaUsageByQuotaPeriodCacheKey(apiKeyID, quotaID, periodStr)
+		r.cache.Delete(ctx, periodCacheKey)
+	}
+
+	return err
 }
 
 // Delete 删除配额使用记录

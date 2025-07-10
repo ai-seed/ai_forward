@@ -36,6 +36,16 @@ func (r *modelRepositoryGorm) Create(ctx context.Context, model *entities.Model)
 
 // GetByID 根据ID获取模型
 func (r *modelRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.Model, error) {
+	// 尝试从缓存获取模型
+	if r.cache != nil {
+		cacheKey := GetModelCacheKey(id)
+		var cachedModel entities.Model
+		if err := r.cache.Get(ctx, cacheKey, &cachedModel); err == nil {
+			return &cachedModel, nil
+		}
+	}
+
+	// 从数据库获取模型
 	var model entities.Model
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -43,11 +53,33 @@ func (r *modelRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.
 		}
 		return nil, fmt.Errorf("failed to get model by id: %w", err)
 	}
+
+	// 缓存模型信息（模型配置基本不变，缓存30分钟）
+	if r.cache != nil {
+		cacheKey := GetModelCacheKey(id)
+		ttl := 30 * time.Minute
+		r.cache.Set(ctx, cacheKey, &model, ttl)
+
+		// 同时缓存slug索引
+		slugCacheKey := GetModelBySlugCacheKey(model.Slug)
+		r.cache.Set(ctx, slugCacheKey, &model, ttl)
+	}
+
 	return &model, nil
 }
 
 // GetBySlug 根据slug获取模型
 func (r *modelRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*entities.Model, error) {
+	// 尝试从缓存获取模型
+	if r.cache != nil {
+		cacheKey := GetModelBySlugCacheKey(slug)
+		var cachedModel entities.Model
+		if err := r.cache.Get(ctx, cacheKey, &cachedModel); err == nil {
+			return &cachedModel, nil
+		}
+	}
+
+	// 从数据库获取模型
 	var model entities.Model
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -55,6 +87,20 @@ func (r *modelRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*enti
 		}
 		return nil, fmt.Errorf("failed to get model by slug: %w", err)
 	}
+
+	// 缓存模型信息
+	if r.cache != nil {
+		ttl := 30 * time.Minute
+
+		// 缓存slug索引
+		slugCacheKey := GetModelBySlugCacheKey(slug)
+		r.cache.Set(ctx, slugCacheKey, &model, ttl)
+
+		// 同时缓存ID索引
+		idCacheKey := GetModelCacheKey(model.ID)
+		r.cache.Set(ctx, idCacheKey, &model, ttl)
+	}
+
 	return &model, nil
 }
 
@@ -69,6 +115,25 @@ func (r *modelRepositoryGorm) Update(ctx context.Context, model *entities.Model)
 
 	if result.RowsAffected == 0 {
 		return entities.ErrModelNotFound
+	}
+
+	// 清除模型相关缓存
+	if r.cache != nil {
+		// 清除ID索引缓存
+		idCacheKey := GetModelCacheKey(model.ID)
+		r.cache.Delete(ctx, idCacheKey)
+
+		// 清除slug索引缓存
+		slugCacheKey := GetModelBySlugCacheKey(model.Slug)
+		r.cache.Delete(ctx, slugCacheKey)
+
+		// 清除模型列表缓存
+		r.cache.Delete(ctx, CacheKeyActiveModels)
+		r.cache.Delete(ctx, CacheKeyAvailableModels)
+
+		// 清除按类型分组的模型列表缓存
+		typeCacheKey := GetModelsByTypeCacheKey(string(model.ModelType))
+		r.cache.Delete(ctx, typeCacheKey)
 	}
 
 	return nil
@@ -112,6 +177,16 @@ func (r *modelRepositoryGorm) Count(ctx context.Context) (int64, error) {
 
 // GetActiveModels 获取活跃的模型列表
 func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.Model, error) {
+	// 尝试从缓存获取活跃模型列表
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveModels
+		var cachedModels []*entities.Model
+		if err := r.cache.Get(ctx, cacheKey, &cachedModels); err == nil {
+			return cachedModels, nil
+		}
+	}
+
+	// 从数据库获取活跃模型列表
 	var models []*entities.Model
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.ModelStatusActive).
@@ -119,11 +194,29 @@ func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get active models: %w", err)
 	}
+
+	// 缓存活跃模型列表（模型列表变化不频繁，缓存15分钟）
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveModels
+		ttl := 15 * time.Minute
+		r.cache.Set(ctx, cacheKey, models, ttl)
+	}
+
 	return models, nil
 }
 
 // GetModelsByType 根据类型获取模型列表
 func (r *modelRepositoryGorm) GetModelsByType(ctx context.Context, modelType entities.ModelType) ([]*entities.Model, error) {
+	// 尝试从缓存获取按类型分组的模型列表
+	if r.cache != nil {
+		cacheKey := GetModelsByTypeCacheKey(string(modelType))
+		var cachedModels []*entities.Model
+		if err := r.cache.Get(ctx, cacheKey, &cachedModels); err == nil {
+			return cachedModels, nil
+		}
+	}
+
+	// 从数据库获取按类型分组的模型列表
 	var models []*entities.Model
 	if err := r.db.WithContext(ctx).
 		Where("model_type = ? AND status = ?", modelType, entities.ModelStatusActive).
@@ -131,11 +224,29 @@ func (r *modelRepositoryGorm) GetModelsByType(ctx context.Context, modelType ent
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get models by type: %w", err)
 	}
+
+	// 缓存按类型分组的模型列表
+	if r.cache != nil {
+		cacheKey := GetModelsByTypeCacheKey(string(modelType))
+		ttl := 15 * time.Minute
+		r.cache.Set(ctx, cacheKey, models, ttl)
+	}
+
 	return models, nil
 }
 
 // GetAvailableModels 获取可用的模型列表
 func (r *modelRepositoryGorm) GetAvailableModels(ctx context.Context) ([]*entities.Model, error) {
+	// 尝试从缓存获取可用模型列表
+	if r.cache != nil {
+		cacheKey := CacheKeyAvailableModels
+		var cachedModels []*entities.Model
+		if err := r.cache.Get(ctx, cacheKey, &cachedModels); err == nil {
+			return cachedModels, nil
+		}
+	}
+
+	// 从数据库获取可用模型列表
 	var models []*entities.Model
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.ModelStatusActive).
@@ -143,6 +254,14 @@ func (r *modelRepositoryGorm) GetAvailableModels(ctx context.Context) ([]*entiti
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get available models: %w", err)
 	}
+
+	// 缓存可用模型列表
+	if r.cache != nil {
+		cacheKey := CacheKeyAvailableModels
+		ttl := 15 * time.Minute
+		r.cache.Set(ctx, cacheKey, models, ttl)
+	}
+
 	return models, nil
 }
 
