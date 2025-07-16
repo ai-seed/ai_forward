@@ -1,3 +1,28 @@
+// @title AI API Gateway
+// @version 1.0.0
+// @description AI API Gateway provides unified access to multiple AI services including OpenAI-compatible chat completions, Midjourney image generation, and more.
+// @termsOfService https://example.com/terms
+
+// @contact.name API Support
+// @contact.url https://example.com/support
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Bearer token for API authentication. Format: 'Bearer {token}'
+
+// @securityDefinitions.apikey MJApiSecret
+// @in header
+// @name mj-api-secret
+// @description API secret for Midjourney endpoints
+
 package main
 
 import (
@@ -21,6 +46,8 @@ import (
 	"ai-api-gateway/internal/presentation/routes"
 
 	"github.com/spf13/viper"
+
+	_ "ai-api-gateway/docs" // Import generated docs
 )
 
 func main() {

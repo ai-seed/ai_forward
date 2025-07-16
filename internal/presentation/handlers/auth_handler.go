@@ -32,9 +32,9 @@ func NewAuthHandler(authService services.AuthService, logger logger.Logger) *Aut
 // @Produce json
 // @Param request body dto.LoginRequest true "登录请求"
 // @Success 200 {object} dto.LoginResponse "登录成功"
-// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
-// @Failure 401 {object} dto.ErrorResponse "认证失败"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "认证失败"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
@@ -83,9 +83,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Produce json
 // @Param request body dto.RegisterRequest true "注册请求"
 // @Success 201 {object} dto.RegisterResponse "注册成功"
-// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
-// @Failure 409 {object} dto.ErrorResponse "用户名或邮箱已存在"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 409 {object} dto.Response "用户名或邮箱已存在"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
@@ -143,9 +143,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Produce json
 // @Param request body dto.RefreshTokenRequest true "刷新令牌请求"
 // @Success 200 {object} dto.RefreshTokenResponse "刷新成功"
-// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
-// @Failure 401 {object} dto.ErrorResponse "刷新令牌无效"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "刷新令牌无效"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req dto.RefreshTokenRequest
@@ -188,8 +188,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} dto.GetUserProfileResponse "获取成功"
-// @Failure 401 {object} dto.ErrorResponse "未认证"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Failure 401 {object} dto.Response "未认证"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	// 从上下文获取用户ID
@@ -240,10 +240,10 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.ChangePasswordRequest true "修改密码请求"
-// @Success 200 {object} dto.SuccessResponse "修改成功"
-// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
-// @Failure 401 {object} dto.ErrorResponse "未认证或旧密码错误"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Success 200 {object} dto.Response "修改成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证或旧密码错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/change-password [post]
 func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	// 从上下文获取用户ID
@@ -318,9 +318,9 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 // @Security BearerAuth
 // @Param request body dto.UserRechargeRequest true "充值请求"
 // @Success 200 {object} dto.GetUserProfileResponse "充值成功"
-// @Failure 400 {object} dto.ErrorResponse "请求参数错误"
-// @Failure 401 {object} dto.ErrorResponse "未认证"
-// @Failure 500 {object} dto.ErrorResponse "服务器内部错误"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
+// @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /auth/recharge [post]
 func (h *AuthHandler) Recharge(c *gin.Context) {
 	// 从上下文获取用户ID

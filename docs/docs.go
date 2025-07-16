@@ -9,8 +9,9 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
+        "termsOfService": "https://example.com/terms",
         "contact": {
-            "name": "AI API Gateway Team",
+            "name": "API Support",
             "url": "https://example.com/support",
             "email": "support@example.com"
         },
@@ -23,6 +24,313 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/change-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "修改当前用户的密码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "修改用户密码",
+                "parameters": [
+                    {
+                        "description": "修改密码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.ChangePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "修改成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证或旧密码错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "使用用户名和密码进行登录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "用户登录",
+                "parameters": [
+                    {
+                        "description": "登录请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "获取当前登录用户的详细信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "获取当前用户资料",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/recharge": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "用户为自己的账户充值",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "用户充值",
+                "parameters": [
+                    {
+                        "description": "充值请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UserRechargeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "充值成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未认证",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "使用刷新令牌获取新的访问令牌",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "刷新访问令牌",
+                "parameters": [
+                    {
+                        "description": "刷新令牌请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "刷新成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "刷新令牌无效",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "注册新用户账户",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "用户注册",
+                "parameters": [
+                    {
+                        "description": "注册请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "注册成功",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RegisterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "用户名或邮箱已存在",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "检查服务整体健康状态，包括数据库和AI提供商连接状态",
@@ -37,13 +345,13 @@ const docTemplate = `{
                     "200": {
                         "description": "健康检查通过",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "503": {
                         "description": "健康检查失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -63,7 +371,7 @@ const docTemplate = `{
                     "200": {
                         "description": "服务存活",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -83,13 +391,13 @@ const docTemplate = `{
                     "200": {
                         "description": "服务就绪",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "503": {
                         "description": "服务未就绪",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -109,13 +417,13 @@ const docTemplate = `{
                     "200": {
                         "description": "统计信息",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "500": {
                         "description": "获取统计失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -135,7 +443,7 @@ const docTemplate = `{
                     "200": {
                         "description": "版本信息",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -156,6 +464,423 @@ const docTemplate = `{
                         "description": "Prometheus指标",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/action": {
+            "post": {
+                "description": "执行 U1-U4、V1-V4 等操作",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "执行操作",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "操作请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.ActionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/blend": {
+            "post": {
+                "description": "上传2-5张图像并混合成新图像",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "混合图像",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "混合请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.BlendRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/cancel": {
+            "post": {
+                "description": "取消正在进行的任务",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "取消任务",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "取消请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.CancelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/describe": {
+            "post": {
+                "description": "上传图像并生成四个提示词",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "描述图像",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "描述请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.DescribeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/imagine": {
+            "post": {
+                "description": "根据提示词生成图像，类似 /imagine 命令",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "生成图像",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "图像生成请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.ImagineRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/submit/modal": {
+            "post": {
+                "description": "对图像进行局部重绘",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "局部重绘",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "局部重绘请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.ModalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/mj/task/{id}/fetch": {
+            "get": {
+                "description": "获取任务的当前状态和结果",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Midjourney"
+                ],
+                "summary": "获取任务结果",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API密钥",
+                        "name": "mj-api-secret",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "任务ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJTaskResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
                         }
                     }
                 }
@@ -186,7 +911,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/clients.ChatCompletionRequest"
+                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest"
                         }
                     }
                 ],
@@ -194,31 +919,31 @@ const docTemplate = `{
                     "200": {
                         "description": "聊天补全响应",
                         "schema": {
-                            "$ref": "#/definitions/clients.AIResponse"
+                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "429": {
                         "description": "请求过于频繁",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -249,7 +974,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/clients.CompletionRequest"
+                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.CompletionRequest"
                         }
                     }
                 ],
@@ -257,31 +982,31 @@ const docTemplate = `{
                     "200": {
                         "description": "文本补全响应",
                         "schema": {
-                            "$ref": "#/definitions/clients.AIResponse"
+                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "429": {
                         "description": "请求过于频繁",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -306,19 +1031,19 @@ const docTemplate = `{
                     "200": {
                         "description": "模型列表",
                         "schema": {
-                            "$ref": "#/definitions/clients.ModelsResponse"
+                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ModelsResponse"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -343,19 +1068,19 @@ const docTemplate = `{
                     "200": {
                         "description": "使用统计信息",
                         "schema": {
-                            "$ref": "#/definitions/dto.UsageResponse"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UsageResponse"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/dto.Response"
+                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
                         }
                     }
                 }
@@ -363,7 +1088,248 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "clients.AIChoice": {
+        "ai-api-gateway_internal_application_dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "new_password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "old_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.ErrorInfo": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.GetUserProfileResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UserInfo"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.RefreshTokenRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.RefreshTokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.Response": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/ai-api-gateway_internal_application_dto.ErrorInfo"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.UsageResponse": {
+            "type": "object",
+            "properties": {
+                "total_cost": {
+                    "type": "number",
+                    "example": 1.25
+                },
+                "total_requests": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "total_tokens": {
+                    "type": "integer",
+                    "example": 5000
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.UserInfo": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_application_dto.UserRechargeRequest": {
+            "type": "object",
+            "required": [
+                "amount"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "ai-api-gateway_internal_infrastructure_clients.AIChoice": {
             "type": "object",
             "properties": {
                 "finish_reason": {
@@ -373,14 +1339,21 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "message": {
-                    "$ref": "#/definitions/clients.AIMessage"
+                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage"
                 },
                 "text": {
                     "type": "string"
+                },
+                "tool_calls": {
+                    "description": "Function calls in streaming mode",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall"
+                    }
                 }
             }
         },
-        "clients.AIError": {
+        "ai-api-gateway_internal_infrastructure_clients.AIError": {
             "type": "object",
             "properties": {
                 "code": {
@@ -394,10 +1367,9 @@ const docTemplate = `{
                 }
             }
         },
-        "clients.AIMessage": {
+        "ai-api-gateway_internal_infrastructure_clients.AIMessage": {
             "type": "object",
             "required": [
-                "content",
                 "role"
             ],
             "properties": {
@@ -405,18 +1377,34 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Hello, how are you?"
                 },
+                "name": {
+                    "description": "Name of the function for tool messages",
+                    "type": "string"
+                },
                 "role": {
                     "type": "string",
                     "enum": [
                         "system",
                         "user",
-                        "assistant"
+                        "assistant",
+                        "tool"
                     ],
                     "example": "user"
+                },
+                "tool_call_id": {
+                    "description": "ID of the tool call this message is responding to",
+                    "type": "string"
+                },
+                "tool_calls": {
+                    "description": "Function calls made by assistant",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall"
+                    }
                 }
             }
         },
-        "clients.AIModel": {
+        "ai-api-gateway_internal_infrastructure_clients.AIModel": {
             "type": "object",
             "properties": {
                 "created": {
@@ -437,20 +1425,20 @@ const docTemplate = `{
                 }
             }
         },
-        "clients.AIResponse": {
+        "ai-api-gateway_internal_infrastructure_clients.AIResponse": {
             "type": "object",
             "properties": {
                 "choices": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/clients.AIChoice"
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIChoice"
                     }
                 },
                 "created": {
                     "type": "integer"
                 },
                 "error": {
-                    "$ref": "#/definitions/clients.AIError"
+                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIError"
                 },
                 "id": {
                     "type": "string"
@@ -462,11 +1450,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage": {
-                    "$ref": "#/definitions/clients.AIUsage"
+                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIUsage"
                 }
             }
         },
-        "clients.AIUsage": {
+        "ai-api-gateway_internal_infrastructure_clients.AIUsage": {
             "type": "object",
             "properties": {
                 "completion_tokens": {
@@ -480,7 +1468,7 @@ const docTemplate = `{
                 }
             }
         },
-        "clients.ChatCompletionRequest": {
+        "ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest": {
             "type": "object",
             "required": [
                 "messages",
@@ -495,7 +1483,7 @@ const docTemplate = `{
                     "type": "array",
                     "minItems": 1,
                     "items": {
-                        "$ref": "#/definitions/clients.AIMessage"
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage"
                     }
                 },
                 "model": {
@@ -509,10 +1497,25 @@ const docTemplate = `{
                 "temperature": {
                     "type": "number",
                     "example": 0.7
+                },
+                "tool_choice": {
+                    "description": "Tool choice strategy"
+                },
+                "tools": {
+                    "description": "Function call tools",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.Tool"
+                    }
+                },
+                "web_search": {
+                    "description": "是否启用联网搜索",
+                    "type": "boolean",
+                    "example": false
                 }
             }
         },
-        "clients.CompletionRequest": {
+        "ai-api-gateway_internal_infrastructure_clients.CompletionRequest": {
             "type": "object",
             "required": [
                 "model",
@@ -538,16 +1541,50 @@ const docTemplate = `{
                 "temperature": {
                     "type": "number",
                     "example": 0.7
+                },
+                "web_search": {
+                    "description": "是否启用联网搜索",
+                    "type": "boolean",
+                    "example": false
                 }
             }
         },
-        "clients.ModelsResponse": {
+        "ai-api-gateway_internal_infrastructure_clients.Function": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Search for information"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "search"
+                },
+                "parameters": {
+                    "description": "JSON Schema for function parameters"
+                }
+            }
+        },
+        "ai-api-gateway_internal_infrastructure_clients.FunctionCall": {
+            "type": "object",
+            "properties": {
+                "arguments": {
+                    "description": "JSON string of function arguments",
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "search"
+                }
+            }
+        },
+        "ai-api-gateway_internal_infrastructure_clients.ModelsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/clients.AIModel"
+                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIModel"
                     }
                 },
                 "object": {
@@ -555,62 +1592,270 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ErrorInfo": {
+        "ai-api-gateway_internal_infrastructure_clients.Tool": {
+            "type": "object",
+            "properties": {
+                "function": {
+                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.Function"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "function"
+                }
+            }
+        },
+        "ai-api-gateway_internal_infrastructure_clients.ToolCall": {
+            "type": "object",
+            "properties": {
+                "function": {
+                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.FunctionCall"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "call_123"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "function"
+                }
+            }
+        },
+        "internal_presentation_handlers.ActionRequest": {
+            "type": "object",
+            "required": [
+                "customId",
+                "taskId"
+            ],
+            "properties": {
+                "customId": {
+                    "type": "string"
+                },
+                "notifyHook": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "taskId": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_presentation_handlers.BlendRequest": {
+            "type": "object",
+            "required": [
+                "base64Array"
+            ],
+            "properties": {
+                "base64Array": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "minItems": 2,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "botType": {
+                    "type": "string"
+                },
+                "dimensions": {
+                    "type": "string"
+                },
+                "notifyHook": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_presentation_handlers.CancelRequest": {
+            "type": "object",
+            "required": [
+                "taskId"
+            ],
+            "properties": {
+                "taskId": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_presentation_handlers.DescribeRequest": {
+            "type": "object",
+            "required": [
+                "base64"
+            ],
+            "properties": {
+                "base64": {
+                    "type": "string"
+                },
+                "botType": {
+                    "type": "string"
+                },
+                "notifyHook": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_presentation_handlers.ImagineRequest": {
+            "type": "object",
+            "required": [
+                "prompt"
+            ],
+            "properties": {
+                "base64Array": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "botType": {
+                    "type": "string"
+                },
+                "notifyHook": {
+                    "type": "string"
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_presentation_handlers.MJButton": {
+            "type": "object",
+            "properties": {
+                "customId": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "style": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_presentation_handlers.MJResponse": {
             "type": "object",
             "properties": {
                 "code": {
+                    "type": "integer"
+                },
+                "description": {
                     "type": "string"
                 },
-                "details": {
+                "properties": {
                     "type": "object",
                     "additionalProperties": true
                 },
-                "message": {
+                "result": {}
+            }
+        },
+        "internal_presentation_handlers.MJTaskResponse": {
+            "type": "object",
+            "properties": {
+                "action": {
                     "type": "string"
+                },
+                "buttons": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_presentation_handlers.MJButton"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "failReason": {
+                    "type": "string"
+                },
+                "finishTime": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "imageUrl": {
+                    "type": "string"
+                },
+                "progress": {
+                    "type": "string"
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "promptEn": {
+                    "type": "string"
+                },
+                "properties": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "startTime": {
+                    "type": "integer"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "submitTime": {
+                    "type": "integer"
                 }
             }
         },
-        "dto.Response": {
+        "internal_presentation_handlers.ModalRequest": {
             "type": "object",
+            "required": [
+                "base64",
+                "maskBase64",
+                "prompt"
+            ],
             "properties": {
-                "data": {},
-                "error": {
-                    "$ref": "#/definitions/dto.ErrorInfo"
-                },
-                "message": {
+                "base64": {
                     "type": "string"
                 },
-                "success": {
-                    "type": "boolean"
-                },
-                "timestamp": {
+                "botType": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.UsageResponse": {
-            "type": "object",
-            "properties": {
-                "total_cost": {
-                    "type": "number",
-                    "example": 1.25
                 },
-                "total_requests": {
-                    "type": "integer",
-                    "example": 100
+                "maskBase64": {
+                    "type": "string"
                 },
-                "total_tokens": {
-                    "type": "integer",
-                    "example": 5000
+                "notifyHook": {
+                    "type": "string"
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
                 }
             }
         }
     },
     "securityDefinitions": {
-        "ApiKeyAuth": {
-            "description": "API密钥认证，格式：Bearer YOUR_API_KEY",
+        "BearerAuth": {
+            "description": "Bearer token for API authentication. Format: 'Bearer {token}'",
             "type": "apiKey",
             "name": "Authorization",
+            "in": "header"
+        },
+        "MJApiSecret": {
+            "description": "API secret for Midjourney endpoints",
+            "type": "apiKey",
+            "name": "mj-api-secret",
             "in": "header"
         }
     }
@@ -621,9 +1866,9 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
 	Host:             "localhost:8080",
 	BasePath:         "/",
-	Schemes:          []string{"http", "https"},
+	Schemes:          []string{},
 	Title:            "AI API Gateway",
-	Description:      "AI API Gateway是一个高性能的AI API网关，提供统一的API接口来访问多个AI提供商。\n\n## 主要功能\n- 🤖 多AI提供商支持（OpenAI、Anthropic等）\n- ⚖️ 智能负载均衡和故障转移\n- 📊 精确的配额管理和计费\n- 🔐 完整的认证和授权\n- 📈 实时监控和统计\n\n## 认证方式\n所有API请求都需要在请求头中包含有效的API密钥：\n```\nAuthorization: Bearer YOUR_API_KEY\n```\n\n## 快速开始\n1. 使用管理API创建用户账户\n2. 为用户生成API密钥\n3. 使用API密钥调用AI接口\n\n## 支持的模型\n- GPT-3.5-turbo\n- GPT-4\n- Claude-3-haiku\n- Claude-3-sonnet\n- Claude-3-opus",
+	Description:      "AI API Gateway provides unified access to multiple AI services including OpenAI-compatible chat completions, Midjourney image generation, and more.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

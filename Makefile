@@ -1,16 +1,19 @@
 # AI API Gateway Makefile
 
-.PHONY: help build run test clean docker-build docker-run
+.PHONY: help build run test clean docker-build docker-run swagger swagger-clean swagger-verify
 
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  build        - Build the application"
-	@echo "  run          - Run the application"
-	@echo "  test         - Run tests"
-	@echo "  clean        - Clean build artifacts"
-	@echo "  docker-build - Build Docker image"
-	@echo "  docker-run   - Run Docker container"
+	@echo "  build          - Build the application"
+	@echo "  run            - Run the application"
+	@echo "  test           - Run tests"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  swagger        - Generate Swagger documentation"
+	@echo "  swagger-clean  - Clean Swagger documentation"
+	@echo "  swagger-verify - Verify Swagger documentation"
+	@echo "  docker-build   - Build Docker image"
+	@echo "  docker-run     - Run Docker container"
 
 # Build the application
 build:
@@ -31,6 +34,57 @@ test:
 clean:
 	@echo "Cleaning..."
 	@rm -rf bin/
+
+# Generate Swagger documentation
+swagger:
+	@echo "Generating Swagger documentation..."
+ifeq ($(OS),Windows_NT)
+	@if exist scripts\generate-swagger.bat ( \
+		scripts\generate-swagger.bat \
+	) else ( \
+		go run scripts/generate-swagger.go \
+	)
+else
+	@if [ -f scripts/generate-swagger.sh ]; then \
+		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh; \
+	else \
+		go run scripts/generate-swagger.go; \
+	fi
+endif
+
+# Clean Swagger documentation
+swagger-clean:
+	@echo "Cleaning Swagger documentation..."
+ifeq ($(OS),Windows_NT)
+	@if exist scripts\generate-swagger.bat ( \
+		scripts\generate-swagger.bat --clean \
+	) else ( \
+		go run scripts/generate-swagger.go --clean \
+	)
+else
+	@if [ -f scripts/generate-swagger.sh ]; then \
+		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh --clean; \
+	else \
+		go run scripts/generate-swagger.go --clean; \
+	fi
+endif
+
+# Verify Swagger documentation
+swagger-verify:
+	@echo "Verifying Swagger documentation..."
+ifeq ($(OS),Windows_NT)
+	@if exist scripts\generate-swagger.bat ( \
+		scripts\generate-swagger.bat --verify \
+	) else ( \
+		go run scripts/generate-swagger.go --verify \
+	)
+else
+	@if [ -f scripts/generate-swagger.sh ]; then \
+		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh --verify; \
+	else \
+		go run scripts/generate-swagger.go --verify; \
+	fi
+endif
 	@rm -rf data/
 
 
