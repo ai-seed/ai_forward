@@ -62,7 +62,7 @@ func (r *CreateUserRequest) ToEntity() *entities.User {
 		Email:    r.Email,
 		FullName: r.FullName,
 		Status:   entities.UserStatusActive,
-		Balance:  0.0,
+		Balance:  0.000001,
 	}
 }
 
