@@ -84,6 +84,11 @@ func (f *RepositoryFactory) ToolRepository() repositories.ToolRepository {
 	return NewToolRepositoryGorm(f.gormDB, f.cache)
 }
 
+// MidjourneyJobRepository 获取Midjourney任务仓储
+func (f *RepositoryFactory) MidjourneyJobRepository() repositories.MidjourneyJobRepository {
+	return NewMidjourneyJobRepositoryGorm(f.gormDB, f.cache)
+}
+
 // GormDB 获取GORM数据库连接
 func (f *RepositoryFactory) GormDB() *gorm.DB {
 	return f.gormDB

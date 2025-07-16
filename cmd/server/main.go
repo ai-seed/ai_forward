@@ -59,8 +59,12 @@ func main() {
 		log.WithField("error", err.Error()).Fatal("Failed to connect to PostgreSQL with GORM")
 	}
 
-	// 跳过自动迁移，因为我们使用手动创建的PostgreSQL表结构
-	// 只进行健康检查
+	// 执行数据库自动迁移
+	// if err := database.InitializeDatabase(gormDB); err != nil {
+	// 	log.WithField("error", err.Error()).Fatal("Database initialization failed")
+	// }
+
+	// 进行健康检查
 	if err := database.HealthCheck(gormDB); err != nil {
 		log.WithField("error", err.Error()).Fatal("Database health check failed")
 	}

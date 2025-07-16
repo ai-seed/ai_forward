@@ -71,6 +71,11 @@ func (m *AuthMiddleware) extractAPIKey(c *gin.Context) string {
 		}
 	}
 
+	mj_api_secret := c.GetHeader("mj-api-secret")
+	if mj_api_secret != "" {
+		return mj_api_secret
+	}
+
 	// 2. 从X-API-Key头中提取
 	apiKey := c.GetHeader("X-API-Key")
 	if apiKey != "" {

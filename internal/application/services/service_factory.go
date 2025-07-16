@@ -147,6 +147,36 @@ func (f *ServiceFactory) ToolService() *ToolService {
 	)
 }
 
+// MidjourneyService 获取Midjourney服务
+func (f *ServiceFactory) MidjourneyService() MidjourneyService {
+	return NewMidjourneyService(
+		f.repoFactory.MidjourneyJobRepository(),
+		f.MidjourneyQueueService(),
+		f.logger,
+	)
+}
+
+// MidjourneyQueueService 获取Midjourney队列服务
+func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
+	return NewMidjourneyQueueService(
+		f.repoFactory.MidjourneyJobRepository(),
+		f.redisFactory.GetCacheService(),
+		f.WebhookService(),
+		f.ImageGenerationService(),
+		f.logger,
+	)
+}
+
+// WebhookService 获取Webhook服务
+func (f *ServiceFactory) WebhookService() WebhookService {
+	return NewWebhookService(f.logger)
+}
+
+// ImageGenerationService 获取图像生成服务
+func (f *ServiceFactory) ImageGenerationService() ImageGenerationService {
+	return NewMockImageGenerationService(f.logger)
+}
+
 // UsageLogRepository 获取使用日志仓储
 func (f *ServiceFactory) UsageLogRepository() repositories.UsageLogRepository {
 	return f.repoFactory.UsageLogRepository()

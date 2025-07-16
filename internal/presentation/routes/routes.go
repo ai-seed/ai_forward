@@ -104,6 +104,7 @@ func (r *Router) SetupRoutes() {
 	authHandler := handlers.NewAuthHandler(r.serviceFactory.AuthService(), r.logger)
 	toolHandler := handlers.NewToolHandler(r.serviceFactory.ToolService(), r.logger)
 	quotaHandler := handlers.NewQuotaHandler(r.serviceFactory.QuotaService(), r.logger)
+	midjourneyHandler := handlers.NewMidjourneyHandler(r.serviceFactory.MidjourneyService(), r.logger)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
@@ -225,6 +226,34 @@ func (r *Router) SetupRoutes() {
 		publicTools.GET("/models", toolHandler.GetModels)
 		publicTools.GET("/public", toolHandler.GetPublicTools)
 		publicTools.GET("/share/:token", toolHandler.GetSharedToolInstance)
+	}
+
+	// Midjourney兼容的API路由（302AI格式）
+	mj := r.engine.Group("/mj")
+	mj.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
+	{
+		// Midjourney提交路由（需要认证和配额检查）
+		mjSubmit := mj.Group("/submit")
+		mjSubmit.Use(authMiddleware.Authenticate())
+		mjSubmit.Use(rateLimitMiddleware.RateLimit())
+		mjSubmit.Use(quotaMiddleware.CheckQuota())
+		mjSubmit.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		{
+			mjSubmit.POST("/imagine", midjourneyHandler.Imagine)
+			mjSubmit.POST("/action", midjourneyHandler.Action)
+			mjSubmit.POST("/blend", midjourneyHandler.Blend)
+			mjSubmit.POST("/describe", midjourneyHandler.Describe)
+			mjSubmit.POST("/modal", midjourneyHandler.Modal)
+			mjSubmit.POST("/cancel", midjourneyHandler.Cancel)
+		}
+
+		// Midjourney任务查询路由（需要认证但不消费配额）
+		mjTask := mj.Group("/task")
+		mjTask.Use(authMiddleware.Authenticate())
+		mjTask.Use(rateLimitMiddleware.RateLimit())
+		{
+			mjTask.GET("/:id/fetch", midjourneyHandler.Fetch)
+		}
 	}
 
 	// 404处理
