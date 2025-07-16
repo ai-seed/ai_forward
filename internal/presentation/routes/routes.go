@@ -91,7 +91,7 @@ func (r *Router) SetupRoutes() {
 	searchService := functioncall.NewSearchService(searchConfig, r.logger)
 	functionCallHandler := functioncall.NewFunctionCallHandler(searchService, r.logger)
 
-	aiHandler := handlers.NewAIHandler(r.gatewayService, r.logger, r.config, functionCallHandler)
+	aiHandler := handlers.NewAIHandler(r.gatewayService, r.serviceFactory.ModelService(), r.logger, r.config, functionCallHandler)
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(
 		r.serviceFactory.APIKeyService(),

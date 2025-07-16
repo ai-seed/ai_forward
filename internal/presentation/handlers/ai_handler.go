@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/application/dto"
+	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/functioncall"
@@ -22,6 +23,7 @@ import (
 // AIHandler AI请求处理器
 type AIHandler struct {
 	gatewayService      gateway.GatewayService
+	modelService        services.ModelService
 	logger              logger.Logger
 	config              *config.Config
 	functionCallHandler functioncall.FunctionCallHandler
@@ -30,12 +32,14 @@ type AIHandler struct {
 // NewAIHandler 创建AI请求处理器
 func NewAIHandler(
 	gatewayService gateway.GatewayService,
+	modelService services.ModelService,
 	logger logger.Logger,
 	config *config.Config,
 	functionCallHandler functioncall.FunctionCallHandler,
 ) *AIHandler {
 	return &AIHandler{
 		gatewayService:      gatewayService,
+		modelService:        modelService,
 		logger:              logger,
 		config:              config,
 		functionCallHandler: functionCallHandler,
@@ -565,10 +569,66 @@ func (h *AIHandler) Completions(c *gin.Context) {
 // @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /v1/models [get]
 func (h *AIHandler) Models(c *gin.Context) {
-	// TODO: 实现获取模型列表
+	// 获取可用模型列表
+	models, err := h.modelService.GetAvailableModels(c.Request.Context(), 0) // 0 表示获取所有提供商的模型
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to get available models")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"message": "Failed to get models",
+				"type":    "internal_error",
+				"code":    "models_fetch_failed",
+			},
+		})
+		return
+	}
+
+	// 转换为 OpenAI API 格式
+	var modelList []map[string]interface{}
+	for _, model := range models {
+		displayName := model.Name
+		if model.DisplayName != nil {
+			displayName = *model.DisplayName
+		}
+
+		modelData := map[string]interface{}{
+			"id":       model.Slug,
+			"object":   "model",
+			"created":  model.CreatedAt.Unix(),
+			"owned_by": "system",
+		}
+
+		// 添加可选字段
+		if model.Description != nil {
+			modelData["description"] = *model.Description
+		}
+
+		// 添加扩展信息
+		modelData["display_name"] = displayName
+		modelData["model_type"] = string(model.ModelType)
+		modelData["status"] = string(model.Status)
+
+		if model.ContextLength != nil {
+			modelData["context_length"] = *model.ContextLength
+		}
+
+		if model.MaxTokens != nil {
+			modelData["max_tokens"] = *model.MaxTokens
+		}
+
+		modelData["supports_streaming"] = model.SupportsStreaming
+		modelData["supports_functions"] = model.SupportsFunctions
+
+		modelList = append(modelList, modelData)
+	}
+
+	// 返回 OpenAI API 兼容格式
 	c.JSON(http.StatusOK, gin.H{
 		"object": "list",
-		"data":   []interface{}{},
+		"data":   modelList,
 	})
 }
 
