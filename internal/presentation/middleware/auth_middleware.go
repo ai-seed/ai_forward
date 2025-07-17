@@ -207,10 +207,12 @@ func (m *AuthMiddleware) tryJWTAuth(c *gin.Context) bool {
 	// 检查用户是否可以发起请求（包括余额检查）
 	if !user.CanMakeRequest() {
 		m.logger.WithFields(map[string]interface{}{
-			"user_id": user.ID,
-			"balance": user.Balance,
-			"status":  user.Status,
-		}).Debug("User cannot make request - insufficient balance or inactive status")
+			"user_id":   user.ID,
+			"username":  user.Username,
+			"balance":   user.Balance,
+			"status":    user.Status,
+			"is_active": user.IsActive(),
+		}).Warn("JWT authentication failed - user cannot make request (insufficient balance or inactive status)")
 		return false
 	}
 
@@ -245,6 +247,16 @@ func (m *AuthMiddleware) tryAPIKeyAuth(c *gin.Context) bool {
 			"api_key_prefix": m.maskAPIKey(apiKey),
 			"error":          err.Error(),
 		}).Debug("API key validation failed")
+		return false
+	}
+
+	if !user.HasBalance() {
+		m.logger.WithFields(map[string]interface{}{
+			"user_id":        user.ID,
+			"balance":        user.Balance,
+			"status":         user.Status,
+			"api_key_prefix": apiKeyEntity.KeyPrefix,
+		}).Debug("User cannot make request - insufficient balance")
 		return false
 	}
 

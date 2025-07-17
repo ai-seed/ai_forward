@@ -1,8 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"strconv"
 
 	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/domain/entities"
@@ -35,23 +36,37 @@ type MJResponse struct {
 	Result      interface{}            `json:"result"`
 }
 
-// MJTaskResponse 任务详情响应
+// MJTaskResponse 任务详情响应 - 匹配302AI格式
 type MJTaskResponse struct {
-	Action      string                 `json:"action"`
-	Buttons     []MJButton             `json:"buttons,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	FailReason  string                 `json:"failReason,omitempty"`
-	FinishTime  *int64                 `json:"finishTime,omitempty"`
-	ID          string                 `json:"id"`
-	ImageURL    string                 `json:"imageUrl,omitempty"`
-	Progress    string                 `json:"progress"`
-	Prompt      string                 `json:"prompt,omitempty"`
-	PromptEn    string                 `json:"promptEn,omitempty"`
-	Properties  map[string]interface{} `json:"properties,omitempty"`
-	StartTime   *int64                 `json:"startTime,omitempty"`
-	State       string                 `json:"state,omitempty"`
-	Status      string                 `json:"status"`
-	SubmitTime  int64                  `json:"submitTime"`
+	Action      string       `json:"action"`
+	BotType     string       `json:"botType,omitempty"`
+	Buttons     []MJButton   `json:"buttons,omitempty"`
+	CustomID    string       `json:"customId,omitempty"`
+	Description string       `json:"description,omitempty"`
+	FailReason  string       `json:"failReason,omitempty"`
+	FinishTime  *int64       `json:"finishTime,omitempty"`
+	ID          string       `json:"id"`
+	ImageHeight int          `json:"imageHeight,omitempty"`
+	ImageURL    string       `json:"imageUrl,omitempty"`
+	ImageURLs   []MJImageURL `json:"imageUrls,omitempty"`
+	ImageWidth  int          `json:"imageWidth,omitempty"`
+	MaskBase64  string       `json:"maskBase64,omitempty"`
+	Mode        string       `json:"mode,omitempty"`
+	Progress    string       `json:"progress"`
+	Prompt      string       `json:"prompt,omitempty"`
+	PromptEn    string       `json:"promptEn,omitempty"`
+	Proxy       string       `json:"proxy,omitempty"`
+	StartTime   *int64       `json:"startTime,omitempty"`
+	State       string       `json:"state,omitempty"`
+	Status      string       `json:"status"`
+	SubmitTime  int64        `json:"submitTime"`
+	VideoURL    string       `json:"videoUrl,omitempty"`
+	VideoURLs   []string     `json:"videoUrls,omitempty"`
+}
+
+// MJImageURL 图片URL结构
+type MJImageURL struct {
+	URL string `json:"url"`
 }
 
 // MJButton 可执行按钮
@@ -854,22 +869,27 @@ func (h *MidjourneyHandler) Cancel(c *gin.Context) {
 	})
 }
 
-// buildTaskResponse 构造任务响应
+// buildTaskResponse 构造任务响应 - 匹配302AI格式
 func (h *MidjourneyHandler) buildTaskResponse(job *entities.MidjourneyJob) MJTaskResponse {
 	response := MJTaskResponse{
-		Action:     string(job.Action),
-		ID:         job.JobID,
-		Progress:   strconv.Itoa(job.Progress),
-		Status:     string(job.Status),
-		SubmitTime: job.CreatedAt.Unix() * 1000, // 转换为毫秒
-		Properties: map[string]interface{}{},
+		Action:      string(job.Action),
+		ID:          job.JobID,
+		Progress:    fmt.Sprintf("%d%%", job.Progress),
+		Status:      h.convertJobStatus(job.Status),
+		SubmitTime:  job.CreatedAt.Unix() * 1000, // 转换为毫秒
+		BotType:     "MID_JOURNEY",
+		Mode:        string(job.Mode),
+		State:       "",
+		Description: "Submit Success",
 	}
 
+	// 设置提示词
 	if job.Prompt != nil {
 		response.Prompt = *job.Prompt
 		response.PromptEn = *job.Prompt // 简化处理，实际应该翻译
 	}
 
+	// 设置时间戳
 	if job.StartedAt != nil {
 		startTime := job.StartedAt.Unix() * 1000
 		response.StartTime = &startTime
@@ -880,27 +900,118 @@ func (h *MidjourneyHandler) buildTaskResponse(job *entities.MidjourneyJob) MJTas
 		response.FinishTime = &finishTime
 	}
 
+	// 设置错误信息
 	if job.ErrorMessage != nil {
 		response.FailReason = *job.ErrorMessage
 	}
 
-	if job.CDNImage != nil {
+	// 设置图片信息
+	if job.CDNImage != nil && *job.CDNImage != "" {
 		response.ImageURL = *job.CDNImage
 	}
 
-	// 如果任务成功完成，添加操作按钮
+	// 设置图片尺寸
+	if job.Width != nil {
+		response.ImageWidth = *job.Width
+	} else {
+		response.ImageWidth = 1024 // 默认值
+	}
+
+	if job.Height != nil {
+		response.ImageHeight = *job.Height
+	} else {
+		response.ImageHeight = 1024 // 默认值
+	}
+
+	// 设置四张小图URLs
+	if images, err := job.GetImages(); err == nil && len(images) > 0 {
+		var imageURLs []MJImageURL
+		for _, url := range images {
+			imageURLs = append(imageURLs, MJImageURL{URL: url})
+		}
+		response.ImageURLs = imageURLs
+	}
+
+	// 设置操作按钮
 	if job.IsSuccess() && job.Action == entities.MidjourneyJobActionImagine {
-		response.Buttons = []MJButton{
-			{CustomID: "upsample1", Label: "U1", Type: 2, Style: 2},
-			{CustomID: "upsample2", Label: "U2", Type: 2, Style: 2},
-			{CustomID: "upsample3", Label: "U3", Type: 2, Style: 2},
-			{CustomID: "upsample4", Label: "U4", Type: 2, Style: 2},
-			{CustomID: "variation1", Label: "V1", Type: 2, Style: 3},
-			{CustomID: "variation2", Label: "V2", Type: 2, Style: 3},
-			{CustomID: "variation3", Label: "V3", Type: 2, Style: 3},
-			{CustomID: "variation4", Label: "V4", Type: 2, Style: 3},
+		// 尝试从数据库中获取真实的按钮数据
+		if job.Components != nil && *job.Components != "" {
+			// 首先尝试解析为完整的按钮对象数组（从上游API返回的格式）
+			var buttons []MJButton
+			if err := json.Unmarshal([]byte(*job.Components), &buttons); err == nil {
+				response.Buttons = buttons
+			} else {
+				// 如果不是完整按钮对象，尝试解析为简单的字符串数组
+				if components, err := job.GetComponents(); err == nil && len(components) > 0 {
+					// 将字符串组件转换为按钮对象
+					response.Buttons = h.convertComponentsToButtons(components, job.JobID)
+				} else {
+					// 使用默认按钮
+					response.Buttons = h.getDefaultButtons(job.JobID)
+				}
+			}
+		} else {
+			// 使用默认按钮
+			response.Buttons = h.getDefaultButtons(job.JobID)
 		}
 	}
 
 	return response
+}
+
+// convertJobStatus 转换任务状态为302AI格式
+func (h *MidjourneyHandler) convertJobStatus(status entities.MidjourneyJobStatus) string {
+	switch status {
+	case entities.MidjourneyJobStatusPendingQueue:
+		return "PENDING"
+	case entities.MidjourneyJobStatusOnQueue:
+		return "IN_PROGRESS"
+	case entities.MidjourneyJobStatusSuccess:
+		return "SUCCESS"
+	case entities.MidjourneyJobStatusFailed:
+		return "FAILED"
+	default:
+		return "PENDING"
+	}
+}
+
+// convertComponentsToButtons 将字符串组件转换为按钮对象
+func (h *MidjourneyHandler) convertComponentsToButtons(components []string, jobID string) []MJButton {
+	var buttons []MJButton
+	for _, component := range components {
+		switch component {
+		case "U1":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::upsample::1::%s", jobID), Label: "U1", Type: 2, Style: 2})
+		case "U2":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::upsample::2::%s", jobID), Label: "U2", Type: 2, Style: 2})
+		case "U3":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::upsample::3::%s", jobID), Label: "U3", Type: 2, Style: 2})
+		case "U4":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::upsample::4::%s", jobID), Label: "U4", Type: 2, Style: 2})
+		case "V1":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::variation::1::%s", jobID), Label: "V1", Type: 2, Style: 2})
+		case "V2":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::variation::2::%s", jobID), Label: "V2", Type: 2, Style: 2})
+		case "V3":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::variation::3::%s", jobID), Label: "V3", Type: 2, Style: 2})
+		case "V4":
+			buttons = append(buttons, MJButton{CustomID: fmt.Sprintf("MJ::JOB::variation::4::%s", jobID), Label: "V4", Type: 2, Style: 2})
+		}
+	}
+	return buttons
+}
+
+// getDefaultButtons 获取默认按钮
+func (h *MidjourneyHandler) getDefaultButtons(jobID string) []MJButton {
+	return []MJButton{
+		{CustomID: fmt.Sprintf("MJ::JOB::upsample::1::%s", jobID), Label: "U1", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::upsample::2::%s", jobID), Label: "U2", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::upsample::3::%s", jobID), Label: "U3", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::upsample::4::%s", jobID), Label: "U4", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::reroll::0::%s::SOLO", jobID), Label: "", Type: 2, Style: 2, Emoji: "🔄"},
+		{CustomID: fmt.Sprintf("MJ::JOB::variation::1::%s", jobID), Label: "V1", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::variation::2::%s", jobID), Label: "V2", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::variation::3::%s", jobID), Label: "V3", Type: 2, Style: 2},
+		{CustomID: fmt.Sprintf("MJ::JOB::variation::4::%s", jobID), Label: "V4", Type: 2, Style: 2},
+	}
 }

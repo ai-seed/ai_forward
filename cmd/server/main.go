@@ -87,9 +87,9 @@ func main() {
 	}
 
 	// 执行数据库自动迁移
-	// if err := database.InitializeDatabase(gormDB); err != nil {
-	// 	log.WithField("error", err.Error()).Fatal("Database initialization failed")
-	// }
+	if err := database.InitializeDatabase(gormDB); err != nil {
+		log.WithField("error", err.Error()).Fatal("Database initialization failed")
+	}
 
 	// 进行健康检查
 	if err := database.HealthCheck(gormDB); err != nil {
@@ -160,6 +160,15 @@ func main() {
 		log,
 	)
 
+	// 启动 Midjourney 队列服务
+	midjourneyQueueService := serviceFactory.MidjourneyQueueService()
+	ctx := context.Background()
+	workerCount := 3 // 可以从配置文件读取
+	if err := midjourneyQueueService.StartWorkers(ctx, workerCount); err != nil {
+		log.WithField("error", err.Error()).Fatal("Failed to start Midjourney queue workers")
+	}
+	log.WithField("worker_count", workerCount).Info("Midjourney queue workers started")
+
 	// 创建路由器
 	router := routes.NewRouter(cfg, log, serviceFactory, gatewayService)
 	router.SetupRoutes()
@@ -188,11 +197,18 @@ func main() {
 
 	log.Info("Shutting down server...")
 
+	// 停止 Midjourney 队列服务
+	if err := midjourneyQueueService.StopWorkers(); err != nil {
+		log.WithField("error", err.Error()).Error("Failed to stop Midjourney queue workers")
+	} else {
+		log.Info("Midjourney queue workers stopped")
+	}
+
 	// 优雅关闭服务器
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.WithField("error", err.Error()).Fatal("Server forced to shutdown")
 	} else {
 		log.Info("Server shutdown complete")

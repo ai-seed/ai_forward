@@ -22,6 +22,14 @@ const (
 	HealthStatusUnknown   HealthStatus = "unknown"
 )
 
+// ProviderType 提供商类型枚举
+type ProviderType string
+
+const (
+	ProviderTypeAI         ProviderType = "ai"         // AI API 提供商 (OpenAI, Anthropic 等)
+	ProviderTypeMidjourney ProviderType = "midjourney" // Midjourney 提供商 (302AI, 官方等)
+)
+
 // Provider 服务提供商实体
 type Provider struct {
 	ID                  int64          `json:"id" gorm:"primaryKey;autoIncrement"`

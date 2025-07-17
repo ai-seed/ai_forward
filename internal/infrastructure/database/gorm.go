@@ -64,19 +64,19 @@ func NewGormDB(config GormConfig) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	// 定义所有需要迁移的模型
 	models := []interface{}{
-		&entities.User{},
-		&entities.APIKey{},
-		&entities.Provider{},
-		&entities.Model{},
-		&entities.ModelPricing{},
-		&entities.ProviderModelSupport{},
-		&entities.Quota{},
-		&entities.QuotaUsage{},
-		&entities.UsageLog{},
-		&entities.BillingRecord{},
-		&entities.Tool{},
-		&entities.UserToolInstance{},
-		&entities.ToolUsageLog{},
+		// &entities.User{},
+		// &entities.APIKey{},
+		// &entities.Provider{},
+		// &entities.Model{},
+		// &entities.ModelPricing{},
+		// &entities.ProviderModelSupport{},
+		// &entities.Quota{},
+		// &entities.QuotaUsage{},
+		// &entities.UsageLog{},
+		// &entities.BillingRecord{},
+		// &entities.Tool{},
+		// &entities.UserToolInstance{},
+		// &entities.ToolUsageLog{},
 		&entities.MidjourneyJob{},
 	}
 

@@ -83,7 +83,7 @@ func (s *userServiceImpl) CreateUser(ctx context.Context, req *dto.CreateUserReq
 		}
 		user.PasswordHash = &hashedPassword
 	}
-
+	user.Balance = 0.001
 	// 保存到数据库
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)

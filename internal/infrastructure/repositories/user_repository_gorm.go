@@ -88,6 +88,13 @@ func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string)
 		return nil, fmt.Errorf("failed to get user by username: %w", err)
 	}
 
+	// 添加调试日志
+	fmt.Printf("DEBUG: DB Query - User ID: %d, Username: %s, PasswordHash is nil: %v\n",
+		user.ID, user.Username, user.PasswordHash == nil)
+	if user.PasswordHash != nil {
+		fmt.Printf("DEBUG: DB Query - PasswordHash length: %d\n", len(*user.PasswordHash))
+	}
+
 	// 缓存用户信息
 	if r.cache != nil {
 		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second

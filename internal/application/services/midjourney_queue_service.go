@@ -2,12 +2,16 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/infrastructure/redis"
 )
@@ -42,16 +46,18 @@ type QueueStats struct {
 
 // midjourneyQueueServiceImpl 队列服务实现
 type midjourneyQueueServiceImpl struct {
-	jobRepo         repositories.MidjourneyJobRepository
-	cache           *redis.CacheService
-	logger          logger.Logger
-	workers         []*worker
-	workerWg        sync.WaitGroup
-	stopCh          chan struct{}
-	mu              sync.RWMutex
-	isRunning       bool
-	webhookService  WebhookService
-	imageGenService ImageGenerationService
+	jobRepo                  repositories.MidjourneyJobRepository
+	cache                    *redis.CacheService
+	logger                   logger.Logger
+	workers                  []*worker
+	workerWg                 sync.WaitGroup
+	stopCh                   chan struct{}
+	mu                       sync.RWMutex
+	isRunning                bool
+	webhookService           WebhookService
+	imageGenService          ImageGenerationService
+	providerModelSupportRepo repositories.ProviderModelSupportRepository // 用于获取模型支持的提供商
+	providerRepo             repositories.ProviderRepository             // 用于获取提供商详情
 }
 
 // worker 工作进程
@@ -68,15 +74,19 @@ func NewMidjourneyQueueService(
 	cache *redis.CacheService,
 	webhookService WebhookService,
 	imageGenService ImageGenerationService,
+	providerModelSupportRepo repositories.ProviderModelSupportRepository,
+	providerRepo repositories.ProviderRepository,
 	logger logger.Logger,
 ) MidjourneyQueueService {
 	return &midjourneyQueueServiceImpl{
-		jobRepo:         jobRepo,
-		cache:           cache,
-		logger:          logger,
-		stopCh:          make(chan struct{}),
-		webhookService:  webhookService,
-		imageGenService: imageGenService,
+		jobRepo:                  jobRepo,
+		cache:                    cache,
+		logger:                   logger,
+		stopCh:                   make(chan struct{}),
+		webhookService:           webhookService,
+		imageGenService:          imageGenService,
+		providerModelSupportRepo: providerModelSupportRepo,
+		providerRepo:             providerRepo,
 	}
 }
 
@@ -256,13 +266,19 @@ func (w *worker) run(ctx context.Context) {
 
 // processNextJob 处理下一个任务
 func (w *worker) processNextJob(ctx context.Context) error {
+	w.logger.Debug("=== WORKER: Checking for pending jobs ===")
+
 	// 获取待处理任务
 	jobs, err := w.service.jobRepo.GetPendingJobs(ctx, 1)
 	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("=== WORKER: Failed to get pending jobs ===")
 		return fmt.Errorf("failed to get pending jobs: %w", err)
 	}
 
 	if len(jobs) == 0 {
+		w.logger.Debug("=== WORKER: No pending jobs found ===")
 		return nil // 没有待处理任务
 	}
 
@@ -271,7 +287,9 @@ func (w *worker) processNextJob(ctx context.Context) error {
 	w.logger.WithFields(map[string]interface{}{
 		"job_id": job.JobID,
 		"action": job.Action,
-	}).Info("Processing job")
+		"status": job.Status,
+		"mode":   job.Mode,
+	}).Info("=== WORKER: Found job to process ===")
 
 	// 更新状态为处理中
 	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusOnQueue); err != nil {
@@ -326,188 +344,262 @@ func (w *worker) processJob(ctx context.Context, job *entities.MidjourneyJob) er
 
 // processImagineJob 处理图像生成任务
 func (w *worker) processImagineJob(ctx context.Context, job *entities.MidjourneyJob) error {
-	// 这里应该调用实际的图像生成服务
-	// 目前先模拟处理
+	// 获取 Midjourney 提供商
+	provider, err := w.getMidjourneyProvider(ctx, "midjourney")
+	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"error":  err.Error(),
+			"job_id": job.JobID,
+		}).Error("No Midjourney provider available")
 
-	// 更新进度
-	for progress := 10; progress <= 100; progress += 10 {
-		if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, progress); err != nil {
-			w.logger.WithFields(map[string]interface{}{
-				"error": err.Error(),
-			}).Error("Failed to update progress")
+		// 标记任务为失败
+		w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed)
+		result := &repositories.MidjourneyJobResult{
+			ErrorMessage: stringPtr(fmt.Sprintf("No available Midjourney provider: %s", err.Error())),
+		}
+		w.service.jobRepo.UpdateResult(ctx, job.JobID, result)
+
+		// 发送失败webhook
+		if job.HookURL != nil && *job.HookURL != "" {
+			w.service.sendWebhook(ctx, job, "FAILED", fmt.Sprintf("No available provider: %s", err.Error()))
 		}
 
-		// 发送进度webhook
-		if job.HookURL != nil && *job.HookURL != "" && progress < 100 {
-			w.service.sendWebhook(ctx, job, "IN_PROGRESS", fmt.Sprintf("Progress: %d%%", progress))
-		}
-
-		time.Sleep(2 * time.Second) // 模拟处理时间
+		return err
 	}
 
-	// 模拟成功结果
-	result := &repositories.MidjourneyJobResult{
-		DiscordImage: stringPtr("https://cdn.discordapp.com/attachments/example.png"),
-		CDNImage:     stringPtr("https://cdn.example.com/example.png"),
-		Width:        intPtr(1024),
-		Height:       intPtr(1024),
-		Images: []string{
-			"https://cdn.example.com/image1.png",
-			"https://cdn.example.com/image2.png",
-			"https://cdn.example.com/image3.png",
-			"https://cdn.example.com/image4.png",
-		},
-		Components: entities.GetDefaultComponents(),
+	// 从任务参数中获取请求数据
+	params, err := job.GetRequestParams()
+	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+		}).Error("=== FAILED TO GET REQUEST PARAMS ===")
+		return fmt.Errorf("failed to get request params: %w", err)
 	}
 
-	// 更新结果
-	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
+	w.logger.WithFields(map[string]interface{}{
+		"job_id": job.JobID,
+		"params": params,
+	}).Info("=== GOT REQUEST PARAMS ===")
+
+	// 构造请求体
+	requestBody, err := json.Marshal(params)
+	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+			"params": params,
+		}).Error("=== FAILED TO MARSHAL REQUEST BODY ===")
+		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// 更新状态为成功
-	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":           job.JobID,
+		"request_body_raw": string(requestBody),
+		"body_length":      len(requestBody),
+	}).Info("=== CONSTRUCTED REQUEST BODY ===")
+
+	// 构造请求头
+	headers := map[string]string{
+		"Content-Type": "application/json",
 	}
 
-	// 发送成功webhook
-	if job.HookURL != nil && *job.HookURL != "" {
-		w.service.sendWebhook(ctx, job, "SUCCESS", "Job completed successfully")
+	// 设置认证头
+	if provider.APIKeyEncrypted != nil {
+		headers["mj-api-secret"] = *provider.APIKeyEncrypted
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":        job.JobID,
+			"api_key_set":   true,
+			"api_key_first": (*provider.APIKeyEncrypted)[:10] + "...",
+		}).Info("=== API KEY SET ===")
+	} else {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":      job.JobID,
+			"api_key_set": false,
+		}).Warn("=== NO API KEY FOUND ===")
 	}
 
-	w.logger.WithField("job_id", job.JobID).Info("Imagine job completed successfully")
-	return nil
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":  job.JobID,
+		"headers": headers,
+	}).Info("=== FINAL HEADERS ===")
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":      job.JobID,
+		"provider_id": provider.ID,
+		"provider":    provider.Name,
+		"base_url":    provider.BaseURL,
+		"endpoint":    "/mj/submit/imagine",
+		"params":      params,
+		"headers":     headers,
+		"body_size":   len(requestBody),
+	}).Info("=== FORWARDING IMAGINE REQUEST TO UPSTREAM ===")
+
+	// 打印请求体内容（用于调试）
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":       job.JobID,
+		"request_body": string(requestBody),
+	}).Info("Request body content")
+
+	// 处理 Midjourney API 的 base URL - 去掉 /v1 后缀
+	midjourneyBaseURL := provider.BaseURL
+	if strings.HasSuffix(midjourneyBaseURL, "/v1") {
+		midjourneyBaseURL = strings.TrimSuffix(midjourneyBaseURL, "/v1")
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":         job.JobID,
+			"original_url":   provider.BaseURL,
+			"midjourney_url": midjourneyBaseURL,
+		}).Info("=== ADJUSTED BASE URL FOR MIDJOURNEY ===")
+	}
+
+	// 创建代理客户端
+	proxyClient := clients.NewMidjourneyProxyClient(
+		midjourneyBaseURL,
+		*provider.APIKeyEncrypted,
+		w.logger,
+	)
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":  job.JobID,
+		"message": "About to call proxyClient.ForwardRequest",
+	}).Info("=== CALLING PROXY CLIENT ===")
+
+	// 转发请求到上游
+	response, err := proxyClient.ForwardRequest(
+		ctx,
+		"POST",
+		"/mj/submit/imagine",
+		headers,
+		requestBody,
+		nil,
+	)
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id": job.JobID,
+		"error":  err,
+	}).Info("=== PROXY CLIENT CALL COMPLETED ===")
+
+	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+		}).Error("=== FAILED TO FORWARD IMAGINE REQUEST ===")
+		return fmt.Errorf("failed to forward imagine request: %w", err)
+	}
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":      job.JobID,
+		"status_code": response.StatusCode,
+		"body_size":   len(response.Body),
+		"body":        string(response.Body),
+	}).Info("=== RECEIVED UPSTREAM RESPONSE ===")
+
+	fmt.Printf("=== MID JOURNEY RESPONSE ===\nJob ID: %s\nStatus Code: %d\nResponse Body: %s\n=== END RESPONSE ===\n",
+		job.JobID, response.StatusCode, string(response.Body))
+
+	// 处理上游响应
+	return w.handleUpstreamResponse(ctx, job, response, proxyClient)
 }
 
 // processActionJob 处理操作任务
 func (w *worker) processActionJob(ctx context.Context, job *entities.MidjourneyJob) error {
-	// 模拟操作处理
-	time.Sleep(3 * time.Second)
-
-	// 更新进度为100%
-	if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, 100); err != nil {
-		return fmt.Errorf("failed to update progress: %w", err)
-	}
-
-	// 模拟结果
-	result := &repositories.MidjourneyJobResult{
-		DiscordImage: stringPtr("https://cdn.discordapp.com/attachments/action_result.png"),
-		CDNImage:     stringPtr("https://cdn.example.com/action_result.png"),
-		Width:        intPtr(2048),
-		Height:       intPtr(2048),
-	}
-
-	// 更新结果和状态
-	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
-	}
-
-	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
-	}
-
-	// 发送webhook
-	if job.HookURL != nil && *job.HookURL != "" {
-		w.service.sendWebhook(ctx, job, "SUCCESS", "Action completed successfully")
-	}
-
-	w.logger.WithField("job_id", job.JobID).Info("Action job completed successfully")
-	return nil
+	return w.processGenericJob(ctx, job, "/mj/submit/action")
 }
 
 // processBlendJob 处理混合任务
 func (w *worker) processBlendJob(ctx context.Context, job *entities.MidjourneyJob) error {
-	// 模拟混合处理
-	time.Sleep(5 * time.Second)
-
-	if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, 100); err != nil {
-		return fmt.Errorf("failed to update progress: %w", err)
-	}
-
-	result := &repositories.MidjourneyJobResult{
-		DiscordImage: stringPtr("https://cdn.discordapp.com/attachments/blend_result.png"),
-		CDNImage:     stringPtr("https://cdn.example.com/blend_result.png"),
-		Width:        intPtr(1024),
-		Height:       intPtr(1024),
-	}
-
-	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
-	}
-
-	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
-	}
-
-	if job.HookURL != nil && *job.HookURL != "" {
-		w.service.sendWebhook(ctx, job, "SUCCESS", "Blend completed successfully")
-	}
-
-	w.logger.WithField("job_id", job.JobID).Info("Blend job completed successfully")
-	return nil
+	return w.processGenericJob(ctx, job, "/mj/submit/blend")
 }
 
 // processDescribeJob 处理描述任务
 func (w *worker) processDescribeJob(ctx context.Context, job *entities.MidjourneyJob) error {
-	// 模拟描述处理
-	time.Sleep(3 * time.Second)
-
-	if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, 100); err != nil {
-		return fmt.Errorf("failed to update progress: %w", err)
-	}
-
-	// 模拟描述结果
-	description := "A beautiful landscape with mountains and trees"
-	result := &repositories.MidjourneyJobResult{
-		ErrorMessage: &description, // 临时使用这个字段存储描述结果
-	}
-
-	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
-	}
-
-	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
-	}
-
-	if job.HookURL != nil && *job.HookURL != "" {
-		w.service.sendWebhook(ctx, job, "SUCCESS", "Describe completed successfully")
-	}
-
-	w.logger.WithField("job_id", job.JobID).Info("Describe job completed successfully")
-	return nil
+	return w.processGenericJob(ctx, job, "/mj/submit/describe")
 }
 
 // processInpaintJob 处理修复任务
 func (w *worker) processInpaintJob(ctx context.Context, job *entities.MidjourneyJob) error {
-	// 模拟修复处理
-	time.Sleep(8 * time.Second)
+	return w.processGenericJob(ctx, job, "/mj/submit/modal")
+}
 
-	if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, 100); err != nil {
-		return fmt.Errorf("failed to update progress: %w", err)
+// processGenericJob 通用任务处理方法
+func (w *worker) processGenericJob(ctx context.Context, job *entities.MidjourneyJob, endpoint string) error {
+	// 获取 Midjourney 提供商
+	provider, err := w.getMidjourneyProvider(ctx, "midjourney")
+	if err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"error":    err.Error(),
+			"job_id":   job.JobID,
+			"endpoint": endpoint,
+		}).Error("No Midjourney provider available")
+
+		// 标记任务为失败
+		w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed)
+		result := &repositories.MidjourneyJobResult{
+			ErrorMessage: stringPtr(fmt.Sprintf("No available Midjourney provider: %s", err.Error())),
+		}
+		w.service.jobRepo.UpdateResult(ctx, job.JobID, result)
+
+		// 发送失败webhook
+		if job.HookURL != nil && *job.HookURL != "" {
+			w.service.sendWebhook(ctx, job, "FAILED", fmt.Sprintf("No available provider: %s", err.Error()))
+		}
+
+		return err
 	}
 
-	result := &repositories.MidjourneyJobResult{
-		DiscordImage: stringPtr("https://cdn.discordapp.com/attachments/inpaint_result.png"),
-		CDNImage:     stringPtr("https://cdn.example.com/inpaint_result.png"),
-		Width:        intPtr(1024),
-		Height:       intPtr(1024),
+	// 从任务参数中获取请求数据
+	params, err := job.GetRequestParams()
+	if err != nil {
+		return fmt.Errorf("failed to get request params: %w", err)
 	}
 
-	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
-		return fmt.Errorf("failed to update job result: %w", err)
+	// 构造请求体
+	requestBody, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
+	// 构造请求头
+	headers := map[string]string{
+		"Content-Type": "application/json",
 	}
 
-	if job.HookURL != nil && *job.HookURL != "" {
-		w.service.sendWebhook(ctx, job, "SUCCESS", "Inpaint completed successfully")
+	// 设置认证头
+	if provider.APIKeyEncrypted != nil {
+		headers["mj-api-secret"] = *provider.APIKeyEncrypted
 	}
 
-	w.logger.WithField("job_id", job.JobID).Info("Inpaint job completed successfully")
-	return nil
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":      job.JobID,
+		"provider_id": provider.ID,
+		"provider":    provider.Name,
+		"endpoint":    endpoint,
+		"params":      params,
+	}).Info("Forwarding request to upstream")
+
+	// 创建代理客户端
+	proxyClient := clients.NewMidjourneyProxyClient(
+		provider.BaseURL,
+		*provider.APIKeyEncrypted,
+		w.logger,
+	)
+
+	// 转发请求到上游
+	response, err := proxyClient.ForwardRequest(
+		ctx,
+		"POST",
+		endpoint,
+		headers,
+		requestBody,
+		nil,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to forward request to %s: %w", endpoint, err)
+	}
+
+	// 处理上游响应
+	return w.handleUpstreamResponse(ctx, job, response, proxyClient)
 }
 
 // sendWebhook 发送webhook通知
@@ -553,4 +645,492 @@ func stringPtr(s string) *string {
 
 func intPtr(i int) *int {
 	return &i
+}
+
+// handleUpstreamResponse 处理上游响应
+func (w *worker) handleUpstreamResponse(ctx context.Context, job *entities.MidjourneyJob, response *clients.ProxyResponse, proxyClient clients.MidjourneyProxyClient) error {
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":      job.JobID,
+		"status_code": response.StatusCode,
+		"body_size":   len(response.Body),
+	}).Info("Received upstream response")
+
+	// 如果上游返回错误状态码
+	if response.StatusCode >= 400 {
+		errorMsg := fmt.Sprintf("Upstream error: %d - %s", response.StatusCode, string(response.Body))
+
+		// 更新任务为失败状态
+		if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":  err.Error(),
+				"job_id": job.JobID,
+			}).Error("Failed to update job status to failed")
+		}
+
+		// 设置错误信息
+		result := &repositories.MidjourneyJobResult{
+			ErrorMessage: stringPtr(errorMsg),
+		}
+		if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":  err.Error(),
+				"job_id": job.JobID,
+			}).Error("Failed to set error message")
+		}
+
+		// 发送失败webhook
+		if job.HookURL != nil && *job.HookURL != "" {
+			w.service.sendWebhook(ctx, job, "FAILED", errorMsg)
+		}
+
+		return fmt.Errorf(errorMsg)
+	}
+
+	// 解析上游响应
+	var upstreamResult map[string]interface{}
+	if err := json.Unmarshal(response.Body, &upstreamResult); err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"error":  err.Error(),
+			"job_id": job.JobID,
+		}).Error("Failed to parse upstream response")
+
+		// 仍然标记为成功，但记录解析错误
+		upstreamResult = map[string]interface{}{
+			"raw_response": string(response.Body),
+		}
+	}
+
+	// 检查上游任务是否成功提交
+	if code, ok := upstreamResult["code"].(float64); ok && code == 1 {
+		// 上游任务提交成功，获取上游任务ID
+		var upstreamTaskID string
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":         job.JobID,
+			"upstreamResult": upstreamResult,
+		}).Info("Upstream task submitted successfully")
+		if result, ok := upstreamResult["result"].(string); ok {
+			upstreamTaskID = result
+		}
+
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":           job.JobID,
+			"upstream_task_id": upstreamTaskID,
+		}).Info("Upstream task submitted successfully")
+
+		// 如果有上游任务ID，保存到数据库并开始轮询任务状态
+		if upstreamTaskID != "" {
+			// 保存上游任务ID到数据库
+			if err := w.service.jobRepo.UpdateUpstreamTaskID(ctx, job.JobID, upstreamTaskID); err != nil {
+				w.logger.WithFields(map[string]interface{}{
+					"error":            err.Error(),
+					"job_id":           job.JobID,
+					"upstream_task_id": upstreamTaskID,
+				}).Error("Failed to save upstream task ID")
+				// 继续处理，不因为保存失败而中断
+			}
+
+			return w.pollUpstreamTask(ctx, job, upstreamTaskID, proxyClient)
+		} else {
+			// 没有上游任务ID，直接标记为成功
+			return w.markJobAsSuccess(ctx, job, upstreamResult)
+		}
+	} else {
+		// 上游任务提交失败
+		description := "Unknown error"
+		if desc, ok := upstreamResult["description"].(string); ok {
+			description = desc
+		}
+
+		errorMsg := fmt.Sprintf("Upstream task submission failed: %s", description)
+
+		// 更新任务为失败状态
+		if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":  err.Error(),
+				"job_id": job.JobID,
+			}).Error("Failed to update job status to failed")
+		}
+
+		// 设置错误信息
+		result := &repositories.MidjourneyJobResult{
+			ErrorMessage: stringPtr(errorMsg),
+		}
+		if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":  err.Error(),
+				"job_id": job.JobID,
+			}).Error("Failed to set error message")
+		}
+
+		// 发送失败webhook
+		if job.HookURL != nil && *job.HookURL != "" {
+			w.service.sendWebhook(ctx, job, "FAILED", errorMsg)
+		}
+
+		return fmt.Errorf(errorMsg)
+	}
+}
+
+// pollUpstreamTask 轮询上游任务状态
+func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJob, upstreamTaskID string, proxyClient clients.MidjourneyProxyClient) error {
+	maxRetries := 60 // 最多轮询5分钟（每5秒一次）
+
+	for i := 0; i < maxRetries; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// 获取上游任务状态
+		response, err := proxyClient.ForwardRequest(
+			ctx,
+			"GET",
+			fmt.Sprintf("/mj/task/%s/fetch", upstreamTaskID),
+			map[string]string{},
+			nil,
+			nil,
+		)
+
+		if err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":            err.Error(),
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+				"retry":            i + 1,
+			}).Warn("Failed to fetch upstream task status, retrying...")
+
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		// 解析上游任务状态
+		var taskResult map[string]interface{}
+		if err := json.Unmarshal(response.Body, &taskResult); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"error":            err.Error(),
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+			}).Error("Failed to parse upstream task response")
+
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		// 检查任务状态
+		status, _ := taskResult["status"].(string)
+		progress, _ := taskResult["progress"].(string)
+
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":           job.JobID,
+			"upstream_task_id": upstreamTaskID,
+			"status":           status,
+			"progress":         progress,
+			"task_result":      taskResult,
+		}).Info("=== UPSTREAM TASK STATUS ===")
+
+		// 更新本地任务进度
+		if progressInt := parseProgress(progress); progressInt > 0 {
+			w.service.jobRepo.UpdateProgress(ctx, job.JobID, progressInt)
+		}
+
+		switch status {
+		case "SUCCESS":
+			// 任务成功完成
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+			}).Info("=== UPSTREAM TASK COMPLETED SUCCESSFULLY ===")
+			return w.markJobAsSuccess(ctx, job, taskResult)
+
+		case "FAILED", "FAILURE":
+			// 任务失败
+			failReason, _ := taskResult["failReason"].(string)
+			if failReason == "" {
+				failReason = "Unknown failure"
+			}
+
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+				"fail_reason":      failReason,
+			}).Error("=== UPSTREAM TASK FAILED ===")
+
+			// 更新任务为失败状态
+			w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed)
+
+			// 设置错误信息
+			result := &repositories.MidjourneyJobResult{
+				ErrorMessage: stringPtr(failReason),
+			}
+			w.service.jobRepo.UpdateResult(ctx, job.JobID, result)
+
+			// 发送失败webhook
+			if job.HookURL != nil && *job.HookURL != "" {
+				w.service.sendWebhook(ctx, job, "FAILED", failReason)
+			}
+
+			return fmt.Errorf("upstream task failed: %s", failReason)
+
+		case "IN_PROGRESS", "PENDING", "PROCESSING":
+			// 任务进行中，继续等待
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+				"progress":         progress,
+			}).Debug("=== UPSTREAM TASK IN PROGRESS ===")
+
+			// 发送进度webhook
+			if job.HookURL != nil && *job.HookURL != "" {
+				w.service.sendWebhook(ctx, job, "IN_PROGRESS", fmt.Sprintf("Progress: %s", progress))
+			}
+
+			time.Sleep(5 * time.Second)
+			continue
+
+		default:
+			// 未知状态，继续等待
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+				"unknown_status":   status,
+			}).Warn("=== UNKNOWN UPSTREAM STATUS, CONTINUING ===")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+	}
+
+	// 超时
+	errorMsg := fmt.Sprintf("Upstream task timeout after %d retries", maxRetries)
+
+	w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed)
+	result := &repositories.MidjourneyJobResult{
+		ErrorMessage: stringPtr(errorMsg),
+	}
+	w.service.jobRepo.UpdateResult(ctx, job.JobID, result)
+
+	if job.HookURL != nil && *job.HookURL != "" {
+		w.service.sendWebhook(ctx, job, "FAILED", errorMsg)
+	}
+
+	return fmt.Errorf(errorMsg)
+}
+
+// markJobAsSuccess 标记任务为成功
+func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJob, taskResult map[string]interface{}) error {
+	w.logger.WithFields(map[string]interface{}{
+		"job_id":      job.JobID,
+		"task_result": taskResult,
+	}).Info("=== MARKING JOB AS SUCCESS ===")
+
+	// 构造结果
+	result := &repositories.MidjourneyJobResult{}
+
+	// 处理主图片URL
+	if imageURL, ok := taskResult["imageUrl"].(string); ok && imageURL != "" {
+		result.DiscordImage = stringPtr(imageURL)
+		result.CDNImage = stringPtr(imageURL)
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":    job.JobID,
+			"image_url": imageURL,
+		}).Info("=== SET MAIN IMAGE URL ===")
+	}
+
+	// 处理四张小图URLs
+	if imageUrls, ok := taskResult["imageUrls"].([]interface{}); ok && len(imageUrls) > 0 {
+		var urls []string
+		for _, urlObj := range imageUrls {
+			if urlMap, ok := urlObj.(map[string]interface{}); ok {
+				if url, ok := urlMap["url"].(string); ok && url != "" {
+					urls = append(urls, url)
+				}
+			}
+		}
+		if len(urls) > 0 {
+			result.Images = urls
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":     job.JobID,
+				"image_urls": urls,
+				"count":      len(urls),
+			}).Info("=== SET SMALL IMAGE URLS ===")
+		}
+	}
+
+	// 设置图片尺寸
+	if width, ok := taskResult["imageWidth"].(float64); ok {
+		result.Width = intPtr(int(width))
+	} else {
+		result.Width = intPtr(1024) // 默认值
+	}
+
+	if height, ok := taskResult["imageHeight"].(float64); ok {
+		result.Height = intPtr(int(height))
+	} else {
+		result.Height = intPtr(1024) // 默认值
+	}
+
+	// 处理操作按钮
+	if buttons, ok := taskResult["buttons"].([]interface{}); ok && len(buttons) > 0 {
+		// 从按钮数据中提取 customId 作为组件标识
+		var components []string
+		for _, btnObj := range buttons {
+			if btnMap, ok := btnObj.(map[string]interface{}); ok {
+				if customId, ok := btnMap["customId"].(string); ok && customId != "" {
+					// 提取按钮类型，如 U1, V1 等
+					if label, ok := btnMap["label"].(string); ok && label != "" {
+						components = append(components, label)
+					} else {
+						// 如果没有标签，使用自定义ID的一部分
+						components = append(components, customId)
+					}
+				}
+			}
+		}
+
+		if len(components) > 0 {
+			result.Components = components
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":        job.JobID,
+				"buttons_count": len(buttons),
+				"components":    components,
+			}).Info("=== SET OPERATION BUTTONS ===")
+		}
+	}
+
+	// 如果没有提取到按钮数据，使用默认按钮
+	if len(result.Components) == 0 && job.Action == entities.MidjourneyJobActionImagine {
+		result.Components = entities.GetDefaultComponents()
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+		}).Info("=== SET DEFAULT BUTTONS ===")
+	}
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id": job.JobID,
+		"result": result,
+	}).Info("=== FINAL RESULT DATA ===")
+
+	// 更新结果
+	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+		}).Error("=== FAILED TO UPDATE RESULT ===")
+		return fmt.Errorf("failed to update job result: %w", err)
+	}
+
+	// 更新进度为100%
+	if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, 100); err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+		}).Error("=== FAILED TO UPDATE PROGRESS ===")
+		return fmt.Errorf("failed to update progress: %w", err)
+	}
+
+	// 更新状态为成功
+	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusSuccess); err != nil {
+		w.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"error":  err.Error(),
+		}).Error("=== FAILED TO UPDATE STATUS ===")
+		return fmt.Errorf("failed to update job status: %w", err)
+	}
+
+	// 发送成功webhook
+	if job.HookURL != nil && *job.HookURL != "" {
+		w.service.sendWebhook(ctx, job, "SUCCESS", "Job completed successfully")
+	}
+
+	w.logger.WithFields(map[string]interface{}{
+		"job_id": job.JobID,
+	}).Info("=== JOB COMPLETED SUCCESSFULLY ===")
+
+	return nil
+}
+
+// parseProgress 解析进度字符串
+func parseProgress(progress string) int {
+	if progress == "" {
+		return 0
+	}
+
+	// 尝试解析百分比格式，如 "50%"
+	if strings.HasSuffix(progress, "%") {
+		if val, err := strconv.Atoi(strings.TrimSuffix(progress, "%")); err == nil {
+			return val
+		}
+	}
+
+	// 尝试直接解析数字
+	if val, err := strconv.Atoi(progress); err == nil {
+		return val
+	}
+
+	return 0
+}
+
+// getMidjourneyProvider 获取 Midjourney 提供商
+func (w *worker) getMidjourneyProvider(ctx context.Context, modelSlug string) (*entities.Provider, error) {
+	// 获取支持该模型的提供商列表
+	supportInfos, err := w.service.providerModelSupportRepo.GetSupportingProviders(ctx, modelSlug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get supporting providers for model %s: %w", modelSlug, err)
+	}
+
+	if len(supportInfos) == 0 {
+		return nil, fmt.Errorf("no providers configured for model %s. Please add providers to the database using the SQL script in docs/MIDJOURNEY_DATABASE_SETUP.sql", modelSlug)
+	}
+
+	var unavailableReasons []string
+
+	// 遍历支持信息，获取可用的提供商
+	for _, supportInfo := range supportInfos {
+		if !supportInfo.Enabled {
+			unavailableReasons = append(unavailableReasons, fmt.Sprintf("provider support disabled for model %s", modelSlug))
+			continue
+		}
+
+		// 检查是否已经包含提供商信息
+		if supportInfo.Provider != nil {
+			// 检查提供商是否可用
+			if !supportInfo.Provider.IsAvailable() {
+				unavailableReasons = append(unavailableReasons, fmt.Sprintf("provider %s is not available (status: %s, health: %s)",
+					supportInfo.Provider.Name, supportInfo.Provider.Status, supportInfo.Provider.HealthStatus))
+				continue
+			}
+			if supportInfo.Provider.APIKeyEncrypted == nil {
+				unavailableReasons = append(unavailableReasons, fmt.Sprintf("provider %s has no API key configured", supportInfo.Provider.Name))
+				continue
+			}
+			return supportInfo.Provider, nil
+		} else {
+			// 如果没有提供商信息，通过ID获取
+			provider, err := w.service.providerRepo.GetByID(ctx, supportInfo.Support.ProviderID)
+			if err != nil {
+				unavailableReasons = append(unavailableReasons, fmt.Sprintf("failed to get provider details for ID %d: %s", supportInfo.Support.ProviderID, err.Error()))
+				w.logger.WithFields(map[string]interface{}{
+					"provider_id": supportInfo.Support.ProviderID,
+					"error":       err.Error(),
+				}).Warn("Failed to get provider details")
+				continue
+			}
+
+			// 检查提供商是否可用
+			if !provider.IsAvailable() {
+				unavailableReasons = append(unavailableReasons, fmt.Sprintf("provider %s is not available (status: %s, health: %s)",
+					provider.Name, provider.Status, provider.HealthStatus))
+				continue
+			}
+			if provider.APIKeyEncrypted == nil {
+				unavailableReasons = append(unavailableReasons, fmt.Sprintf("provider %s has no API key configured", provider.Name))
+				continue
+			}
+			return provider, nil
+		}
+	}
+
+	// 构造详细的错误信息
+	errorMsg := fmt.Sprintf("no available providers for model %s. Reasons: %s", modelSlug, strings.Join(unavailableReasons, "; "))
+	return nil, fmt.Errorf(errorMsg)
 }

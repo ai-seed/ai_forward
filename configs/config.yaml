@@ -25,7 +25,7 @@ database:
 
 logging:
   level: "info"
-  format: "json"
+  format: "text"
   output: "stdout"
 
 rate_limiting:
@@ -194,6 +194,3 @@ function_call:
     # serpapi_key: "your_serpapi_key"
     # serper_key: "your_serper_key"
     # searxng_base_url: "https://your-searxng-instance.com"
-
-
-

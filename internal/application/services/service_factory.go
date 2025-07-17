@@ -163,6 +163,8 @@ func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
 		f.redisFactory.GetCacheService(),
 		f.WebhookService(),
 		f.ImageGenerationService(),
+		f.repoFactory.ProviderModelSupportRepository(),
+		f.repoFactory.ProviderRepository(),
 		f.logger,
 	)
 }
@@ -174,6 +176,7 @@ func (f *ServiceFactory) WebhookService() WebhookService {
 
 // ImageGenerationService 获取图像生成服务
 func (f *ServiceFactory) ImageGenerationService() ImageGenerationService {
+	// 现在 Midjourney 通过数据库配置提供商，这里只提供模拟服务用于向后兼容
 	return NewMockImageGenerationService(f.logger)
 }
 

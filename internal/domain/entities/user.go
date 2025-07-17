@@ -18,10 +18,10 @@ type User struct {
 	ID           int64      `json:"id" gorm:"primaryKey;autoIncrement"`
 	Username     string     `json:"username" gorm:"uniqueIndex;not null;size:100"`
 	Email        string     `json:"email" gorm:"uniqueIndex;not null;size:255"`
-	PasswordHash *string    `json:"-" gorm:"size:255"` // 密码哈希，不在JSON中返回
+	PasswordHash *string    `json:"password_hash" gorm:"size:255;column:password_hash"` // 密码哈希，不在JSON中返回
 	FullName     *string    `json:"full_name,omitempty" gorm:"size:255"`
 	Status       UserStatus `json:"status" gorm:"not null;default:active;size:20"`
-	Balance      float64    `json:"balance" gorm:"type:numeric(15,6);not null;default:0"`
+	Balance      float64    `json:"balance" gorm:"type:numeric(15,6);not null;default:0.000001"`
 	CreatedAt    time.Time  `json:"created_at" gorm:"not null;autoCreateTime"`
 	UpdatedAt    time.Time  `json:"updated_at" gorm:"not null;autoUpdateTime"`
 }
@@ -38,7 +38,11 @@ func (u *User) IsActive() bool {
 
 // CanMakeRequest 检查用户是否可以发起请求
 func (u *User) CanMakeRequest() bool {
-	return u.IsActive() && u.Balance > 0
+	return u.IsActive()
+}
+
+func (u *User) HasBalance() bool {
+	return u.Balance > 0
 }
 
 // DeductBalance 扣减用户余额（允许余额变负数）
