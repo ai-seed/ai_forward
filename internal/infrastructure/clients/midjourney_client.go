@@ -178,11 +178,6 @@ func (c *midjourneyClientImpl) FetchTask(ctx context.Context, taskID string) (*M
 	req.Header.Set("mj-api-secret", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	c.logger.WithFields(map[string]interface{}{
-		"url":     url,
-		"task_id": taskID,
-	}).Debug("Fetching Midjourney task")
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -238,11 +233,6 @@ func (c *midjourneyClientImpl) submitRequest(ctx context.Context, url string, re
 	req.Header.Set("mj-api-secret", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	c.logger.WithFields(map[string]interface{}{
-		"url":     url,
-		"request": string(jsonData),
-	}).Debug("Sending Midjourney request")
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -266,11 +256,6 @@ func (c *midjourneyClientImpl) submitRequest(ctx context.Context, url string, re
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-
-	c.logger.WithFields(map[string]interface{}{
-		"task_id": result.Result,
-		"code":    result.Code,
-	}).Info("Midjourney task submitted successfully")
 
 	return &result, nil
 }

@@ -4,26 +4,36 @@ import (
 	"time"
 )
 
+// RequestType 请求类型枚举
+type RequestType string
+
+const (
+	RequestTypeAPI        RequestType = "api"        // 普通API请求
+	RequestTypeMidjourney RequestType = "midjourney" // Midjourney任务
+)
+
 // UsageLog 使用日志实体
 type UsageLog struct {
-	ID           int64     `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserID       int64     `json:"user_id" gorm:"not null;index"`
-	APIKeyID     int64     `json:"api_key_id" gorm:"not null;index"`
-	ProviderID   int64     `json:"provider_id" gorm:"not null;index"`
-	ModelID      int64     `json:"model_id" gorm:"not null;index"`
-	RequestID    string    `json:"request_id" gorm:"uniqueIndex;not null;size:100"`
-	Method       string    `json:"method" gorm:"not null;size:10"`
-	Endpoint     string    `json:"endpoint" gorm:"not null;size:200"`
-	InputTokens  int       `json:"input_tokens" gorm:"default:0"`
-	OutputTokens int       `json:"output_tokens" gorm:"default:0"`
-	TotalTokens  int       `json:"total_tokens" gorm:"default:0"`
-	RequestSize  int       `json:"request_size" gorm:"default:0"`
-	ResponseSize int       `json:"response_size" gorm:"default:0"`
-	DurationMs   int       `json:"duration_ms" gorm:"not null"`
-	StatusCode   int       `json:"status_code" gorm:"not null;index"`
-	ErrorMessage *string   `json:"error_message,omitempty" gorm:"type:text"`
-	Cost         float64   `json:"cost" gorm:"type:numeric(15,8);default:0"`
-	CreatedAt    time.Time `json:"created_at" gorm:"not null;autoCreateTime;index"`
+	ID           int64       `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserID       int64       `json:"user_id" gorm:"not null;index"`
+	APIKeyID     int64       `json:"api_key_id" gorm:"not null;index"`
+	ProviderID   int64       `json:"provider_id" gorm:"not null;index"`
+	ModelID      int64       `json:"model_id" gorm:"not null;index"`
+	RequestID    string      `json:"request_id" gorm:"uniqueIndex;not null;size:100"`        // 对于Midjourney存储job_id
+	RequestType  RequestType `json:"request_type" gorm:"not null;default:api;size:20;index"` // 请求类型
+	Method       string      `json:"method" gorm:"not null;size:10"`
+	Endpoint     string      `json:"endpoint" gorm:"not null;size:200"`
+	InputTokens  int         `json:"input_tokens" gorm:"default:0"`
+	OutputTokens int         `json:"output_tokens" gorm:"default:0"`
+	TotalTokens  int         `json:"total_tokens" gorm:"default:0"`
+	RequestSize  int         `json:"request_size" gorm:"default:0"`
+	ResponseSize int         `json:"response_size" gorm:"default:0"`
+	DurationMs   int         `json:"duration_ms" gorm:"not null"`
+	StatusCode   int         `json:"status_code" gorm:"not null;index"`
+	ErrorMessage *string     `json:"error_message,omitempty" gorm:"type:text"`
+	Cost         float64     `json:"cost" gorm:"type:numeric(15,8);default:0"`
+	IsBilled     bool        `json:"is_billed" gorm:"default:false;index"` // 是否已计费
+	CreatedAt    time.Time   `json:"created_at" gorm:"not null;autoCreateTime;index"`
 }
 
 // TableName 指定表名

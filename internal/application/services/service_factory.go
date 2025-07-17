@@ -165,6 +165,7 @@ func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
 		f.ImageGenerationService(),
 		f.repoFactory.ProviderModelSupportRepository(),
 		f.repoFactory.ProviderRepository(),
+		f.BillingService(),
 		f.logger,
 	)
 }
@@ -198,6 +199,16 @@ func (f *ServiceFactory) UserRepository() repositories.UserRepository {
 // ModelRepository 获取模型仓储
 func (f *ServiceFactory) ModelRepository() repositories.ModelRepository {
 	return f.repoFactory.ModelRepository()
+}
+
+// ProviderRepository 获取提供商仓储
+func (f *ServiceFactory) ProviderRepository() repositories.ProviderRepository {
+	return f.repoFactory.ProviderRepository()
+}
+
+// ProviderModelSupportRepository 获取提供商模型支持仓储
+func (f *ServiceFactory) ProviderModelSupportRepository() repositories.ProviderModelSupportRepository {
+	return f.repoFactory.ProviderModelSupportRepository()
 }
 
 // isAsyncQuotaEnabled 检查是否启用异步配额处理

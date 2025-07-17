@@ -52,19 +52,20 @@ type midjourneyQueueServiceImpl struct {
 	workers                  []*worker
 	workerWg                 sync.WaitGroup
 	stopCh                   chan struct{}
+	jobCh                    chan *entities.MidjourneyJob // 任务队列 channel
 	mu                       sync.RWMutex
 	isRunning                bool
 	webhookService           WebhookService
 	imageGenService          ImageGenerationService
 	providerModelSupportRepo repositories.ProviderModelSupportRepository // 用于获取模型支持的提供商
 	providerRepo             repositories.ProviderRepository             // 用于获取提供商详情
+	billingService           BillingService                              // 计费服务
 }
 
 // worker 工作进程
 type worker struct {
 	id      int
 	service *midjourneyQueueServiceImpl
-	stopCh  chan struct{}
 	logger  logger.Logger
 }
 
@@ -76,6 +77,7 @@ func NewMidjourneyQueueService(
 	imageGenService ImageGenerationService,
 	providerModelSupportRepo repositories.ProviderModelSupportRepository,
 	providerRepo repositories.ProviderRepository,
+	billingService BillingService,
 	logger logger.Logger,
 ) MidjourneyQueueService {
 	return &midjourneyQueueServiceImpl{
@@ -83,10 +85,12 @@ func NewMidjourneyQueueService(
 		cache:                    cache,
 		logger:                   logger,
 		stopCh:                   make(chan struct{}),
+		jobCh:                    make(chan *entities.MidjourneyJob, 1000), // 缓冲队列，可容纳1000个任务
 		webhookService:           webhookService,
 		imageGenService:          imageGenService,
 		providerModelSupportRepo: providerModelSupportRepo,
 		providerRepo:             providerRepo,
+		billingService:           billingService,
 	}
 }
 
@@ -106,7 +110,6 @@ func (s *midjourneyQueueServiceImpl) StartWorkers(ctx context.Context, workerCou
 		worker := &worker{
 			id:      i + 1,
 			service: s,
-			stopCh:  make(chan struct{}),
 			logger:  s.logger.WithField("worker_id", i+1),
 		}
 		s.workers[i] = worker
@@ -114,6 +117,17 @@ func (s *midjourneyQueueServiceImpl) StartWorkers(ctx context.Context, workerCou
 		s.workerWg.Add(1)
 		go worker.run(ctx)
 	}
+
+	// 启动时加载所有待处理任务
+	if err := s.loadPendingJobsOnStartup(ctx); err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to load pending jobs on startup")
+		// 不返回错误，继续启动服务
+	}
+
+	// 启动任务分发器（作为备用机制）
+	go s.startJobDispatcher(ctx)
 
 	s.isRunning = true
 	s.logger.WithField("worker_count", workerCount).Info("Midjourney queue workers started")
@@ -133,10 +147,8 @@ func (s *midjourneyQueueServiceImpl) StopWorkers() error {
 	// 发送停止信号
 	close(s.stopCh)
 
-	// 停止所有工作进程
-	for _, worker := range s.workers {
-		close(worker.stopCh)
-	}
+	// 关闭任务队列，通知所有 worker 停止
+	close(s.jobCh)
 
 	// 等待所有工作进程结束
 	s.workerWg.Wait()
@@ -155,15 +167,22 @@ func (s *midjourneyQueueServiceImpl) EnqueueJob(ctx context.Context, job *entiti
 		return fmt.Errorf("failed to update job status: %w", err)
 	}
 
-	// 如果使用Redis，可以将任务ID加入队列
-	// 暂时跳过Redis队列实现，直接使用数据库轮询
-	_ = s.cache // 避免未使用变量警告
-
-	s.logger.WithFields(map[string]interface{}{
-		"job_id": job.JobID,
-		"action": job.Action,
-		"mode":   job.Mode,
-	}).Info("Job enqueued successfully")
+	// 直接将任务放入 channel，避免轮询延迟
+	select {
+	case s.jobCh <- job:
+		s.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"action": job.Action,
+			"mode":   job.Mode,
+		}).Info("Job enqueued successfully")
+	default:
+		// channel 满了，记录警告但不阻塞
+		s.logger.WithFields(map[string]interface{}{
+			"job_id": job.JobID,
+			"action": job.Action,
+			"mode":   job.Mode,
+		}).Warn("Job channel is full, job will be processed by dispatcher")
+	}
 
 	return nil
 }
@@ -243,57 +262,40 @@ func (w *worker) run(ctx context.Context) {
 	w.logger.Info("Worker started")
 	defer w.logger.Info("Worker stopped")
 
-	ticker := time.NewTicker(5 * time.Second) // 每5秒检查一次
-	defer ticker.Stop()
-
 	for {
 		select {
-		case <-w.stopCh:
-			return
 		case <-w.service.stopCh:
 			return
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			if err := w.processNextJob(ctx); err != nil {
-				w.logger.WithFields(map[string]interface{}{
-					"error": err.Error(),
-				}).Error("Failed to process job")
+		case job, ok := <-w.service.jobCh:
+			if !ok {
+				// channel 已关闭，退出
+				return
 			}
+
+			// 异步处理任务，避免阻塞 worker
+			go w.processJobAsync(ctx, job)
 		}
 	}
 }
 
-// processNextJob 处理下一个任务
-func (w *worker) processNextJob(ctx context.Context) error {
-	w.logger.Debug("=== WORKER: Checking for pending jobs ===")
-
-	// 获取待处理任务
-	jobs, err := w.service.jobRepo.GetPendingJobs(ctx, 1)
-	if err != nil {
-		w.logger.WithFields(map[string]interface{}{
-			"error": err.Error(),
-		}).Error("=== WORKER: Failed to get pending jobs ===")
-		return fmt.Errorf("failed to get pending jobs: %w", err)
-	}
-
-	if len(jobs) == 0 {
-		w.logger.Debug("=== WORKER: No pending jobs found ===")
-		return nil // 没有待处理任务
-	}
-
-	job := jobs[0]
-
+// processJobAsync 异步处理任务
+func (w *worker) processJobAsync(ctx context.Context, job *entities.MidjourneyJob) {
 	w.logger.WithFields(map[string]interface{}{
 		"job_id": job.JobID,
 		"action": job.Action,
 		"status": job.Status,
 		"mode":   job.Mode,
-	}).Info("=== WORKER: Found job to process ===")
+	}).Info("=== WORKER: Processing job ===")
 
 	// 更新状态为处理中
 	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusOnQueue); err != nil {
-		return fmt.Errorf("failed to update job status: %w", err)
+		w.logger.WithFields(map[string]interface{}{
+			"error":  err.Error(),
+			"job_id": job.JobID,
+		}).Error("Failed to update job status")
+		return
 	}
 
 	// 处理任务
@@ -317,10 +319,16 @@ func (w *worker) processNextJob(ctx context.Context) error {
 			w.service.sendWebhook(ctx, job, "FAILED", err.Error())
 		}
 
-		return nil // 不返回错误，继续处理下一个任务
+		// 处理失败任务的计费（不扣费）
+		if w.service.billingService != nil {
+			if err := w.service.billingService.ProcessMidjourneyBilling(ctx, job.JobID, false); err != nil {
+				w.logger.WithFields(map[string]interface{}{
+					"job_id": job.JobID,
+					"error":  err.Error(),
+				}).Error("Failed to process billing for failed job")
+			}
+		}
 	}
-
-	return nil
 }
 
 // processJob 处理单个任务
@@ -643,6 +651,112 @@ func stringPtr(s string) *string {
 	return &s
 }
 
+// loadPendingJobsOnStartup 启动时加载所有待处理任务到 channel
+func (s *midjourneyQueueServiceImpl) loadPendingJobsOnStartup(ctx context.Context) error {
+	// TODO: 如果需要多实例部署，可以在这里添加分布式锁逻辑
+
+	s.logger.Info("Loading pending jobs on startup...")
+
+	// 获取所有待处理任务
+	jobs, err := s.jobRepo.GetPendingJobs(ctx, 10000) // 一次最多加载10000个任务
+	if err != nil {
+		return fmt.Errorf("failed to get pending jobs: %w", err)
+	}
+
+	if len(jobs) == 0 {
+		s.logger.Info("No pending jobs found on startup")
+		return nil
+	}
+
+	s.logger.WithField("job_count", len(jobs)).Info("Loading pending jobs into channel")
+
+	// 将任务加载到 channel
+	loadedCount := 0
+	for _, job := range jobs {
+		select {
+		case s.jobCh <- job:
+			loadedCount++
+		case <-ctx.Done():
+			s.logger.WithField("loaded_count", loadedCount).Info("Context cancelled during job loading")
+			return ctx.Err()
+		default:
+			// channel 满了，记录警告
+			s.logger.WithFields(map[string]interface{}{
+				"loaded_count": loadedCount,
+				"total_jobs":   len(jobs),
+			}).Warn("Job channel is full during startup loading")
+			break
+		}
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"loaded_count": loadedCount,
+		"total_jobs":   len(jobs),
+	}).Info("Pending jobs loaded successfully on startup")
+
+	return nil
+}
+
+// startJobDispatcher 启动任务分发器，作为备用机制处理可能遗漏的任务
+func (s *midjourneyQueueServiceImpl) startJobDispatcher(ctx context.Context) {
+	s.logger.Info("Job dispatcher started (backup mechanism)")
+	defer s.logger.Info("Job dispatcher stopped")
+
+	ticker := time.NewTicker(30 * time.Second) // 每30秒检查一次，作为备用机制
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			s.dispatchPendingJobs(ctx)
+		}
+	}
+}
+
+// dispatchPendingJobs 分发待处理任务到 channel（备用机制）
+func (s *midjourneyQueueServiceImpl) dispatchPendingJobs(ctx context.Context) {
+	// 作为备用机制，只获取少量任务检查是否有遗漏
+	jobs, err := s.jobRepo.GetPendingJobs(ctx, 10)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to get pending jobs in backup dispatcher")
+		return
+	}
+
+	if len(jobs) == 0 {
+		return // 没有待处理任务
+	}
+
+	s.logger.WithField("job_count", len(jobs)).Info("Found pending jobs in backup dispatcher")
+
+	// 将任务分发到 channel
+	dispatchedCount := 0
+	for _, job := range jobs {
+		select {
+		case s.jobCh <- job:
+			dispatchedCount++
+			s.logger.WithField("job_id", job.JobID).Info("Job dispatched by backup dispatcher")
+		case <-ctx.Done():
+			return
+		case <-s.stopCh:
+			return
+		default:
+			// channel 满了，跳过这次分发
+			s.logger.Warn("Job channel is full in backup dispatcher")
+			return
+		}
+	}
+
+	if dispatchedCount > 0 {
+		s.logger.WithField("dispatched_count", dispatchedCount).Info("Backup dispatcher processed pending jobs")
+	}
+}
+
 func intPtr(i int) *int {
 	return &i
 }
@@ -821,14 +935,6 @@ func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJ
 		status, _ := taskResult["status"].(string)
 		progress, _ := taskResult["progress"].(string)
 
-		w.logger.WithFields(map[string]interface{}{
-			"job_id":           job.JobID,
-			"upstream_task_id": upstreamTaskID,
-			"status":           status,
-			"progress":         progress,
-			"task_result":      taskResult,
-		}).Info("=== UPSTREAM TASK STATUS ===")
-
 		// 更新本地任务进度
 		if progressInt := parseProgress(progress); progressInt > 0 {
 			w.service.jobRepo.UpdateProgress(ctx, job.JobID, progressInt)
@@ -837,10 +943,6 @@ func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJ
 		switch status {
 		case "SUCCESS":
 			// 任务成功完成
-			w.logger.WithFields(map[string]interface{}{
-				"job_id":           job.JobID,
-				"upstream_task_id": upstreamTaskID,
-			}).Info("=== UPSTREAM TASK COMPLETED SUCCESSFULLY ===")
 			return w.markJobAsSuccess(ctx, job, taskResult)
 
 		case "FAILED", "FAILURE":
@@ -874,11 +976,6 @@ func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJ
 
 		case "IN_PROGRESS", "PENDING", "PROCESSING":
 			// 任务进行中，继续等待
-			w.logger.WithFields(map[string]interface{}{
-				"job_id":           job.JobID,
-				"upstream_task_id": upstreamTaskID,
-				"progress":         progress,
-			}).Debug("=== UPSTREAM TASK IN PROGRESS ===")
 
 			// 发送进度webhook
 			if job.HookURL != nil && *job.HookURL != "" {
@@ -918,10 +1015,6 @@ func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJ
 
 // markJobAsSuccess 标记任务为成功
 func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJob, taskResult map[string]interface{}) error {
-	w.logger.WithFields(map[string]interface{}{
-		"job_id":      job.JobID,
-		"task_result": taskResult,
-	}).Info("=== MARKING JOB AS SUCCESS ===")
 
 	// 构造结果
 	result := &repositories.MidjourneyJobResult{}
@@ -930,10 +1023,6 @@ func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJ
 	if imageURL, ok := taskResult["imageUrl"].(string); ok && imageURL != "" {
 		result.DiscordImage = stringPtr(imageURL)
 		result.CDNImage = stringPtr(imageURL)
-		w.logger.WithFields(map[string]interface{}{
-			"job_id":    job.JobID,
-			"image_url": imageURL,
-		}).Info("=== SET MAIN IMAGE URL ===")
 	}
 
 	// 处理四张小图URLs
@@ -948,11 +1037,6 @@ func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJ
 		}
 		if len(urls) > 0 {
 			result.Images = urls
-			w.logger.WithFields(map[string]interface{}{
-				"job_id":     job.JobID,
-				"image_urls": urls,
-				"count":      len(urls),
-			}).Info("=== SET SMALL IMAGE URLS ===")
 		}
 	}
 
@@ -989,26 +1073,13 @@ func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJ
 
 		if len(components) > 0 {
 			result.Components = components
-			w.logger.WithFields(map[string]interface{}{
-				"job_id":        job.JobID,
-				"buttons_count": len(buttons),
-				"components":    components,
-			}).Info("=== SET OPERATION BUTTONS ===")
 		}
 	}
 
 	// 如果没有提取到按钮数据，使用默认按钮
 	if len(result.Components) == 0 && job.Action == entities.MidjourneyJobActionImagine {
 		result.Components = entities.GetDefaultComponents()
-		w.logger.WithFields(map[string]interface{}{
-			"job_id": job.JobID,
-		}).Info("=== SET DEFAULT BUTTONS ===")
 	}
-
-	w.logger.WithFields(map[string]interface{}{
-		"job_id": job.JobID,
-		"result": result,
-	}).Info("=== FINAL RESULT DATA ===")
 
 	// 更新结果
 	if err := w.service.jobRepo.UpdateResult(ctx, job.JobID, result); err != nil {
@@ -1040,6 +1111,17 @@ func (w *worker) markJobAsSuccess(ctx context.Context, job *entities.MidjourneyJ
 	// 发送成功webhook
 	if job.HookURL != nil && *job.HookURL != "" {
 		w.service.sendWebhook(ctx, job, "SUCCESS", "Job completed successfully")
+	}
+
+	// 处理成功任务的计费
+	if w.service.billingService != nil {
+		if err := w.service.billingService.ProcessMidjourneyBilling(ctx, job.JobID, true); err != nil {
+			w.logger.WithFields(map[string]interface{}{
+				"job_id": job.JobID,
+				"error":  err.Error(),
+			}).Error("Failed to process billing for successful job")
+			// 不返回错误，避免影响任务完成状态
+		}
 	}
 
 	w.logger.WithFields(map[string]interface{}{

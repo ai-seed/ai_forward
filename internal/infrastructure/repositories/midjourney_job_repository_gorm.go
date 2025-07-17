@@ -127,21 +127,26 @@ func (r *midjourneyJobRepositoryGorm) UpdateStatus(ctx context.Context, jobID st
 	return nil
 }
 
-// UpdateProgress 更新任务进度
+// UpdateProgress 更新任务进度（防止并发冲突）
 func (r *midjourneyJobRepositoryGorm) UpdateProgress(ctx context.Context, jobID string, progress int) error {
-	if err := r.db.WithContext(ctx).Model(&entities.MidjourneyJob{}).
-		Where("job_id = ?", jobID).
+	// 使用乐观锁机制，只有当进度确实需要更新时才执行
+	result := r.db.WithContext(ctx).Model(&entities.MidjourneyJob{}).
+		Where("job_id = ? AND (progress < ? OR progress IS NULL)", jobID, progress).
 		Updates(map[string]interface{}{
 			"progress":   progress,
 			"updated_at": time.Now(),
-		}).Error; err != nil {
-		return fmt.Errorf("failed to update midjourney job progress: %w", err)
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update midjourney job progress: %w", result.Error)
 	}
 
-	// 清除缓存
-	if r.cache != nil {
-		cacheKey := fmt.Sprintf("midjourney_job:%s", jobID)
-		r.cache.Delete(ctx, cacheKey)
+	// 只有实际更新了数据才清除缓存
+	if result.RowsAffected > 0 {
+		if r.cache != nil {
+			cacheKey := fmt.Sprintf("midjourney_job:%s", jobID)
+			r.cache.Delete(ctx, cacheKey)
+		}
 	}
 
 	return nil
@@ -244,6 +249,7 @@ func (r *midjourneyJobRepositoryGorm) GetPendingJobs(ctx context.Context, limit 
 	var jobs []*entities.MidjourneyJob
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.MidjourneyJobStatusPendingQueue).
+		Or("Progress < 100 and status = ?", entities.MidjourneyJobStatusOnQueue).
 		Order("created_at ASC").
 		Limit(limit).
 		Find(&jobs).Error; err != nil {

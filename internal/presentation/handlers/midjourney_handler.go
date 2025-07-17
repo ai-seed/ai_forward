@@ -1,12 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/domain/entities"
+	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/presentation/utils"
 
@@ -16,16 +20,119 @@ import (
 
 // MidjourneyHandler Midjourney API处理器（302AI格式）
 type MidjourneyHandler struct {
-	midjourneyService services.MidjourneyService
-	logger            logger.Logger
+	midjourneyService        services.MidjourneyService
+	billingService           services.BillingService
+	modelRepo                repositories.ModelRepository
+	usageLogRepo             repositories.UsageLogRepository
+	userService              services.UserService
+	providerRepo             repositories.ProviderRepository
+	providerModelSupportRepo repositories.ProviderModelSupportRepository
+	logger                   logger.Logger
 }
 
 // NewMidjourneyHandler 创建Midjourney处理器
-func NewMidjourneyHandler(midjourneyService services.MidjourneyService, logger logger.Logger) *MidjourneyHandler {
+func NewMidjourneyHandler(
+	midjourneyService services.MidjourneyService,
+	billingService services.BillingService,
+	modelRepo repositories.ModelRepository,
+	usageLogRepo repositories.UsageLogRepository,
+	userService services.UserService,
+	providerRepo repositories.ProviderRepository,
+	providerModelSupportRepo repositories.ProviderModelSupportRepository,
+	logger logger.Logger,
+) *MidjourneyHandler {
 	return &MidjourneyHandler{
-		midjourneyService: midjourneyService,
-		logger:            logger,
+		midjourneyService:        midjourneyService,
+		billingService:           billingService,
+		modelRepo:                modelRepo,
+		usageLogRepo:             usageLogRepo,
+		userService:              userService,
+		providerRepo:             providerRepo,
+		providerModelSupportRepo: providerModelSupportRepo,
+		logger:                   logger,
 	}
+}
+
+// processMidjourneyBilling 处理 Midjourney 计费（提交时创建使用日志，不扣费）
+func (h *MidjourneyHandler) processMidjourneyBilling(c *gin.Context, modelSlug string, jobID string) {
+	// 获取用户和API密钥信息
+	userID, exists := utils.GetUserIDFromContext(c)
+	if !exists {
+		return
+	}
+
+	apiKeyID, exists := utils.GetAPIKeyIDFromContext(c)
+	if !exists {
+		return
+	}
+
+	// 获取模型信息
+	model, err := h.modelRepo.GetBySlug(c.Request.Context(), modelSlug)
+	if err != nil {
+		return
+	}
+
+	// 计算基于请求的成本
+	cost, err := h.billingService.CalculateRequestCost(c.Request.Context(), model.ID)
+	if err != nil {
+		return
+	}
+
+	// 获取 Midjourney 提供商ID
+	providerID := h.getMidjourneyProviderID(c.Request.Context(), modelSlug)
+	if providerID == 0 {
+		return
+	}
+
+	h.createUsageLogForMidjourney(c, userID, apiKeyID, model.ID, providerID, cost, modelSlug, jobID)
+}
+
+// getMidjourneyProviderID 获取 Midjourney 提供商ID
+func (h *MidjourneyHandler) getMidjourneyProviderID(ctx context.Context, modelSlug string) int64 {
+	// 首先尝试通过模型支持关系查找
+	supportingProviders, err := h.providerModelSupportRepo.GetSupportingProviders(ctx, modelSlug)
+	if err == nil && len(supportingProviders) > 0 {
+		return supportingProviders[0].Provider.ID
+	}
+
+	// 如果找不到，尝试查找名称包含 midjourney 的活跃提供商
+	providers, err := h.providerRepo.GetActiveProviders(ctx)
+	if err != nil {
+		return 0
+	}
+
+	for _, p := range providers {
+		if strings.Contains(strings.ToLower(p.Name), "midjourney") {
+			return p.ID
+		}
+	}
+
+	return 0
+}
+
+// createUsageLogForMidjourney 为 Midjourney 创建使用日志（不立即扣费）
+func (h *MidjourneyHandler) createUsageLogForMidjourney(c *gin.Context, userID, apiKeyID, modelID, providerID int64, cost float64, modelSlug string, jobID string) {
+	usageLog := &entities.UsageLog{
+		UserID:       userID,
+		APIKeyID:     apiKeyID,
+		RequestID:    jobID,                          // 直接使用 jobID 作为 requestID
+		RequestType:  entities.RequestTypeMidjourney, // 标记为 Midjourney 请求
+		Method:       c.Request.Method,
+		Endpoint:     c.Request.URL.Path,
+		ProviderID:   providerID,
+		ModelID:      modelID,
+		InputTokens:  0,
+		OutputTokens: 0,
+		TotalTokens:  0,
+		Cost:         cost,
+		StatusCode:   202,   // 任务已提交，等待处理
+		DurationMs:   0,     // 不记录耗时
+		IsBilled:     false, // 标记为未计费
+		CreatedAt:    time.Now(),
+	}
+
+	// 只保存使用日志，不进行计费
+	h.usageLogRepo.Create(c.Request.Context(), usageLog)
 }
 
 // MJResponse 302AI标准响应格式
@@ -225,6 +332,9 @@ func (h *MidjourneyHandler) Imagine(c *gin.Context) {
 		return
 	}
 
+	// 处理计费
+	h.processMidjourneyBilling(c, "midjourney-imagine", jobID)
+
 	h.logger.WithFields(map[string]interface{}{
 		"job_id": jobID,
 	}).Info("Imagine job submitted successfully")
@@ -328,6 +438,9 @@ func (h *MidjourneyHandler) Action(c *gin.Context) {
 		})
 		return
 	}
+
+	// 处理计费
+	h.processMidjourneyBilling(c, "midjourney-action", newJobID)
 
 	h.logger.WithFields(map[string]interface{}{
 		"job_id":        newJobID,
@@ -523,6 +636,9 @@ func (h *MidjourneyHandler) Blend(c *gin.Context) {
 		return
 	}
 
+	// 处理计费
+	h.processMidjourneyBilling(c, "midjourney-blend", jobID)
+
 	h.logger.WithFields(map[string]interface{}{
 		"job_id": jobID,
 	}).Info("Blend job submitted successfully")
@@ -630,6 +746,9 @@ func (h *MidjourneyHandler) Describe(c *gin.Context) {
 		})
 		return
 	}
+
+	// 处理计费
+	h.processMidjourneyBilling(c, "midjourney-describe", jobID)
 
 	h.logger.WithFields(map[string]interface{}{
 		"job_id": jobID,
@@ -741,6 +860,9 @@ func (h *MidjourneyHandler) Modal(c *gin.Context) {
 		})
 		return
 	}
+
+	// 处理计费
+	h.processMidjourneyBilling(c, "midjourney-modal", jobID)
 
 	h.logger.WithFields(map[string]interface{}{
 		"job_id": jobID,

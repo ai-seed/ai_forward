@@ -379,11 +379,10 @@ func (r *modelPricingRepositoryGorm) Count(ctx context.Context) (int64, error) {
 // GetPricingByType 根据定价类型获取定价
 func (r *modelPricingRepositoryGorm) GetPricingByType(ctx context.Context, modelID int64, pricingType entities.PricingType) (*entities.ModelPricing, error) {
 	var pricing entities.ModelPricing
-	now := time.Now()
 
 	if err := r.db.WithContext(ctx).
-		Where("model_id = ? AND pricing_type = ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)",
-			modelID, pricingType, now, now).
+		Where("model_id = ? AND pricing_type = ?",
+			modelID, pricingType).
 		Order("effective_from DESC").
 		First(&pricing).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

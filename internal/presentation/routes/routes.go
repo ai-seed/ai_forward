@@ -104,7 +104,16 @@ func (r *Router) SetupRoutes() {
 	authHandler := handlers.NewAuthHandler(r.serviceFactory.AuthService(), r.logger)
 	toolHandler := handlers.NewToolHandler(r.serviceFactory.ToolService(), r.logger)
 	quotaHandler := handlers.NewQuotaHandler(r.serviceFactory.QuotaService(), r.logger)
-	midjourneyHandler := handlers.NewMidjourneyHandler(r.serviceFactory.MidjourneyService(), r.logger)
+	midjourneyHandler := handlers.NewMidjourneyHandler(
+		r.serviceFactory.MidjourneyService(),
+		r.serviceFactory.BillingService(),
+		r.serviceFactory.ModelRepository(),
+		r.serviceFactory.UsageLogRepository(),
+		r.serviceFactory.UserService(),
+		r.serviceFactory.ProviderRepository(),
+		r.serviceFactory.ProviderModelSupportRepository(),
+		r.logger,
+	)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)

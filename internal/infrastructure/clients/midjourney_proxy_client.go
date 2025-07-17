@@ -48,15 +48,6 @@ func NewMidjourneyProxyClient(baseURL, apiKey string, logger logger.Logger) Midj
 
 // ForwardRequest 转发请求到上游服务
 func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, path string, headers map[string]string, body []byte, query url.Values) (*ProxyResponse, error) {
-	c.logger.WithFields(map[string]interface{}{
-		"method":        method,
-		"path":          path,
-		"headers_input": headers,
-		"body_length":   len(body),
-		"body_content":  string(body),
-		"query":         query,
-		"base_url":      c.baseURL,
-	}).Info("=== PROXY CLIENT: ForwardRequest called with parameters ===")
 
 	// 构造完整的上游URL
 	upstreamURL := fmt.Sprintf("%s%s", c.baseURL, path)
@@ -64,20 +55,6 @@ func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, 
 	// 添加查询参数
 	if len(query) > 0 {
 		upstreamURL += "?" + query.Encode()
-	}
-
-	c.logger.WithFields(map[string]interface{}{
-		"method":       method,
-		"upstream_url": upstreamURL,
-		"body_size":    len(body),
-		"headers":      headers,
-		"api_key_set":  c.apiKey != "",
-	}).Info("=== PROXY CLIENT: Forwarding request to upstream Midjourney service ===")
-
-	if len(body) > 0 {
-		c.logger.WithFields(map[string]interface{}{
-			"body_content": string(body),
-		}).Debug("Request body content")
 	}
 
 	// 创建请求
@@ -91,43 +68,23 @@ func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, 
 		return nil, fmt.Errorf("failed to create upstream request: %w", err)
 	}
 
-	c.logger.WithFields(map[string]interface{}{
-		"headers_before_processing": headers,
-		"api_key_length":            len(c.apiKey),
-	}).Info("=== PROXY CLIENT: Processing headers ===")
-
 	// 转发所有原始头部
 	for key, value := range headers {
 		// 跳过一些不应该转发的头部
 		if c.shouldSkipHeader(key) {
-			c.logger.WithFields(map[string]interface{}{
-				"header_key": key,
-				"skipped":    true,
-			}).Debug("Skipping header")
 			continue
 		}
 		req.Header.Set(key, value)
-		c.logger.WithFields(map[string]interface{}{
-			"header_key":   key,
-			"header_value": value,
-			"set":          true,
-		}).Debug("Setting header")
 	}
 
 	// 设置或覆盖认证头
 	if c.apiKey != "" {
 		req.Header.Set("mj-api-secret", c.apiKey)
-		c.logger.WithFields(map[string]interface{}{
-			"api_key_first_10": c.apiKey[:10] + "...",
-		}).Info("=== PROXY CLIENT: Set mj-api-secret header ===")
-	} else {
-		c.logger.Info("=== PROXY CLIENT: No API key to set ===")
 	}
 
 	// 确保Content-Type正确设置
 	if len(body) > 0 && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
-		c.logger.Info("=== PROXY CLIENT: Set default Content-Type ===")
 	}
 
 	// 打印最终的请求头
@@ -137,21 +94,6 @@ func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, 
 			finalHeaders[key] = values[0]
 		}
 	}
-	c.logger.WithFields(map[string]interface{}{
-		"final_headers": finalHeaders,
-		"body_length":   len(body),
-	}).Info("=== PROXY CLIENT: Final request headers and body ===")
-
-	if len(body) > 0 {
-		c.logger.WithFields(map[string]interface{}{
-			"body_content": string(body),
-		}).Info("=== PROXY CLIENT: Request body content ===")
-	}
-
-	c.logger.WithFields(map[string]interface{}{
-		"upstream_url": upstreamURL,
-		"method":       method,
-	}).Info("=== PROXY CLIENT: About to send HTTP request ===")
 
 	// 发送请求
 	resp, err := c.httpClient.Do(req)
@@ -163,11 +105,6 @@ func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, 
 		return nil, fmt.Errorf("failed to send upstream request: %w", err)
 	}
 	defer resp.Body.Close()
-
-	c.logger.WithFields(map[string]interface{}{
-		"upstream_url": upstreamURL,
-		"status_code":  resp.StatusCode,
-	}).Info("=== PROXY CLIENT: Received HTTP response ===")
 
 	// 读取响应体
 	respBody, err := io.ReadAll(resp.Body)
@@ -182,12 +119,6 @@ func (c *midjourneyProxyClientImpl) ForwardRequest(ctx context.Context, method, 
 			respHeaders[key] = values[0]
 		}
 	}
-
-	c.logger.WithFields(map[string]interface{}{
-		"status_code":   resp.StatusCode,
-		"response_size": len(respBody),
-		"upstream_url":  upstreamURL,
-	}).Debug("Received response from upstream")
 
 	return &ProxyResponse{
 		StatusCode: resp.StatusCode,

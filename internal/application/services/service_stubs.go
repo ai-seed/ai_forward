@@ -101,8 +101,14 @@ type BillingService interface {
 	// CalculateCost 计算请求成本
 	CalculateCost(ctx context.Context, modelID int64, inputTokens, outputTokens int) (float64, error)
 
+	// CalculateRequestCost 计算基于请求的成本（适用于 Midjourney 等模型）
+	CalculateRequestCost(ctx context.Context, modelID int64) (float64, error)
+
 	// ProcessBilling 处理计费
 	ProcessBilling(ctx context.Context, usageLog *entities.UsageLog) error
+
+	// ProcessMidjourneyBilling 处理 Midjourney 任务完成时的计费
+	ProcessMidjourneyBilling(ctx context.Context, jobID string, success bool) error
 }
 
 // 计费服务实现已移至 billing_service_impl.go
