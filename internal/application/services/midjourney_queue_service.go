@@ -126,9 +126,6 @@ func (s *midjourneyQueueServiceImpl) StartWorkers(ctx context.Context, workerCou
 		// 不返回错误，继续启动服务
 	}
 
-	// 启动任务分发器（作为备用机制）
-	go s.startJobDispatcher(ctx)
-
 	s.isRunning = true
 	s.logger.WithField("worker_count", workerCount).Info("Midjourney queue workers started")
 
@@ -695,66 +692,6 @@ func (s *midjourneyQueueServiceImpl) loadPendingJobsOnStartup(ctx context.Contex
 	}).Info("Pending jobs loaded successfully on startup")
 
 	return nil
-}
-
-// startJobDispatcher 启动任务分发器，作为备用机制处理可能遗漏的任务
-func (s *midjourneyQueueServiceImpl) startJobDispatcher(ctx context.Context) {
-	s.logger.Info("Job dispatcher started (backup mechanism)")
-	defer s.logger.Info("Job dispatcher stopped")
-
-	ticker := time.NewTicker(30 * time.Second) // 每30秒检查一次，作为备用机制
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-s.stopCh:
-			return
-		case <-ticker.C:
-			s.dispatchPendingJobs(ctx)
-		}
-	}
-}
-
-// dispatchPendingJobs 分发待处理任务到 channel（备用机制）
-func (s *midjourneyQueueServiceImpl) dispatchPendingJobs(ctx context.Context) {
-	// 作为备用机制，只获取少量任务检查是否有遗漏
-	jobs, err := s.jobRepo.GetPendingJobs(ctx, 10)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error": err.Error(),
-		}).Error("Failed to get pending jobs in backup dispatcher")
-		return
-	}
-
-	if len(jobs) == 0 {
-		return // 没有待处理任务
-	}
-
-	s.logger.WithField("job_count", len(jobs)).Info("Found pending jobs in backup dispatcher")
-
-	// 将任务分发到 channel
-	dispatchedCount := 0
-	for _, job := range jobs {
-		select {
-		case s.jobCh <- job:
-			dispatchedCount++
-			s.logger.WithField("job_id", job.JobID).Info("Job dispatched by backup dispatcher")
-		case <-ctx.Done():
-			return
-		case <-s.stopCh:
-			return
-		default:
-			// channel 满了，跳过这次分发
-			s.logger.Warn("Job channel is full in backup dispatcher")
-			return
-		}
-	}
-
-	if dispatchedCount > 0 {
-		s.logger.WithField("dispatched_count", dispatchedCount).Info("Backup dispatcher processed pending jobs")
-	}
 }
 
 func intPtr(i int) *int {
