@@ -77,7 +77,104 @@ type CompletionRequest struct {
 	WebSearch   bool    `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
 }
 
-// AIMessage AI消息
+// ClaudeMessageRequest Claude消息请求
+type ClaudeMessageRequest struct {
+	Model         string          `json:"model" binding:"required" example:"claude-3-sonnet-20240229"`
+	Messages      []ClaudeMessage `json:"messages" binding:"required,min=1"`
+	MaxTokens     int             `json:"max_tokens" binding:"required" example:"1024"`
+	Temperature   *float64        `json:"temperature,omitempty" example:"0.7"`
+	Stream        bool            `json:"stream,omitempty" example:"false"`
+	System        interface{}     `json:"system,omitempty"` // 支持字符串或数组格式
+	StopSequences []string        `json:"stop_sequences,omitempty"`
+	TopK          *int            `json:"top_k,omitempty" example:"5"`
+	TopP          *float64        `json:"top_p,omitempty" example:"0.7"`
+	Tools         []Tool          `json:"tools,omitempty"`
+	ToolChoice    interface{}     `json:"tool_choice,omitempty"`
+	WebSearch     bool            `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
+
+	// Claude特有字段
+	Metadata    *ClaudeMetadata `json:"metadata,omitempty"`
+	ServiceTier string          `json:"service_tier,omitempty"` // "auto", "standard_only"
+}
+
+// ClaudeMetadata Claude元数据
+type ClaudeMetadata struct {
+	UserID string `json:"user_id,omitempty"` // 外部用户标识符
+}
+
+// ClaudeContentBlock Claude内容块
+type ClaudeContentBlock struct {
+	Type   string `json:"type"`           // "text", "image", "tool_use", "tool_result"
+	Text   string `json:"text,omitempty"` // 文本内容
+	Source *struct {
+		Type      string `json:"type"`       // "base64"
+		MediaType string `json:"media_type"` // "image/jpeg", "image/png", etc.
+		Data      string `json:"data"`       // base64编码的图片数据
+	} `json:"source,omitempty"` // 图片源
+	ID        string      `json:"id,omitempty"`          // tool_use的ID
+	Name      string      `json:"name,omitempty"`        // tool_use的名称
+	Input     interface{} `json:"input,omitempty"`       // tool_use的输入
+	ToolUseID string      `json:"tool_use_id,omitempty"` // tool_result对应的tool_use_id
+	Content   interface{} `json:"content,omitempty"`     // tool_result的内容
+	IsError   bool        `json:"is_error,omitempty"`    // tool_result是否为错误
+}
+
+// ClaudeMessage Claude消息格式
+type ClaudeMessage struct {
+	Role    string      `json:"role"`    // "user", "assistant"
+	Content interface{} `json:"content"` // 可以是string或[]ClaudeContentBlock
+}
+
+// UnmarshalJSON 自定义JSON解析
+func (cm *ClaudeMessage) UnmarshalJSON(data []byte) error {
+	// 先解析基本结构
+	type Alias ClaudeMessage
+	aux := &struct {
+		*Alias
+		Content json.RawMessage `json:"content"`
+	}{
+		Alias: (*Alias)(cm),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// 尝试解析content为字符串
+	var str string
+	if err := json.Unmarshal(aux.Content, &str); err == nil {
+		cm.Content = str
+		return nil
+	}
+
+	// 尝试解析content为数组
+	var blocks []ClaudeContentBlock
+	if err := json.Unmarshal(aux.Content, &blocks); err == nil {
+		cm.Content = blocks
+		return nil
+	}
+
+	return fmt.Errorf("content must be string or array of content blocks")
+}
+
+// GetTextContent 获取文本内容
+func (cm *ClaudeMessage) GetTextContent() string {
+	if str, ok := cm.Content.(string); ok {
+		return str
+	}
+
+	if blocks, ok := cm.Content.([]ClaudeContentBlock); ok {
+		for _, block := range blocks {
+			if block.Type == "text" {
+				return block.Text
+			}
+		}
+	}
+
+	return ""
+}
+
+// AIMessage AI消息 (保持向后兼容)
 type AIMessage struct {
 	Role       string     `json:"role" binding:"required" example:"user" enums:"system,user,assistant,tool"`
 	Content    string     `json:"content" example:"Hello, how are you?"`
@@ -125,6 +222,36 @@ type AIError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
+}
+
+// ClaudeMessageResponse Claude消息响应
+type ClaudeMessageResponse struct {
+	ID           string          `json:"id"`
+	Type         string          `json:"type"`
+	Role         string          `json:"role"`
+	Content      []ClaudeContent `json:"content"`
+	Model        string          `json:"model"`
+	StopReason   string          `json:"stop_reason"`
+	StopSequence *string         `json:"stop_sequence"`
+	Usage        ClaudeUsage     `json:"usage"`
+	Error        *AIError        `json:"error,omitempty"`
+}
+
+// ClaudeContent Claude内容块
+type ClaudeContent struct {
+	Type     string      `json:"type"`
+	Text     string      `json:"text,omitempty"`
+	ToolUse  *ToolCall   `json:"tool_use,omitempty"`
+	ToolCall *ToolCall   `json:"tool_call,omitempty"` // 兼容性字段
+	ID       string      `json:"id,omitempty"`
+	Name     string      `json:"name,omitempty"`
+	Input    interface{} `json:"input,omitempty"`
+}
+
+// ClaudeUsage Claude使用情况
+type ClaudeUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
 }
 
 // AIModel AI模型信息

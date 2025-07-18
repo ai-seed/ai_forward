@@ -881,3 +881,465 @@ func (h *AIHandler) streamContent(w http.ResponseWriter, content, responseID, mo
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// ClaudeMessages 处理Claude消息请求
+// @Summary Claude消息接口
+// @Description 创建Claude消息请求，兼容Anthropic Claude API格式。支持流式和非流式响应。
+// @Tags AI接口
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param body body clients.ClaudeMessageRequest true "Claude消息请求"
+// @Success 200 {object} clients.ClaudeMessageResponse "Claude消息响应"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "认证失败"
+// @Failure 429 {object} dto.Response "请求过于频繁"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /v1/messages [post]
+func (h *AIHandler) ClaudeMessages(c *gin.Context) {
+	// 获取认证信息
+	userID, exists := middleware.GetUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse(
+			"AUTHENTICATION_REQUIRED",
+			"Authentication required",
+			nil,
+		))
+		return
+	}
+
+	apiKeyID, exists := middleware.GetAPIKeyIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse(
+			"AUTHENTICATION_REQUIRED",
+			"API key required",
+			nil,
+		))
+		return
+	}
+
+	// 解析请求体
+	var claudeRequest clients.ClaudeMessageRequest
+	if err := c.ShouldBindJSON(&claudeRequest); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+			"error":      err.Error(),
+		}).Warn("Invalid request body")
+
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_REQUEST",
+			"Invalid request body",
+			map[string]interface{}{
+				"details": err.Error(),
+			},
+		))
+		return
+	}
+
+	// 验证必需字段
+	if claudeRequest.Model == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"MISSING_MODEL",
+			"Model is required",
+			nil,
+		))
+		return
+	}
+
+	if len(claudeRequest.Messages) == 0 {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"MISSING_MESSAGES",
+			"Messages array is required",
+			nil,
+		))
+		return
+	}
+
+	if claudeRequest.MaxTokens <= 0 {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_MAX_TOKENS",
+			"max_tokens must be greater than 0",
+			nil,
+		))
+		return
+	}
+
+	// 获取请求ID
+	requestID := middleware.GetRequestIDFromContext(c)
+
+	// 转换Claude消息为通用AIMessage格式
+	aiMessages := make([]clients.AIMessage, len(claudeRequest.Messages))
+	for i, claudeMsg := range claudeRequest.Messages {
+		aiMessages[i] = clients.AIMessage{
+			Role:    claudeMsg.Role,
+			Content: claudeMsg.GetTextContent(),
+		}
+	}
+
+	// 转换为通用 AIRequest 结构
+	temperature := 1.0
+	if claudeRequest.Temperature != nil {
+		temperature = *claudeRequest.Temperature
+	}
+
+	aiRequest := &clients.AIRequest{
+		Model:       claudeRequest.Model,
+		Messages:    aiMessages,
+		MaxTokens:   claudeRequest.MaxTokens,
+		Temperature: temperature,
+		Stream:      claudeRequest.Stream,
+		Tools:       claudeRequest.Tools,
+		ToolChoice:  claudeRequest.ToolChoice,
+		WebSearch:   claudeRequest.WebSearch,
+		Extra: map[string]interface{}{
+			"system":         claudeRequest.System,
+			"stop_sequences": claudeRequest.StopSequences,
+			"top_k":          claudeRequest.TopK,
+			"top_p":          claudeRequest.TopP,
+			"service_tier":   claudeRequest.ServiceTier,
+			"metadata":       claudeRequest.Metadata,
+		},
+	}
+
+	// 如果有system消息，将其添加到messages开头
+	if claudeRequest.System != nil {
+		systemContent := h.extractSystemContent(claudeRequest.System)
+		if systemContent != "" {
+			systemMessage := clients.AIMessage{
+				Role:    "system",
+				Content: systemContent,
+			}
+			aiRequest.Messages = append([]clients.AIMessage{systemMessage}, aiRequest.Messages...)
+		}
+	}
+
+	// 如果开启了联网搜索，自动添加可用工具
+	if h.functionCallHandler != nil && aiRequest.WebSearch {
+		aiRequest.Tools = h.functionCallHandler.GetAvailableTools()
+		aiRequest.ToolChoice = "auto"
+	}
+
+	// 构造网关请求
+	gatewayRequest := &gateway.GatewayRequest{
+		UserID:    userID,
+		APIKeyID:  apiKeyID,
+		ModelSlug: aiRequest.Model,
+		Request:   aiRequest,
+		RequestID: requestID,
+	}
+
+	// 处理流式请求
+	if aiRequest.Stream {
+		h.handleClaudeStreamingRequest(c, gatewayRequest, requestID, userID, apiKeyID)
+		return
+	}
+
+	// 处理非流式请求
+	ctx := context.Background()
+	response, err := h.gatewayService.ProcessRequest(ctx, gatewayRequest)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+			"model":      aiRequest.Model,
+			"request_id": requestID,
+			"error":      err.Error(),
+		}).Error("Failed to process Claude request")
+
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"PROCESSING_ERROR",
+			"Failed to process request",
+			map[string]interface{}{
+				"request_id": requestID,
+			},
+		))
+		return
+	}
+
+	// 转换为Claude响应格式
+	claudeResponse := h.convertToClaudeResponse(response.Response)
+	c.JSON(http.StatusOK, claudeResponse)
+}
+
+// convertToClaudeResponse 将通用AI响应转换为Claude格式
+func (h *AIHandler) convertToClaudeResponse(response *clients.AIResponse) *clients.ClaudeMessageResponse {
+	claudeResponse := &clients.ClaudeMessageResponse{
+		ID:    response.ID,
+		Type:  "message",
+		Role:  "assistant",
+		Model: response.Model,
+		Usage: clients.ClaudeUsage{
+			InputTokens:  response.Usage.PromptTokens,
+			OutputTokens: response.Usage.CompletionTokens,
+		},
+	}
+
+	// 处理错误
+	if response.Error != nil {
+		claudeResponse.Error = response.Error
+		return claudeResponse
+	}
+
+	// 转换内容
+	var content []clients.ClaudeContent
+	for _, choice := range response.Choices {
+		if choice.Message.Content != "" {
+			content = append(content, clients.ClaudeContent{
+				Type: "text",
+				Text: choice.Message.Content,
+			})
+		}
+
+		// 处理工具调用
+		for _, toolCall := range choice.Message.ToolCalls {
+			content = append(content, clients.ClaudeContent{
+				Type:    "tool_use",
+				ID:      toolCall.ID,
+				Name:    toolCall.Function.Name,
+				Input:   toolCall.Function.Arguments,
+				ToolUse: &toolCall,
+			})
+		}
+
+		// 设置停止原因
+		switch choice.FinishReason {
+		case "stop":
+			claudeResponse.StopReason = "end_turn"
+		case "length":
+			claudeResponse.StopReason = "max_tokens"
+		case "tool_calls":
+			claudeResponse.StopReason = "tool_use"
+		default:
+			claudeResponse.StopReason = "end_turn"
+		}
+	}
+
+	claudeResponse.Content = content
+	return claudeResponse
+}
+
+// handleClaudeStreamingRequest 处理Claude流式请求
+func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest *gateway.GatewayRequest, requestID string, userID, apiKeyID int64) {
+	// 设置流式响应头
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("X-Request-ID", requestID)
+
+	// 获取响应写入器
+	w := c.Writer
+
+	// 检查是否启用了Function Call
+	if h.config.FunctionCall.Enabled && len(gatewayRequest.Request.Tools) > 0 {
+		// 对于有工具的流式请求，暂时使用非流式处理
+		// TODO: 实现Claude格式的Function Call流式处理
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+		}).Warn("Claude streaming with function calls not fully implemented, falling back to non-streaming")
+
+		// 临时处理：转为非流式请求
+		gatewayRequest.Request.Stream = false
+		ctx := context.Background()
+		response, err := h.gatewayService.ProcessRequest(ctx, gatewayRequest)
+		if err != nil {
+			errorEvent := map[string]interface{}{
+				"error": map[string]interface{}{
+					"type":    "api_error",
+					"message": "Failed to process request",
+				},
+			}
+			errorJSON, _ := json.Marshal(errorEvent)
+			w.Write([]byte(fmt.Sprintf("data: %s\n\n", errorJSON)))
+			return
+		}
+
+		claudeResponse := h.convertToClaudeResponse(response.Response)
+		responseJSON, _ := json.Marshal(claudeResponse)
+		w.Write([]byte(fmt.Sprintf("data: %s\n\n", responseJSON)))
+		return
+	}
+
+	// 创建流式响应通道
+	streamChan := make(chan *gateway.StreamChunk, 100)
+	errorChan := make(chan error, 1)
+
+	// 启动流式处理
+	go func() {
+		defer func() {
+			// 安全关闭channels
+			select {
+			case <-streamChan:
+			default:
+				close(streamChan)
+			}
+
+			select {
+			case <-errorChan:
+			default:
+				close(errorChan)
+			}
+		}()
+
+		err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), gatewayRequest, streamChan)
+		if err != nil {
+			select {
+			case errorChan <- err:
+			case <-c.Request.Context().Done():
+				// 如果上下文已取消，不发送错误
+			}
+		}
+	}()
+
+	// 发送流式数据
+	var totalTokens int
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+		}).Error("Streaming unsupported")
+		return
+	}
+
+	for {
+		select {
+		case chunk, ok := <-streamChan:
+			if !ok {
+				// 流已结束
+				return
+			}
+
+			// 转换为Claude格式
+			claudeChunk := h.convertToClaudeStreamChunk(chunk)
+			chunkJSON, err := json.Marshal(claudeChunk)
+			if err != nil {
+				h.logger.WithFields(map[string]interface{}{
+					"request_id": requestID,
+					"error":      err.Error(),
+				}).Error("Failed to marshal Claude stream chunk")
+				continue
+			}
+
+			w.Write([]byte(fmt.Sprintf("data: %s\n\n", chunkJSON)))
+			flusher.Flush()
+
+			if chunk.Usage != nil {
+				totalTokens = chunk.Usage.TotalTokens
+			}
+
+		case err := <-errorChan:
+			h.logger.WithFields(map[string]interface{}{
+				"user_id":    userID,
+				"api_key_id": apiKeyID,
+				"model":      gatewayRequest.Request.Model,
+				"request_id": requestID,
+				"error":      err.Error(),
+			}).Error("Failed to process Claude stream request")
+
+			// 发送错误事件
+			errorEvent := map[string]interface{}{
+				"error": map[string]interface{}{
+					"type":    "api_error",
+					"message": "Failed to process request",
+				},
+			}
+			errorJSON, _ := json.Marshal(errorEvent)
+			w.Write([]byte(fmt.Sprintf("data: %s\n\n", errorJSON)))
+			flusher.Flush()
+			return
+
+		case <-c.Request.Context().Done():
+			// 客户端断开连接
+			h.logger.WithFields(map[string]interface{}{
+				"request_id":   requestID,
+				"total_tokens": totalTokens,
+			}).Info("Claude stream request cancelled by client")
+			return
+		}
+	}
+}
+
+// convertToClaudeStreamChunk 将流式响应块转换为Claude格式
+func (h *AIHandler) convertToClaudeStreamChunk(chunk *gateway.StreamChunk) map[string]interface{} {
+	claudeChunk := map[string]interface{}{
+		"type":  "content_block_delta",
+		"index": 0,
+		"delta": map[string]interface{}{
+			"type": "text_delta",
+			"text": chunk.Content,
+		},
+	}
+
+	// 如果是最后一个块，添加完成信息
+	if chunk.FinishReason != nil {
+		claudeChunk["type"] = "message_delta"
+		claudeChunk["delta"] = map[string]interface{}{
+			"stop_reason": h.convertFinishReasonToClaude(*chunk.FinishReason),
+		}
+
+		// 添加使用情况信息
+		if chunk.Usage != nil {
+			claudeChunk["usage"] = map[string]interface{}{
+				"input_tokens":  chunk.Usage.PromptTokens,
+				"output_tokens": chunk.Usage.CompletionTokens,
+			}
+		}
+	}
+
+	return claudeChunk
+}
+
+// convertFinishReasonToClaude 转换完成原因为Claude格式
+func (h *AIHandler) convertFinishReasonToClaude(finishReason string) string {
+	switch finishReason {
+	case "stop":
+		return "end_turn"
+	case "length":
+		return "max_tokens"
+	case "tool_calls":
+		return "tool_use"
+	default:
+		return "end_turn"
+	}
+}
+
+// extractSystemContent 从system字段中提取文本内容
+func (h *AIHandler) extractSystemContent(system interface{}) string {
+	if system == nil {
+		return ""
+	}
+
+	// 如果是字符串，直接返回
+	if str, ok := system.(string); ok {
+		return str
+	}
+
+	// 如果是数组格式，提取text内容
+	if arr, ok := system.([]interface{}); ok {
+		for _, item := range arr {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				if itemType, exists := itemMap["type"]; exists && itemType == "text" {
+					if text, exists := itemMap["text"]; exists {
+						if textStr, ok := text.(string); ok {
+							return textStr
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 如果是单个对象格式
+	if objMap, ok := system.(map[string]interface{}); ok {
+		if objType, exists := objMap["type"]; exists && objType == "text" {
+			if text, exists := objMap["text"]; exists {
+				if textStr, ok := text.(string); ok {
+					return textStr
+				}
+			}
+		}
+	}
+
+	return ""
+}

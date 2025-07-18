@@ -157,6 +157,7 @@ func (r *Router) SetupRoutes() {
 		{
 			aiRoutes.POST("/chat/completions", aiHandler.ChatCompletions)
 			aiRoutes.POST("/completions", aiHandler.Completions)
+			aiRoutes.POST("/messages", aiHandler.ClaudeMessages) // Claude兼容接口
 			aiRoutes.GET("/models", aiHandler.Models)
 		}
 

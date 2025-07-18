@@ -27,7 +27,7 @@ X-API-Key: YOUR_API_KEY
 
 ### 聊天完成 (Chat Completions)
 
-创建聊天完成请求。
+创建聊天完成请求，兼容OpenAI API格式。
 
 **端点**: `POST /v1/chat/completions`
 
@@ -113,6 +113,73 @@ X-API-Key: YOUR_API_KEY
   }
 }
 ```
+
+### Claude消息 (Claude Messages)
+
+创建Claude消息请求，兼容Anthropic Claude API格式。
+
+**端点**: `POST /v1/messages`
+
+**请求体**:
+```json
+{
+  "model": "claude-3-sonnet-20240229",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello, Claude!"
+    }
+  ],
+  "temperature": 0.7,
+  "system": "You are a helpful assistant.",
+  "stream": false
+}
+```
+
+**响应**:
+```json
+{
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "Hello! I'm Claude, an AI assistant. How can I help you today?"
+    }
+  ],
+  "model": "claude-3-sonnet-20240229",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 12,
+    "output_tokens": 18
+  }
+}
+```
+
+**请求参数**:
+- `model` (必需): 模型名称
+- `max_tokens` (必需): 最大生成token数
+- `messages` (必需): 消息数组
+- `temperature` (可选): 温度参数，控制随机性
+- `system` (可选): 系统提示词
+- `stream` (可选): 是否启用流式响应
+- `stop_sequences` (可选): 停止序列
+- `top_k` (可选): Top-K采样参数
+- `top_p` (可选): Top-P采样参数
+- `tools` (可选): 工具定义数组
+- `tool_choice` (可选): 工具选择策略
+- `web_search` (可选): 是否启用联网搜索
+
+**认证头**:
+Claude API兼容以下认证方式：
+- `Authorization: Bearer YOUR_API_KEY`
+- `x-api-key: YOUR_API_KEY`
+
+**版本头**:
+- `anthropic-version: 2023-06-01` (可选，用于完全兼容Claude API)
 
 ### 获取模型列表
 
