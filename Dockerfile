@@ -19,8 +19,7 @@ RUN go mod download
 COPY . .
 
 # 构建应用
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main cmd/server/main.go
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o migrate cmd/migrate/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build  -o main cmd/server/main.go
 
 # 运行阶段
 FROM alpine:latest
@@ -37,11 +36,9 @@ WORKDIR /app
 
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/main .
-COPY --from=builder /app/migrate .
 
 # 复制配置文件和迁移文件
 COPY configs/ ./configs/
-COPY migrations/ ./migrations/
 
 
 # 切换到非root用户
