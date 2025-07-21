@@ -158,14 +158,15 @@ func (r *Router) SetupRoutes() {
 			aiRoutes.POST("/chat/completions", aiHandler.ChatCompletions)
 			aiRoutes.POST("/completions", aiHandler.Completions)
 			aiRoutes.POST("/messages", aiHandler.ClaudeMessages) // Claude兼容接口
-			aiRoutes.GET("/models", aiHandler.Models)
 		}
 
-		// 使用情况路由（需要认证）
-		usageRoutes := v1.Group("/")
-		usageRoutes.Use(authMiddleware.Authenticate())
+		// 信息查询路由（需要认证但不消费配额）
+		infoRoutes := v1.Group("/")
+		infoRoutes.Use(authMiddleware.Authenticate())
+		infoRoutes.Use(rateLimitMiddleware.RateLimit())
 		{
-			usageRoutes.GET("/usage", aiHandler.Usage)
+			infoRoutes.GET("/models", aiHandler.Models)
+			infoRoutes.GET("/usage", aiHandler.Usage)
 		}
 	}
 

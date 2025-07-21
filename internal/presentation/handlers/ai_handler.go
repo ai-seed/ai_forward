@@ -219,7 +219,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 // @Tags AI接口
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Param body body clients.ChatCompletionRequest true "聊天补全请求"
 // @Success 200 {object} clients.AIResponse "聊天补全响应"
 // @Failure 400 {object} dto.Response "请求参数错误"
@@ -404,7 +404,7 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 // @Tags AI接口
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Param body body clients.CompletionRequest true "文本补全请求"
 // @Success 200 {object} clients.AIResponse "文本补全响应"
 // @Failure 400 {object} dto.Response "请求参数错误"
@@ -563,7 +563,7 @@ func (h *AIHandler) Completions(c *gin.Context) {
 // @Description 获取可用的AI模型列表
 // @Tags AI接口
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Success 200 {object} clients.ModelsResponse "模型列表"
 // @Failure 401 {object} dto.Response "认证失败"
 // @Failure 500 {object} dto.Response "服务器内部错误"
@@ -637,7 +637,7 @@ func (h *AIHandler) Models(c *gin.Context) {
 // @Description 获取当前用户的API使用统计
 // @Tags AI接口
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Success 200 {object} dto.UsageResponse "使用统计信息"
 // @Failure 401 {object} dto.Response "认证失败"
 // @Failure 500 {object} dto.Response "服务器内部错误"
@@ -888,7 +888,7 @@ func (h *AIHandler) streamContent(w http.ResponseWriter, content, responseID, mo
 // @Tags AI接口
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Param body body clients.ClaudeMessageRequest true "Claude消息请求"
 // @Success 200 {object} clients.ClaudeMessageResponse "Claude消息响应"
 // @Failure 400 {object} dto.Response "请求参数错误"
