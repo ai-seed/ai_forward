@@ -9,6 +9,9 @@ WORKDIR /app
 # 安装必要的包
 RUN apk add --no-cache git ca-certificates tzdata
 
+# 安装swag工具用于生成Swagger文档
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
 # 复制go mod文件
 COPY go.mod go.sum ./
 
@@ -17,6 +20,9 @@ RUN go mod download
 
 # 复制源代码
 COPY . .
+
+# 生成Swagger文档
+RUN swag init -g cmd/server/main.go -o docs --parseDependency --parseInternal
 
 # 构建应用
 RUN GOOS=linux go build  -o main cmd/server/main.go
@@ -39,6 +45,9 @@ COPY --from=builder /app/main .
 
 # 复制配置文件和迁移文件
 COPY configs/ ./configs/
+
+# 复制Swagger文档
+COPY --from=builder /app/docs/ ./docs/
 
 
 # 切换到非root用户
