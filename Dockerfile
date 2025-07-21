@@ -19,7 +19,7 @@ RUN go mod download
 COPY . .
 
 # 构建应用
-RUN CGO_ENABLED=1 GOOS=linux go build  -o main cmd/server/main.go
+RUN GOOS=linux go build  -o main cmd/server/main.go
 
 # 运行阶段
 FROM alpine:latest
