@@ -250,6 +250,7 @@ func (r *modelRepositoryGorm) GetAvailableModels(ctx context.Context) ([]*entiti
 	var models []*entities.Model
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.ModelStatusActive).
+		Where("model_type IN (?)", []entities.ModelType{entities.ModelTypeChat}).
 		Order("model_type ASC, created_at DESC").
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get available models: %w", err)
