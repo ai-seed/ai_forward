@@ -36,15 +36,14 @@ func NewMidjourneyProxyHandler(forwardingService *clients.MidjourneyForwardingSe
 // @Failure 400 {object} map[string]interface{} "请求错误"
 // @Failure 401 {object} map[string]interface{} "认证失败"
 // @Failure 500 {object} map[string]interface{} "服务器错误"
-// @Router /mj/* [get,post,put,delete]
 func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 	// 获取请求方法和路径
 	method := c.Request.Method
 	path := c.Request.URL.Path
-	
+
 	// 获取查询参数
 	query := c.Request.URL.Query()
-	
+
 	// 获取请求头
 	headers := make(map[string]string)
 	for key, values := range c.Request.Header {
@@ -52,7 +51,7 @@ func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 			headers[key] = values[0]
 		}
 	}
-	
+
 	// 读取请求体
 	var body []byte
 	var err error
@@ -63,7 +62,7 @@ func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 				"error": err.Error(),
 				"path":  path,
 			}).Error("Failed to read request body")
-			
+
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":        400,
 				"description": "Failed to read request body",
@@ -73,14 +72,14 @@ func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 			return
 		}
 	}
-	
+
 	h.logger.WithFields(map[string]interface{}{
 		"method":    method,
 		"path":      path,
 		"body_size": len(body),
 		"query":     query,
 	}).Info("Forwarding Midjourney request")
-	
+
 	// 转发请求
 	response, err := h.forwardingService.ForwardMidjourneyRequest(
 		c.Request.Context(),
@@ -90,13 +89,13 @@ func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 		body,
 		query,
 	)
-	
+
 	if err != nil {
 		h.logger.WithFields(map[string]interface{}{
 			"error": err.Error(),
 			"path":  path,
 		}).Error("Failed to forward request")
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":        500,
 			"description": "Failed to forward request to upstream service",
@@ -105,12 +104,12 @@ func (h *MidjourneyProxyHandler) ProxyRequest(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	// 设置响应头
 	for key, value := range response.Headers {
 		c.Header(key, value)
 	}
-	
+
 	// 返回响应
 	c.Data(response.StatusCode, c.GetHeader("Content-Type"), response.Body)
 }
@@ -248,7 +247,7 @@ func (h *MidjourneyProxyHandler) handleSpecificEndpoint(c *gin.Context, targetPa
 			headers[key] = values[0]
 		}
 	}
-	
+
 	// 读取请求体
 	var body []byte
 	var err error
@@ -259,7 +258,7 @@ func (h *MidjourneyProxyHandler) handleSpecificEndpoint(c *gin.Context, targetPa
 				"error": err.Error(),
 				"path":  targetPath,
 			}).Error("Failed to read request body")
-			
+
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":        400,
 				"description": "Failed to read request body",
@@ -269,19 +268,19 @@ func (h *MidjourneyProxyHandler) handleSpecificEndpoint(c *gin.Context, targetPa
 			return
 		}
 	}
-	
+
 	// 获取查询参数
 	var query url.Values
 	if c.Request.URL.RawQuery != "" {
 		query = c.Request.URL.Query()
 	}
-	
+
 	h.logger.WithFields(map[string]interface{}{
 		"method":      c.Request.Method,
 		"target_path": targetPath,
 		"body_size":   len(body),
 	}).Info("Forwarding specific Midjourney request")
-	
+
 	// 转发请求
 	response, err := h.forwardingService.ForwardMidjourneyRequest(
 		c.Request.Context(),
@@ -291,13 +290,13 @@ func (h *MidjourneyProxyHandler) handleSpecificEndpoint(c *gin.Context, targetPa
 		body,
 		query,
 	)
-	
+
 	if err != nil {
 		h.logger.WithFields(map[string]interface{}{
 			"error": err.Error(),
 			"path":  targetPath,
 		}).Error("Failed to forward request")
-		
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":        500,
 			"description": "Failed to forward request to upstream service",
@@ -306,12 +305,12 @@ func (h *MidjourneyProxyHandler) handleSpecificEndpoint(c *gin.Context, targetPa
 		})
 		return
 	}
-	
+
 	// 设置响应头
 	for key, value := range response.Headers {
 		c.Header(key, value)
 	}
-	
+
 	// 返回响应
 	c.Data(response.StatusCode, c.GetHeader("Content-Type"), response.Body)
 }
