@@ -101,26 +101,10 @@ func (r *apiKeyRepositoryGorm) GetByKey(ctx context.Context, key string) (*entit
 
 // GetByUserID 根据用户ID获取API密钥列表
 func (r *apiKeyRepositoryGorm) GetByUserID(ctx context.Context, userID int64) ([]*entities.APIKey, error) {
-	// 尝试从缓存获取API密钥列表
-	if r.cache != nil {
-		cacheKey := GetAPIKeysByUserCacheKey(userID)
-		var cachedAPIKeys []*entities.APIKey
-		if err := r.cache.Get(ctx, cacheKey, &cachedAPIKeys); err == nil {
-			return cachedAPIKeys, nil
-		}
-	}
-
-	// 从数据库获取API密钥列表
+	// 直接从数据库获取API密钥列表，不使用缓存
 	var apiKeys []*entities.APIKey
 	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&apiKeys).Error; err != nil {
 		return nil, fmt.Errorf("failed to get api keys by user id: %w", err)
-	}
-
-	// 缓存API密钥列表
-	if r.cache != nil {
-		cacheKey := GetAPIKeysByUserCacheKey(userID)
-		ttl := 5 * time.Minute // 列表缓存5分钟
-		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
 	}
 
 	return apiKeys, nil
@@ -148,10 +132,6 @@ func (r *apiKeyRepositoryGorm) Update(ctx context.Context, apiKey *entities.APIK
 		// 清除ID索引缓存
 		idCacheKey := GetAPIKeyByIDCacheKey(apiKey.ID)
 		r.cache.Delete(ctx, idCacheKey)
-
-		// 清除用户API密钥列表缓存
-		userCacheKey := GetAPIKeysByUserCacheKey(apiKey.UserID)
-		r.cache.Delete(ctx, userCacheKey)
 
 		// 清除活跃API密钥列表缓存
 		activeCacheKey := GetActiveAPIKeysCacheKey(apiKey.UserID)
@@ -217,10 +197,6 @@ func (r *apiKeyRepositoryGorm) UpdateStatus(ctx context.Context, id int64, statu
 		// 清除ID索引缓存
 		idCacheKey := GetAPIKeyByIDCacheKey(id)
 		r.cache.Delete(ctx, idCacheKey)
-
-		// 清除用户API密钥列表缓存
-		userCacheKey := GetAPIKeysByUserCacheKey(apiKey.UserID)
-		r.cache.Delete(ctx, userCacheKey)
 
 		// 清除活跃API密钥列表缓存
 		activeCacheKey := GetActiveAPIKeysCacheKey(apiKey.UserID)

@@ -11,25 +11,25 @@ const (
 	CacheKeyActiveUsers    = "users:active"
 
 	// API密钥相关缓存key
-	CacheKeyAPIKeyByKey    = "apikey:key:%s"
-	CacheKeyAPIKeyByID     = "apikey:id:%d"
-	CacheKeyAPIKeysByUser  = "apikeys:user:%d"
-	CacheKeyActiveAPIKeys  = "apikeys:active:user:%d"
+	CacheKeyAPIKeyByKey   = "apikey:key:%s"
+	CacheKeyAPIKeyByID    = "apikey:id:%d"
+	CacheKeyAPIKeysByUser = "apikeys:user:%d"
+	CacheKeyActiveAPIKeys = "apikeys:active:user:%d"
 
 	// 模型相关缓存key
-	CacheKeyModelByID         = "model:id:%d"
-	CacheKeyModelBySlug       = "model:slug:%s"
-	CacheKeyActiveModels      = "models:active"
-	CacheKeyAvailableModels   = "models:available"
-	CacheKeyModelsByType      = "models:type:%s"
-	CacheKeyModelsByProvider  = "models:provider:%d"
+	CacheKeyModelByID        = "model:id:%d"
+	CacheKeyModelBySlug      = "model:slug:%s"
+	CacheKeyActiveModels     = "models:active"
+	CacheKeyAvailableModels  = "models:available"
+	CacheKeyModelsByType     = "models:type:%s"
+	CacheKeyModelsByProvider = "models:provider:%d"
 
 	// 提供商相关缓存key
-	CacheKeyProviderByID              = "provider:id:%d"
-	CacheKeyProviderBySlug            = "provider:slug:%s"
-	CacheKeyActiveProviders           = "providers:active"
-	CacheKeyAvailableProviders        = "providers:available"
-	CacheKeyProvidersByPriority       = "providers:priority"
+	CacheKeyProviderByID                = "provider:id:%d"
+	CacheKeyProviderBySlug              = "provider:slug:%s"
+	CacheKeyActiveProviders             = "providers:active"
+	CacheKeyAvailableProviders          = "providers:available"
+	CacheKeyProvidersByPriority         = "providers:priority"
 	CacheKeyProvidersNeedingHealthCheck = "providers:health_check"
 
 	// 模型定价相关缓存key
@@ -37,16 +37,16 @@ const (
 	CacheKeyModelPricingByModel = "model_pricing:model:%d"
 
 	// 提供商模型支持相关缓存key
-	CacheKeyProviderModelSupportByID           = "provider_model_support:id:%d"
+	CacheKeyProviderModelSupportByID            = "provider_model_support:id:%d"
 	CacheKeyProviderModelSupportByProviderModel = "provider_model_support:provider:%d:model:%s"
-	CacheKeySupportingProviders                = "supporting_providers:model:%s"
-	CacheKeyProviderSupportedModels            = "provider_supported_models:provider:%d"
+	CacheKeySupportingProviders                 = "supporting_providers:model:%s"
+	CacheKeyProviderSupportedModels             = "provider_supported_models:provider:%d"
 
 	// 配额相关缓存key
-	CacheKeyQuotaByID              = "quota:id:%d"
-	CacheKeyQuotasByAPIKey         = "quotas:apikey:%d"
-	CacheKeyActiveQuotas           = "quotas:active:apikey:%d"
-	CacheKeyQuotaByAPIKeyAndType   = "quota:apikey:%d:type:%s:period:%s"
+	CacheKeyQuotaByID            = "quota:id:%d"
+	CacheKeyQuotasByAPIKey       = "quotas:apikey:%d"
+	CacheKeyActiveQuotas         = "quotas:active:apikey:%d"
+	CacheKeyQuotaByAPIKeyAndType = "quota:apikey:%d:type:%s:period:%s"
 
 	// 配额使用相关缓存key
 	CacheKeyQuotaUsageByID          = "quota_usage:id:%d"
@@ -65,7 +65,7 @@ const (
 	CacheKeyUsageStatsByModel = "usage_stats:model:%d:period:%s"
 
 	// 计费记录相关缓存key（通常不缓存，但可以缓存统计数据）
-	CacheKeyBillingStatsByUser = "billing_stats:user:%d:period:%s"
+	CacheKeyBillingStatsByUser    = "billing_stats:user:%d:period:%s"
 	CacheKeyPendingBillingRecords = "billing_records:pending"
 )
 
@@ -88,10 +88,6 @@ func GetAPIKeyCacheKey(key string) string {
 
 func GetAPIKeyByIDCacheKey(id int64) string {
 	return fmt.Sprintf(CacheKeyAPIKeyByID, id)
-}
-
-func GetAPIKeysByUserCacheKey(userID int64) string {
-	return fmt.Sprintf(CacheKeyAPIKeysByUser, userID)
 }
 
 func GetActiveAPIKeysCacheKey(userID int64) string {
