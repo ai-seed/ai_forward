@@ -43,8 +43,6 @@ COPY --from=builder /app/migrate .
 COPY configs/ ./configs/
 COPY migrations/ ./migrations/
 
-# 创建数据目录
-RUN mkdir -p data && chown -R appuser:appgroup /app
 
 # 切换到非root用户
 USER appuser
