@@ -513,7 +513,7 @@ definitions:
     - maskBase64
     - prompt
     type: object
-host: localhost:8080
+host: api-dev.718ai.cn
 info:
   contact:
     email: support@example.com
