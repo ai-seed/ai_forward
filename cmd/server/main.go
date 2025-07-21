@@ -10,7 +10,7 @@
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-// @host localhost:8080
+// @host api-dev.718ai.cn
 // @BasePath /
 
 // @securityDefinitions.apikey BearerAuth
