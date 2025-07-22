@@ -237,6 +237,7 @@ func (r *Router) SetupRoutes() {
 		publicTools.GET("/models", toolHandler.GetModels)
 		publicTools.GET("/public", toolHandler.GetPublicTools)
 		publicTools.GET("/share/:token", toolHandler.GetSharedToolInstance)
+		publicTools.GET("/by-code/:code", toolHandler.GetToolInstanceByCode) // 通过code获取工具信息
 	}
 
 	// Midjourney兼容的API路由（302AI格式）

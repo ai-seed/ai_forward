@@ -284,6 +284,47 @@ func (h *ToolHandler) IncrementUsage(c *gin.Context) {
 	})
 }
 
+// GetToolInstanceByCode 通过code获取工具实例信息（用于第三方鉴权）
+func (h *ToolHandler) GetToolInstanceByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Code parameter is required",
+		})
+		return
+	}
+
+	toolInfo, err := h.toolService.GetToolInstanceByCode(c.Request.Context(), code)
+	if err != nil {
+		if err.Error() == "tool instance not found" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Tool instance not found",
+			})
+			return
+		}
+
+		h.logger.WithFields(map[string]interface{}{
+			"code":  code,
+			"error": err.Error(),
+		}).Error("Failed to get tool instance by code")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get tool instance",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    toolInfo,
+		"message": "Tool instance retrieved successfully",
+	})
+}
+
 // GetModels 获取可用模型列表
 func (h *ToolHandler) GetModels(c *gin.Context) {
 	// 获取聊天类型的活跃模型

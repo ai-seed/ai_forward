@@ -13,6 +13,7 @@ type Tool struct {
 	Category     string          `json:"category" gorm:"size:50;index"`
 	Icon         string          `json:"icon" gorm:"size:100"`
 	Color        string          `json:"color" gorm:"size:20"`
+	Path         *string         `json:"path" gorm:"size:500"` // 第三方页面路径
 	ConfigSchema json.RawMessage `json:"config_schema" gorm:"type:jsonb"`
 	IsActive     bool            `json:"is_active" gorm:"default:true;index"`
 	CreatedAt    time.Time       `json:"created_at" gorm:"not null;autoCreateTime"`
@@ -36,6 +37,23 @@ func (t *Tool) GetSupportedModelNames() []string {
 	return names
 }
 
+// ToolModelSupport 工具-模型支持关联表
+type ToolModelSupport struct {
+	ID        int64     `json:"id" gorm:"primaryKey;autoIncrement"`
+	ToolID    string    `json:"tool_id" gorm:"not null;size:50;index"`
+	ModelID   int64     `json:"model_id" gorm:"not null;index"`
+	CreatedAt time.Time `json:"created_at" gorm:"not null;autoCreateTime"`
+
+	// 关联数据
+	Tool  *Tool  `json:"tool,omitempty" gorm:"foreignKey:ToolID"`
+	Model *Model `json:"model,omitempty" gorm:"foreignKey:ModelID"`
+}
+
+// TableName 指定表名
+func (ToolModelSupport) TableName() string {
+	return "tool_model_support"
+}
+
 // UserToolInstance 用户工具实例
 type UserToolInstance struct {
 	ID          string          `json:"id" gorm:"primaryKey;size:36"`
@@ -47,7 +65,8 @@ type UserToolInstance struct {
 	APIKeyID    int64           `json:"-" gorm:"not null;index"` // 隐藏原始字段
 	Config      json.RawMessage `json:"config" gorm:"type:jsonb"`
 	IsPublic    bool            `json:"is_public" gorm:"default:false;index"`
-	ShareToken  *string         `json:"-" gorm:"uniqueIndex;size:32"` // 隐藏原始字段
+	ShareToken  *string         `json:"-" gorm:"uniqueIndex;size:32"`             // 隐藏原始字段
+	Code        string          `json:"code" gorm:"uniqueIndex;size:32;not null"` // 第三方鉴权代码
 	UsageCount  int64           `json:"usage_count" gorm:"default:0"`
 	CreatedAt   time.Time       `json:"created_at" gorm:"not null;autoCreateTime"`
 	UpdatedAt   time.Time       `json:"updated_at" gorm:"not null;autoUpdateTime"`
@@ -123,4 +142,43 @@ type UpdateUserToolInstanceRequest struct {
 	APIKeyID    *int64                 `json:"api_key_id,omitempty"`
 	Config      map[string]interface{} `json:"config,omitempty"`
 	IsPublic    *bool                  `json:"is_public,omitempty"`
+}
+
+// ToolInstanceByCodeResponse 通过code获取工具实例的响应
+type ToolInstanceByCodeResponse struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Type        string                 `json:"type"`        // 工具类型
+	Config      map[string]interface{} `json:"config"`      // 工具配置
+	UsageCount  int64                  `json:"usage_count"` // 使用次数
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+
+	// API Key 信息（不包含敏感数据）
+	APIKeyInfo struct {
+		ID           int64  `json:"id"`
+		Name         string `json:"name"`
+		ProviderName string `json:"provider_name"`
+		Status       string `json:"status"`
+	} `json:"api_key_info"`
+
+	// 模型信息
+	ModelInfo struct {
+		ID           int64  `json:"id"`
+		Name         string `json:"name"`
+		ProviderName string `json:"provider_name"`
+		Type         string `json:"type"`
+	} `json:"model_info"`
+
+	// 工具模板信息
+	ToolInfo struct {
+		ID          string  `json:"id"`
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Category    string  `json:"category"`
+		Icon        string  `json:"icon"`
+		Color       string  `json:"color"`
+		Path        *string `json:"path"` // 第三方页面路径
+	} `json:"tool_info"`
 }

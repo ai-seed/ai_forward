@@ -75,6 +75,12 @@ func (s *ToolService) CreateUserToolInstance(ctx context.Context, userID int64, 
 		return nil, fmt.Errorf("API key is not active")
 	}
 
+	// 生成唯一的code
+	code, err := s.generateCode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate code: %w", err)
+	}
+
 	// 创建工具实例
 	instance := &entities.UserToolInstance{
 		ID:          uuid.New().String(),
@@ -85,6 +91,7 @@ func (s *ToolService) CreateUserToolInstance(ctx context.Context, userID int64, 
 		ModelID:     req.ModelID,
 		APIKeyID:    req.APIKeyID,
 		IsPublic:    req.IsPublic,
+		Code:        code,
 		UsageCount:  0,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -269,6 +276,67 @@ func (s *ToolService) IncrementUsageCount(ctx context.Context, instanceID string
 	return s.toolRepo.IncrementUsageCount(ctx, instanceID)
 }
 
+// GetToolInstanceByCode 通过code获取工具实例信息（用于第三方鉴权）
+func (s *ToolService) GetToolInstanceByCode(ctx context.Context, code string) (*entities.ToolInstanceByCodeResponse, error) {
+	// 获取工具实例
+	instance, err := s.toolRepo.GetUserToolInstanceByCode(ctx, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tool instance by code: %w", err)
+	}
+	if instance == nil {
+		return nil, fmt.Errorf("tool instance not found")
+	}
+
+	// 构建响应
+	response := &entities.ToolInstanceByCodeResponse{
+		ID:          instance.ID,
+		Name:        instance.Name,
+		Description: instance.Description,
+		UsageCount:  instance.UsageCount,
+		CreatedAt:   instance.CreatedAt,
+		UpdatedAt:   instance.UpdatedAt,
+	}
+
+	// 获取工具配置
+	if config, err := instance.GetConfig(); err == nil {
+		response.Config = config
+	} else {
+		response.Config = make(map[string]interface{})
+	}
+
+	// 填充API Key信息（不包含敏感数据）
+	if instance.APIKey != nil {
+		response.APIKeyInfo.ID = instance.APIKey.ID
+		if instance.APIKey.Name != nil {
+			response.APIKeyInfo.Name = *instance.APIKey.Name
+		}
+		response.APIKeyInfo.Status = string(instance.APIKey.Status)
+		// 这里需要获取Provider信息，暂时留空
+		response.APIKeyInfo.ProviderName = "" // TODO: 从Provider获取
+	}
+
+	// 填充模型信息
+	response.ModelInfo.ID = instance.ModelID
+	response.ModelInfo.Name = instance.ModelName
+	// TODO: 从Model实体获取更多信息
+	response.ModelInfo.ProviderName = ""
+	response.ModelInfo.Type = ""
+
+	// 填充工具模板信息
+	if instance.Tool != nil {
+		response.ToolInfo.ID = instance.Tool.ID
+		response.ToolInfo.Name = instance.Tool.Name
+		response.ToolInfo.Description = instance.Tool.Description
+		response.ToolInfo.Category = instance.Tool.Category
+		response.ToolInfo.Icon = instance.Tool.Icon
+		response.ToolInfo.Color = instance.Tool.Color
+		response.ToolInfo.Path = instance.Tool.Path
+		response.Type = instance.Tool.Category
+	}
+
+	return response, nil
+}
+
 // GetAvailableModels 获取可用模型列表
 func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]interface{}, error) {
 	// 获取聊天类型的活跃模型
@@ -319,6 +387,15 @@ func (s *ToolService) GetUserAPIKeys(ctx context.Context, userID int64) ([]map[s
 
 // generateShareToken 生成分享token
 func (s *ToolService) generateShareToken() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// generateCode 生成唯一的鉴权代码
+func (s *ToolService) generateCode() (string, error) {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err

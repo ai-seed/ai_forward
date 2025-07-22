@@ -17,6 +17,7 @@ type ToolRepository interface {
 	GetUserToolInstancesByUserID(ctx context.Context, userID int64, includePrivate bool) ([]*entities.UserToolInstance, error)
 	GetPublicUserToolInstances(ctx context.Context, limit, offset int) ([]*entities.UserToolInstance, error)
 	GetUserToolInstanceByShareToken(ctx context.Context, shareToken string) (*entities.UserToolInstance, error)
+	GetUserToolInstanceByCode(ctx context.Context, code string) (*entities.UserToolInstance, error)
 	UpdateUserToolInstance(ctx context.Context, instance *entities.UserToolInstance) error
 	DeleteUserToolInstance(ctx context.Context, id string, userID int64) error
 	IncrementUsageCount(ctx context.Context, instanceID string) error

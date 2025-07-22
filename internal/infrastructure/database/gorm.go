@@ -76,8 +76,9 @@ func AutoMigrate(db *gorm.DB) error {
 		// &entities.BillingRecord{},
 		// &entities.Tool{},
 		// &entities.UserToolInstance{},
+		&entities.ToolModelSupport{}, // 添加工具-模型支持关联表
 		// &entities.ToolUsageLog{},
-		&entities.MidjourneyJob{},
+		// &entities.MidjourneyJob{},
 	}
 
 	// 执行自动迁移

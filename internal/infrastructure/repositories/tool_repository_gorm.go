@@ -183,6 +183,24 @@ func (r *toolRepositoryGorm) GetUserToolInstanceByShareToken(ctx context.Context
 	return &instance, nil
 }
 
+// GetUserToolInstanceByCode 通过code获取用户工具实例
+func (r *toolRepositoryGorm) GetUserToolInstanceByCode(ctx context.Context, code string) (*entities.UserToolInstance, error) {
+	var instance entities.UserToolInstance
+	if err := r.db.WithContext(ctx).Where("code = ?", code).First(&instance).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, entities.ErrToolInstanceNotFound
+		}
+		return nil, fmt.Errorf("failed to get tool instance by code: %w", err)
+	}
+
+	// 填充关联数据
+	if err := r.populateUserToolInstanceRelations(ctx, &instance); err != nil {
+		return nil, fmt.Errorf("failed to populate relations: %w", err)
+	}
+
+	return &instance, nil
+}
+
 // IncrementUsageCount 增加使用次数
 func (r *toolRepositoryGorm) IncrementUsageCount(ctx context.Context, instanceID string) error {
 	result := r.db.WithContext(ctx).Model(&entities.UserToolInstance{}).
