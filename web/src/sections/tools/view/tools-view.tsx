@@ -15,6 +15,7 @@ import Grid from '@mui/system/Grid';
 
 import { Iconify } from 'src/components/iconify';
 import api from 'src/services/api';
+import { generateToolLink, canGenerateToolLink } from 'src/utils/tool-link';
 
 import { ToolEditDialog } from '../tool-edit-dialog';
 import { ToolCreateDialog } from '../tool-create-dialog';
@@ -36,8 +37,11 @@ interface UserTool {
   created_at: string;
   updated_at: string;
   usage_count: number;
+  code: string; // 工具鉴权代码
   tool: {
+    id: string;
     name: string;
+    path?: string; // 工具路径
   };
   creator: {
     username: string;
@@ -124,7 +128,12 @@ export function ToolsView() {
             created_at: '2024-01-15T10:00:00Z',
             updated_at: '2024-01-15T10:00:00Z',
             usage_count: 156,
-            tool: { name: 'AI Chatbot' },
+            code: 'abc123def456',
+            tool: {
+              id: 'chatbot-tool',
+              name: 'AI Chatbot',
+              path: '/chatbot'
+            },
             creator: { username: 'john_doe' }
           },
           {
@@ -140,7 +149,12 @@ export function ToolsView() {
             created_at: '2024-01-10T15:30:00Z',
             updated_at: '2024-01-12T09:15:00Z',
             usage_count: 23,
-            tool: { name: 'Image Generator' },
+            code: 'xyz789uvw012',
+            tool: {
+              id: 'image-gen-tool',
+              name: 'Image Generator',
+              path: '/image-generator'
+            },
             creator: { username: 'john_doe' }
           }
         ];
@@ -190,8 +204,23 @@ export function ToolsView() {
   const handleToolAction = useCallback((tool: UserTool, action: 'edit' | 'share' | 'delete' | 'launch') => {
     switch (action) {
       case 'launch':
-        // 启动工具
-        window.open(`/tools/${tool.id}`, '_blank');
+        // 启动工具 - 使用生成的工具链接
+        try {
+          if (canGenerateToolLink(tool)) {
+            const toolUrl = generateToolLink(tool);
+            window.open(toolUrl, '_blank');
+          } else {
+            // 如果无法生成工具链接，回退到原来的方式
+            window.open(`/tools/${tool.id}`, '_blank');
+          }
+        } catch (error) {
+          console.error('Failed to generate tool link:', error);
+          setSnackbar({
+            open: true,
+            message: t('tools.launch_failed') || 'Failed to launch tool',
+            severity: 'error'
+          });
+        }
         break;
       case 'edit':
         // 编辑工具
@@ -199,15 +228,30 @@ export function ToolsView() {
         setShowEditDialog(true);
         break;
       case 'share': {
-        // 分享工具
-        const shareUrl = tool.share_url || `${window.location.origin}/tools/${tool.id}`;
-        navigator.clipboard.writeText(shareUrl)
-          .then(() => {
-            setSnackbar({ open: true, message: t('tools.share_success'), severity: 'success' });
-          })
-          .catch(() => {
-            setSnackbar({ open: true, message: t('tools.share_failed'), severity: 'error' });
+        // 分享工具 - 优先使用工具链接
+        try {
+          let shareUrl: string;
+          if (canGenerateToolLink(tool)) {
+            shareUrl = generateToolLink(tool);
+          } else {
+            shareUrl = tool.share_url || `${window.location.origin}/tools/${tool.id}`;
+          }
+
+          navigator.clipboard.writeText(shareUrl)
+            .then(() => {
+              setSnackbar({ open: true, message: t('tools.share_success'), severity: 'success' });
+            })
+            .catch(() => {
+              setSnackbar({ open: true, message: t('tools.share_failed'), severity: 'error' });
+            });
+        } catch (error) {
+          console.error('Failed to generate share link:', error);
+          setSnackbar({
+            open: true,
+            message: t('tools.share_failed') || 'Failed to share tool',
+            severity: 'error'
           });
+        }
         break;
       }
       case 'delete':
