@@ -161,6 +161,7 @@ type ToolInstanceByCodeResponse struct {
 		Name         string `json:"name"`
 		ProviderName string `json:"provider_name"`
 		Status       string `json:"status"`
+		Value        string `json:"value"` // 隐藏原始字段
 	} `json:"api_key_info"`
 
 	// 模型信息

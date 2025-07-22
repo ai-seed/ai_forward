@@ -310,6 +310,7 @@ func (s *ToolService) GetToolInstanceByCode(ctx context.Context, code string) (*
 		if instance.APIKey.Name != nil {
 			response.APIKeyInfo.Name = *instance.APIKey.Name
 		}
+		response.APIKeyInfo.Value = instance.APIKey.Key
 		response.APIKeyInfo.Status = string(instance.APIKey.Status)
 		// 这里需要获取Provider信息，暂时留空
 		response.APIKeyInfo.ProviderName = "" // TODO: 从Provider获取
