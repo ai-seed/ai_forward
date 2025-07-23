@@ -1,15 +1,20 @@
 package handlers
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
+	"ai-api-gateway/internal/domain/entities"
+	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/functioncall"
@@ -22,11 +27,14 @@ import (
 
 // AIHandler AI请求处理器
 type AIHandler struct {
-	gatewayService      gateway.GatewayService
-	modelService        services.ModelService
-	logger              logger.Logger
-	config              *config.Config
-	functionCallHandler functioncall.FunctionCallHandler
+	gatewayService           gateway.GatewayService
+	modelService             services.ModelService
+	logger                   logger.Logger
+	config                   *config.Config
+	functionCallHandler      functioncall.FunctionCallHandler
+	providerModelSupportRepo repositories.ProviderModelSupportRepository
+	httpClient               clients.HTTPClient
+	aiClient                 clients.AIProviderClient
 }
 
 // NewAIHandler 创建AI请求处理器
@@ -36,13 +44,19 @@ func NewAIHandler(
 	logger logger.Logger,
 	config *config.Config,
 	functionCallHandler functioncall.FunctionCallHandler,
+	providerModelSupportRepo repositories.ProviderModelSupportRepository,
+	httpClient clients.HTTPClient,
+	aiClient clients.AIProviderClient,
 ) *AIHandler {
 	return &AIHandler{
-		gatewayService:      gatewayService,
-		modelService:        modelService,
-		logger:              logger,
-		config:              config,
-		functionCallHandler: functionCallHandler,
+		gatewayService:           gatewayService,
+		modelService:             modelService,
+		logger:                   logger,
+		config:                   config,
+		functionCallHandler:      functionCallHandler,
+		providerModelSupportRepo: providerModelSupportRepo,
+		httpClient:               httpClient,
+		aiClient:                 aiClient,
 	}
 }
 
@@ -882,184 +896,154 @@ func (h *AIHandler) streamContent(w http.ResponseWriter, content, responseID, mo
 	}
 }
 
-// ClaudeMessages 处理Claude消息请求
-// @Summary Claude消息接口
-// @Description 创建Claude消息请求，兼容Anthropic Claude API格式。支持流式和非流式响应。
+// AnthropicMessages 处理Anthropic Messages API请求
+// @Summary Anthropic Messages API - 创建消息
+// @Description 完全兼容 Anthropic Messages API 的消息创建接口。支持文本对话、工具调用、流式响应等功能。
+// @Description
+// @Description **支持的功能：**
+// @Description - 文本对话（单轮和多轮）
+// @Description - 系统提示（system prompt）
+// @Description - 流式响应（Server-Sent Events）
+// @Description - 工具调用（Function Calling）
+// @Description - 温度控制、Top-K、Top-P 采样
+// @Description - 停止序列、最大token限制
+// @Description
+// @Description **认证方式：**
+// @Description - Bearer Token: `Authorization: Bearer YOUR_API_KEY`
+// @Description - API Key Header: `x-api-key: YOUR_API_KEY`
+// @Description
+// @Description **版本控制：**
+// @Description - 推荐添加版本头: `anthropic-version: 2023-06-01`
+// @Description
+// @Description **流式响应：**
+// @Description - 设置 `stream: true` 启用流式响应
+// @Description - 响应格式为 Server-Sent Events (text/event-stream)
+// @Description - 每个数据块以 `data: ` 开头，结束时发送 `data: [DONE]`
 // @Tags AI接口
 // @Accept json
 // @Produce json
+// @Produce text/event-stream
 // @Security BearerAuth
-// @Param body body clients.ClaudeMessageRequest true "Claude消息请求"
-// @Success 200 {object} clients.ClaudeMessageResponse "Claude消息响应"
-// @Failure 400 {object} dto.Response "请求参数错误"
-// @Failure 401 {object} dto.Response "认证失败"
-// @Failure 429 {object} dto.Response "请求过于频繁"
-// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Param anthropic-version header string false "Anthropic API版本" default(2023-06-01)
+// @Param x-api-key header string false "API密钥（可替代Authorization头）"
+// @Param body body clients.AnthropicMessageRequest true "Anthropic消息请求"
+// @Success 200 {object} clients.AnthropicMessageResponse "成功响应"
+// @Success 200 {string} string "流式响应 (当stream=true时)" format(text/event-stream)
+// @Failure 400 {object} object "请求参数错误" example({"type":"error","error":{"type":"invalid_request_error","message":"model is required"}})
+// @Failure 401 {object} object "认证失败" example({"type":"error","error":{"type":"authentication_error","message":"Authentication required"}})
+// @Failure 429 {object} object "请求过于频繁" example({"type":"error","error":{"type":"rate_limit_error","message":"Rate limit exceeded"}})
+// @Failure 500 {object} object "服务器内部错误" example({"type":"error","error":{"type":"api_error","message":"Internal server error"}})
 // @Router /v1/messages [post]
-func (h *AIHandler) ClaudeMessages(c *gin.Context) {
+func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 	// 获取认证信息
 	userID, exists := middleware.GetUserIDFromContext(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, dto.ErrorResponse(
-			"AUTHENTICATION_REQUIRED",
-			"Authentication required",
-			nil,
-		))
+		c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "authentication_error",
+				"message": "Authentication required",
+			},
+		})
 		return
 	}
 
 	apiKeyID, exists := middleware.GetAPIKeyIDFromContext(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, dto.ErrorResponse(
-			"AUTHENTICATION_REQUIRED",
-			"API key required",
-			nil,
-		))
+		c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "authentication_error",
+				"message": "API key required",
+			},
+		})
 		return
 	}
 
 	// 解析请求体
-	var claudeRequest clients.ClaudeMessageRequest
-	if err := c.ShouldBindJSON(&claudeRequest); err != nil {
+	var anthropicRequest clients.AnthropicMessageRequest
+	if err := c.ShouldBindJSON(&anthropicRequest); err != nil {
 		h.logger.WithFields(map[string]interface{}{
 			"user_id":    userID,
 			"api_key_id": apiKeyID,
 			"error":      err.Error(),
 		}).Warn("Invalid request body")
 
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_REQUEST",
-			"Invalid request body",
-			map[string]interface{}{
-				"details": err.Error(),
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": "Invalid request body: " + err.Error(),
 			},
-		))
+		})
 		return
 	}
 
 	// 验证必需字段
-	if claudeRequest.Model == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"MISSING_MODEL",
-			"Model is required",
-			nil,
-		))
+	if anthropicRequest.Model == "" {
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": "model is required",
+			},
+		})
 		return
 	}
 
-	if len(claudeRequest.Messages) == 0 {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"MISSING_MESSAGES",
-			"Messages array is required",
-			nil,
-		))
+	if len(anthropicRequest.Messages) == 0 {
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": "messages is required",
+			},
+		})
 		return
 	}
 
-	if claudeRequest.MaxTokens <= 0 {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_MAX_TOKENS",
-			"max_tokens must be greater than 0",
-			nil,
-		))
+	if anthropicRequest.MaxTokens <= 0 {
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "invalid_request_error",
+				"message": "max_tokens must be greater than 0",
+			},
+		})
 		return
 	}
 
 	// 获取请求ID
 	requestID := middleware.GetRequestIDFromContext(c)
 
-	// 转换Claude消息为通用AIMessage格式
-	aiMessages := make([]clients.AIMessage, len(claudeRequest.Messages))
-	for i, claudeMsg := range claudeRequest.Messages {
-		aiMessages[i] = clients.AIMessage{
-			Role:    claudeMsg.Role,
-			Content: claudeMsg.GetTextContent(),
-		}
-	}
-
-	// 转换为通用 AIRequest 结构
-	temperature := 1.0
-	if claudeRequest.Temperature != nil {
-		temperature = *claudeRequest.Temperature
-	}
-
-	aiRequest := &clients.AIRequest{
-		Model:       claudeRequest.Model,
-		Messages:    aiMessages,
-		MaxTokens:   claudeRequest.MaxTokens,
-		Temperature: temperature,
-		Stream:      claudeRequest.Stream,
-		Tools:       claudeRequest.Tools,
-		ToolChoice:  claudeRequest.ToolChoice,
-		WebSearch:   claudeRequest.WebSearch,
-		Extra: map[string]interface{}{
-			"system":         claudeRequest.System,
-			"stop_sequences": claudeRequest.StopSequences,
-			"top_k":          claudeRequest.TopK,
-			"top_p":          claudeRequest.TopP,
-			"service_tier":   claudeRequest.ServiceTier,
-			"metadata":       claudeRequest.Metadata,
-		},
-	}
-
-	// 如果有system消息，将其添加到messages开头
-	if claudeRequest.System != nil {
-		systemContent := h.extractSystemContent(claudeRequest.System)
-		if systemContent != "" {
-			systemMessage := clients.AIMessage{
-				Role:    "system",
-				Content: systemContent,
-			}
-			aiRequest.Messages = append([]clients.AIMessage{systemMessage}, aiRequest.Messages...)
-		}
-	}
-
-	// 如果开启了联网搜索，自动添加可用工具
-	if h.functionCallHandler != nil && aiRequest.WebSearch {
-		aiRequest.Tools = h.functionCallHandler.GetAvailableTools()
-		aiRequest.ToolChoice = "auto"
-	}
-
-	// 构造网关请求
-	gatewayRequest := &gateway.GatewayRequest{
-		UserID:    userID,
-		APIKeyID:  apiKeyID,
-		ModelSlug: aiRequest.Model,
-		Request:   aiRequest,
-		RequestID: requestID,
-	}
-
 	// 处理流式请求
-	if aiRequest.Stream {
-		h.handleClaudeStreamingRequest(c, gatewayRequest, requestID, userID, apiKeyID)
+	if anthropicRequest.Stream {
+		h.handleAnthropicStreamingRequest(c, &anthropicRequest, requestID, userID, apiKeyID)
 		return
 	}
 
 	// 处理非流式请求
-	ctx := context.Background()
-	response, err := h.gatewayService.ProcessRequest(ctx, gatewayRequest)
+	response, err := h.processAnthropicRequest(c.Request.Context(), &anthropicRequest, userID, apiKeyID, requestID)
 	if err != nil {
 		h.logger.WithFields(map[string]interface{}{
 			"user_id":    userID,
 			"api_key_id": apiKeyID,
-			"model":      aiRequest.Model,
+			"model":      anthropicRequest.Model,
 			"request_id": requestID,
 			"error":      err.Error(),
-		}).Error("Failed to process Claude request")
+		}).Error("Failed to process Anthropic request")
 
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"PROCESSING_ERROR",
-			"Failed to process request",
-			map[string]interface{}{
-				"request_id": requestID,
+		c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"type": "error",
+			"error": map[string]interface{}{
+				"type":    "api_error",
+				"message": "Failed to process request",
 			},
-		))
+		})
 		return
 	}
 
-	// 转换为Claude响应格式
-	claudeResponse := h.convertToClaudeResponse(response.Response)
-	c.JSON(http.StatusOK, claudeResponse)
+	c.JSON(http.StatusOK, response)
 }
 
 // convertToClaudeResponse 将通用AI响应转换为Claude格式
@@ -1117,6 +1101,56 @@ func (h *AIHandler) convertToClaudeResponse(response *clients.AIResponse) *clien
 
 	claudeResponse.Content = content
 	return claudeResponse
+}
+
+// convertToAnthropicResponse 将通用AI响应转换为Anthropic Messages API格式
+func (h *AIHandler) convertToAnthropicResponse(response *clients.AIResponse) *clients.AnthropicMessageResponse {
+	anthropicResponse := &clients.AnthropicMessageResponse{
+		ID:    response.ID,
+		Type:  "message",
+		Role:  "assistant",
+		Model: response.Model,
+		Usage: clients.AnthropicUsage{
+			InputTokens:  response.Usage.PromptTokens,
+			OutputTokens: response.Usage.CompletionTokens,
+		},
+	}
+
+	// 转换内容
+	var content []clients.AnthropicContentBlock
+	for _, choice := range response.Choices {
+		if choice.Message.Content != "" {
+			content = append(content, clients.AnthropicContentBlock{
+				Type: "text",
+				Text: choice.Message.Content,
+			})
+		}
+
+		// 处理工具调用
+		for _, toolCall := range choice.Message.ToolCalls {
+			content = append(content, clients.AnthropicContentBlock{
+				Type:  "tool_use",
+				ID:    toolCall.ID,
+				Name:  toolCall.Function.Name,
+				Input: toolCall.Function.Arguments,
+			})
+		}
+
+		// 设置停止原因
+		switch choice.FinishReason {
+		case "stop":
+			anthropicResponse.StopReason = "end_turn"
+		case "length":
+			anthropicResponse.StopReason = "max_tokens"
+		case "tool_calls":
+			anthropicResponse.StopReason = "tool_use"
+		default:
+			anthropicResponse.StopReason = "end_turn"
+		}
+	}
+
+	anthropicResponse.Content = content
+	return anthropicResponse
 }
 
 // handleClaudeStreamingRequest 处理Claude流式请求
@@ -1342,4 +1376,593 @@ func (h *AIHandler) extractSystemContent(system interface{}) string {
 	}
 
 	return ""
+}
+
+// processAnthropicRequest 处理Anthropic非流式请求
+func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *clients.AnthropicMessageRequest, userID, apiKeyID int64, requestID string) (*clients.AnthropicMessageResponse, error) {
+	h.logger.WithFields(map[string]interface{}{
+		"request_id": requestID,
+		"user_id":    userID,
+		"api_key_id": apiKeyID,
+		"model":      request.Model,
+		"max_tokens": request.MaxTokens,
+		"stream":     request.Stream,
+	}).Info("开始处理 Anthropic 请求")
+
+	// 从数据库获取支持该模型的提供商
+	supportInfos, err := h.providerModelSupportRepo.GetSupportingProviders(ctx, request.Model)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"model":      request.Model,
+			"error":      err.Error(),
+		}).Error("获取支持该模型的提供商失败")
+		return nil, fmt.Errorf("failed to get supporting providers: %w", err)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":      requestID,
+		"model":           request.Model,
+		"providers_count": len(supportInfos),
+	}).Info("从数据库获取到支持的提供商")
+
+	if len(supportInfos) == 0 {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"model":      request.Model,
+		}).Error("没有提供商支持该模型")
+		return nil, fmt.Errorf("no providers support model: %s", request.Model)
+	}
+
+	// 选择第一个可用的提供商（可以后续优化为负载均衡）
+	var selectedProvider *entities.Provider
+	var selectedModelInfo *entities.ModelSupportInfo
+	for i, info := range supportInfos {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id":    requestID,
+			"provider_id":   info.Provider.ID,
+			"provider_name": info.Provider.Name,
+			"provider_slug": info.Provider.Slug,
+			"base_url":      info.Provider.BaseURL,
+			"status":        info.Provider.Status,
+			"priority":      info.Provider.Priority,
+			"index":         i,
+		}).Info("检查提供商可用性")
+
+		if info.Provider.IsAvailable() {
+			selectedProvider = info.Provider
+			selectedModelInfo = info
+			h.logger.WithFields(map[string]interface{}{
+				"request_id":    requestID,
+				"provider_id":   info.Provider.ID,
+				"provider_name": info.Provider.Name,
+				"provider_slug": info.Provider.Slug,
+				"base_url":      info.Provider.BaseURL,
+			}).Info("选择了可用的提供商")
+			break
+		} else {
+			h.logger.WithFields(map[string]interface{}{
+				"request_id":    requestID,
+				"provider_id":   info.Provider.ID,
+				"provider_name": info.Provider.Name,
+				"status":        info.Provider.Status,
+			}).Warn("提供商不可用，跳过")
+		}
+	}
+
+	if selectedProvider == nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"model":      request.Model,
+		}).Error("没有可用的提供商")
+		return nil, fmt.Errorf("no available providers for model: %s", request.Model)
+	}
+
+	// 直接发送Anthropic格式请求到提供商
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":          requestID,
+		"provider_id":         selectedProvider.ID,
+		"provider_name":       selectedProvider.Name,
+		"provider_slug":       selectedProvider.Slug,
+		"base_url":            selectedProvider.BaseURL,
+		"upstream_model_name": selectedModelInfo.UpstreamModelName,
+	}).Info("开始发送请求到上游提供商")
+
+	response, err := h.sendAnthropicRequestToProvider(ctx, selectedProvider, selectedModelInfo, request)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id":    requestID,
+			"provider_id":   selectedProvider.ID,
+			"provider_name": selectedProvider.Name,
+			"base_url":      selectedProvider.BaseURL,
+			"error":         err.Error(),
+		}).Error("发送请求到提供商失败")
+		return nil, fmt.Errorf("failed to send request to provider: %w", err)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"provider_id":   selectedProvider.ID,
+		"provider_name": selectedProvider.Name,
+		"response_id":   response.ID,
+		"input_tokens":  response.Usage.InputTokens,
+		"output_tokens": response.Usage.OutputTokens,
+	}).Info("成功收到提供商响应")
+
+	return response, nil
+}
+
+// sendAnthropicRequestToProvider 发送Anthropic请求到提供商
+func (h *AIHandler) sendAnthropicRequestToProvider(ctx context.Context, provider *entities.Provider, modelInfo *entities.ModelSupportInfo, request *clients.AnthropicMessageRequest) (*clients.AnthropicMessageResponse, error) {
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":         provider.ID,
+		"provider_name":       provider.Name,
+		"provider_slug":       provider.Slug,
+		"base_url":            provider.BaseURL,
+		"original_model":      request.Model,
+		"upstream_model_name": modelInfo.UpstreamModelName,
+		"max_tokens":          request.MaxTokens,
+		"stream":              request.Stream,
+	}).Info("开始直接发送 Anthropic 格式请求")
+
+	// 构造请求URL - 强制使用 /messages 端点
+	baseURL := strings.TrimSuffix(provider.BaseURL, "/")
+	var url string
+	if strings.HasSuffix(baseURL, "/v1") {
+		url = fmt.Sprintf("%s/messages", baseURL)
+	} else {
+		url = fmt.Sprintf("%s/v1/messages", baseURL)
+	}
+
+	// 构造请求头
+	headers := map[string]string{
+		"Content-Type":      "application/json",
+		"anthropic-version": "2023-06-01",
+	}
+
+	// 设置认证头
+	if provider.APIKeyEncrypted != nil {
+		headers["x-api-key"] = *provider.APIKeyEncrypted
+	}
+
+	// 使用上游模型名称
+	requestCopy := *request
+	if modelInfo.UpstreamModelName != "" {
+		requestCopy.Model = modelInfo.UpstreamModelName
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":   provider.ID,
+		"provider_name": provider.Name,
+		"url":           url,
+		"final_model":   requestCopy.Model,
+		"headers":       headers,
+	}).Info("准备发送 HTTP 请求到 /v1/messages 端点")
+
+	// 直接发送HTTP请求
+	httpResponse, err := h.httpClient.Post(ctx, url, &requestCopy, headers)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"provider_id":   provider.ID,
+			"provider_name": provider.Name,
+			"url":           url,
+			"error":         err.Error(),
+		}).Error("HTTP 请求失败")
+		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":    provider.ID,
+		"provider_name":  provider.Name,
+		"url":            url,
+		"status_code":    httpResponse.StatusCode,
+		"content_length": len(httpResponse.Body),
+	}).Info("收到 HTTP 响应")
+
+	// 检查响应状态
+	if httpResponse.StatusCode != 200 {
+		h.logger.WithFields(map[string]interface{}{
+			"provider_id":   provider.ID,
+			"provider_name": provider.Name,
+			"url":           url,
+			"status_code":   httpResponse.StatusCode,
+			"response_body": string(httpResponse.Body),
+		}).Error("提供商返回错误状态码")
+		return nil, fmt.Errorf("provider returned status %d: %s", httpResponse.StatusCode, string(httpResponse.Body))
+	}
+
+	// 解析响应
+	var anthropicResponse clients.AnthropicMessageResponse
+	if err := json.Unmarshal(httpResponse.Body, &anthropicResponse); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"provider_id":   provider.ID,
+			"provider_name": provider.Name,
+			"url":           url,
+			"error":         err.Error(),
+			"response_body": string(httpResponse.Body),
+		}).Error("解析响应失败")
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":    provider.ID,
+		"provider_name":  provider.Name,
+		"url":            url,
+		"response_id":    anthropicResponse.ID,
+		"response_model": anthropicResponse.Model,
+		"content_blocks": len(anthropicResponse.Content),
+		"stop_reason":    anthropicResponse.StopReason,
+		"input_tokens":   anthropicResponse.Usage.InputTokens,
+		"output_tokens":  anthropicResponse.Usage.OutputTokens,
+	}).Info("Anthropic 响应解析成功")
+
+	return &anthropicResponse, nil
+}
+
+// handleAnthropicStreamingRequest 处理Anthropic流式请求
+func (h *AIHandler) handleAnthropicStreamingRequest(c *gin.Context, request *clients.AnthropicMessageRequest, requestID string, userID, apiKeyID int64) {
+	// 设置流式响应头
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("X-Request-ID", requestID)
+
+	// 获取响应写入器
+	w := c.Writer
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+		}).Error("Streaming unsupported")
+		return
+	}
+
+	// 从数据库获取支持该模型的提供商
+	supportInfos, err := h.providerModelSupportRepo.GetSupportingProviders(c.Request.Context(), request.Model)
+	if err != nil {
+		h.sendStreamError(w, flusher, "Failed to get supporting providers", err)
+		return
+	}
+
+	if len(supportInfos) == 0 {
+		h.sendStreamError(w, flusher, "No providers support model: "+request.Model, nil)
+		return
+	}
+
+	// 选择第一个可用的提供商
+	var selectedProvider *entities.Provider
+	var selectedModelInfo *entities.ModelSupportInfo
+	for _, info := range supportInfos {
+		if info.Provider.IsAvailable() {
+			selectedProvider = info.Provider
+			selectedModelInfo = info
+			break
+		}
+	}
+
+	if selectedProvider == nil {
+		h.sendStreamError(w, flusher, "No available providers for model: "+request.Model, nil)
+		return
+	}
+
+	// 直接发送流式请求到 /v1/messages 端点
+	err = h.sendAnthropicStreamRequestToProvider(c, selectedProvider, selectedModelInfo, request, w, flusher)
+	if err != nil {
+		h.sendStreamError(w, flusher, "Failed to process stream request", err)
+		return
+	}
+}
+
+// convertToAnthropicStreamChunk 将流式响应块转换为Anthropic格式
+func (h *AIHandler) convertToAnthropicStreamChunk(chunk *gateway.StreamChunk) map[string]interface{} {
+	// Anthropic 流式响应格式
+	anthropicChunk := map[string]interface{}{
+		"type":  "content_block_delta",
+		"index": 0,
+		"delta": map[string]interface{}{
+			"type": "text_delta",
+			"text": chunk.Content,
+		},
+	}
+
+	// 如果是最后一个块，添加完成信息
+	if chunk.FinishReason != nil {
+		anthropicChunk["type"] = "message_delta"
+		anthropicChunk["delta"] = map[string]interface{}{
+			"stop_reason": h.convertFinishReasonToAnthropic(*chunk.FinishReason),
+		}
+
+		// 添加使用情况信息
+		if chunk.Usage != nil {
+			anthropicChunk["usage"] = map[string]interface{}{
+				"input_tokens":  chunk.Usage.PromptTokens,
+				"output_tokens": chunk.Usage.CompletionTokens,
+			}
+		}
+	}
+
+	return anthropicChunk
+}
+
+// convertFinishReasonToAnthropic 转换完成原因为Anthropic格式
+func (h *AIHandler) convertFinishReasonToAnthropic(finishReason string) string {
+	switch finishReason {
+	case "stop":
+		return "end_turn"
+	case "length":
+		return "max_tokens"
+	case "tool_calls":
+		return "tool_use"
+	default:
+		return "end_turn"
+	}
+}
+
+// sendStreamError 发送流式错误响应
+func (h *AIHandler) sendStreamError(w http.ResponseWriter, flusher http.Flusher, message string, err error) {
+	errorEvent := map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"type":    "api_error",
+			"message": message,
+		},
+	}
+
+	if err != nil {
+		errorEvent["error"].(map[string]interface{})["details"] = err.Error()
+	}
+
+	errorJSON, _ := json.Marshal(errorEvent)
+	w.Write([]byte(fmt.Sprintf("data: %s\n\n", errorJSON)))
+	flusher.Flush()
+}
+
+// sendAnthropicStreamRequestToProvider 发送Anthropic流式请求到提供商
+func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provider *entities.Provider, modelInfo *entities.ModelSupportInfo, request *clients.AnthropicMessageRequest, w http.ResponseWriter, flusher http.Flusher) error {
+	// 构造请求URL - 强制使用 /messages 端点
+	baseURL := strings.TrimSuffix(provider.BaseURL, "/")
+	var url string
+	if strings.HasSuffix(baseURL, "/v1") {
+		url = fmt.Sprintf("%s/messages", baseURL)
+	} else {
+		url = fmt.Sprintf("%s/v1/messages", baseURL)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":         provider.ID,
+		"provider_name":       provider.Name,
+		"provider_slug":       provider.Slug,
+		"base_url":            provider.BaseURL,
+		"stream_url":          url,
+		"original_model":      request.Model,
+		"upstream_model_name": modelInfo.UpstreamModelName,
+	}).Info("开始发送流式请求到 /v1/messages 端点")
+
+	// 构造请求头
+	headers := map[string]string{
+		"Content-Type":      "application/json",
+		"anthropic-version": "2023-06-01",
+		"Accept":            "text/event-stream",
+	}
+
+	// 设置认证
+	if provider.APIKeyEncrypted != nil {
+		headers["x-api-key"] = *provider.APIKeyEncrypted
+	}
+
+	// 使用上游模型名称
+	requestCopy := *request
+	if modelInfo.UpstreamModelName != "" {
+		requestCopy.Model = modelInfo.UpstreamModelName
+	}
+
+	// 确保是流式请求
+	requestCopy.Stream = true
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id": provider.ID,
+		"stream_url":  url,
+		"final_model": requestCopy.Model,
+		"stream":      requestCopy.Stream,
+		"headers":     headers,
+	}).Info("准备发送流式 HTTP 请求")
+
+	// 序列化请求体
+	requestBody, err := json.Marshal(&requestCopy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// 创建HTTP请求
+	httpReq, err := http.NewRequestWithContext(c.Request.Context(), "POST", url, strings.NewReader(string(requestBody)))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	// 设置请求头
+	for key, value := range headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	// 创建HTTP客户端
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	// 发送请求
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send HTTP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// 处理流式响应
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			data := line[6:] // 移除 "data: " 前缀
+			if data == "[DONE]" {
+				w.Write([]byte("data: [DONE]\n\n"))
+				flusher.Flush()
+				break
+			}
+
+			// 直接转发Anthropic格式的数据
+			w.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+			flusher.Flush()
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading stream: %w", err)
+	}
+
+	return nil
+}
+
+// convertAnthropicToAIRequest 将 Anthropic 请求转换为通用 AI 请求
+func (h *AIHandler) convertAnthropicToAIRequest(request *clients.AnthropicMessageRequest, modelInfo *entities.ModelSupportInfo) *clients.AIRequest {
+	// 转换消息格式
+	var aiMessages []clients.AIMessage
+	for _, anthropicMsg := range request.Messages {
+		aiMessages = append(aiMessages, clients.AIMessage{
+			Role:    anthropicMsg.Role,
+			Content: anthropicMsg.GetTextContent(),
+		})
+	}
+
+	// 转换工具格式
+	var tools []clients.Tool
+	for _, anthropicTool := range request.Tools {
+		tools = append(tools, clients.Tool{
+			Type: "function",
+			Function: clients.Function{
+				Name:        anthropicTool.Name,
+				Description: anthropicTool.Description,
+				Parameters:  anthropicTool.InputSchema,
+			},
+		})
+	}
+
+	// 设置温度默认值
+	temperature := 1.0
+	if request.Temperature != nil {
+		temperature = *request.Temperature
+	}
+
+	// 使用上游模型名称
+	model := request.Model
+	if modelInfo.UpstreamModelName != "" {
+		model = modelInfo.UpstreamModelName
+	}
+
+	return &clients.AIRequest{
+		Model:       model,
+		Messages:    aiMessages,
+		MaxTokens:   request.MaxTokens,
+		Temperature: temperature,
+		Stream:      request.Stream,
+		Tools:       tools,
+		ToolChoice:  request.ToolChoice,
+		Extra: map[string]interface{}{
+			"system":         request.System,
+			"stop_sequences": request.StopSequences,
+			"top_k":          request.TopK,
+			"top_p":          request.TopP,
+			"service_tier":   request.ServiceTier,
+			"metadata":       request.Metadata,
+			"container":      request.Container,
+			"mcp_servers":    request.MCPServers,
+			"thinking":       request.Thinking,
+		},
+	}
+}
+
+// convertAIResponseToAnthropic 将通用 AI 响应转换为 Anthropic 格式
+func (h *AIHandler) convertAIResponseToAnthropic(response *clients.AIResponse) *clients.AnthropicMessageResponse {
+	anthropicResponse := &clients.AnthropicMessageResponse{
+		ID:    response.ID,
+		Type:  "message",
+		Role:  "assistant",
+		Model: response.Model,
+		Usage: clients.AnthropicUsage{
+			InputTokens:  response.Usage.PromptTokens,
+			OutputTokens: response.Usage.CompletionTokens,
+		},
+	}
+
+	// 转换内容
+	var content []clients.AnthropicContentBlock
+	for _, choice := range response.Choices {
+		if choice.Message.Content != "" {
+			content = append(content, clients.AnthropicContentBlock{
+				Type: "text",
+				Text: choice.Message.Content,
+			})
+		}
+
+		// 处理工具调用
+		for _, toolCall := range choice.Message.ToolCalls {
+			content = append(content, clients.AnthropicContentBlock{
+				Type:  "tool_use",
+				ID:    toolCall.ID,
+				Name:  toolCall.Function.Name,
+				Input: toolCall.Function.Arguments,
+			})
+		}
+
+		// 设置停止原因
+		switch choice.FinishReason {
+		case "stop":
+			anthropicResponse.StopReason = "end_turn"
+		case "length":
+			anthropicResponse.StopReason = "max_tokens"
+		case "tool_calls":
+			anthropicResponse.StopReason = "tool_use"
+		default:
+			anthropicResponse.StopReason = "end_turn"
+		}
+	}
+
+	anthropicResponse.Content = content
+	return anthropicResponse
+}
+
+// convertStreamChunkToAnthropic 将流式数据块转换为Anthropic格式
+func (h *AIHandler) convertStreamChunkToAnthropic(chunk *clients.StreamChunk) map[string]interface{} {
+	// Anthropic 流式响应格式
+	anthropicChunk := map[string]interface{}{
+		"type":  "content_block_delta",
+		"index": 0,
+		"delta": map[string]interface{}{
+			"type": "text_delta",
+			"text": chunk.Content,
+		},
+	}
+
+	// 如果是最后一个块，添加完成信息
+	if chunk.FinishReason != nil {
+		anthropicChunk["type"] = "message_delta"
+		anthropicChunk["delta"] = map[string]interface{}{
+			"stop_reason": h.convertFinishReasonToAnthropic(*chunk.FinishReason),
+		}
+
+		// 添加使用情况信息
+		if chunk.Usage != nil {
+			anthropicChunk["usage"] = map[string]interface{}{
+				"input_tokens":  chunk.Usage.PromptTokens,
+				"output_tokens": chunk.Usage.CompletionTokens,
+			}
+		}
+	}
+
+	return anthropicChunk
 }

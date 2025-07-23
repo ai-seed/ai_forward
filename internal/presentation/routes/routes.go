@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/application/services"
+	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/functioncall"
 	"ai-api-gateway/internal/infrastructure/gateway"
@@ -91,7 +92,22 @@ func (r *Router) SetupRoutes() {
 	searchService := functioncall.NewSearchService(searchConfig, r.logger)
 	functionCallHandler := functioncall.NewFunctionCallHandler(searchService, r.logger)
 
-	aiHandler := handlers.NewAIHandler(r.gatewayService, r.serviceFactory.ModelService(), r.logger, r.config, functionCallHandler)
+	// 创建HTTP客户端
+	httpClient := clients.NewHTTPClient(30 * time.Second)
+
+	// 创建AI提供商客户端
+	aiClient := clients.NewAIProviderClient(httpClient)
+
+	aiHandler := handlers.NewAIHandler(
+		r.gatewayService,
+		r.serviceFactory.ModelService(),
+		r.logger,
+		r.config,
+		functionCallHandler,
+		r.serviceFactory.ProviderModelSupportRepository(),
+		httpClient,
+		aiClient,
+	)
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(
 		r.serviceFactory.APIKeyService(),
@@ -157,7 +173,7 @@ func (r *Router) SetupRoutes() {
 		{
 			aiRoutes.POST("/chat/completions", aiHandler.ChatCompletions)
 			aiRoutes.POST("/completions", aiHandler.Completions)
-			aiRoutes.POST("/messages", aiHandler.ClaudeMessages) // Claude兼容接口
+			aiRoutes.POST("/messages", aiHandler.AnthropicMessages) // Anthropic Messages API
 		}
 
 		// 信息查询路由（需要认证但不消费配额）

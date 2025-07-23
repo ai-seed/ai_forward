@@ -49,7 +49,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.ChangePasswordRequest"
+                            "$ref": "#/definitions/dto.ChangePasswordRequest"
                         }
                     }
                 ],
@@ -57,25 +57,25 @@ const docTemplate = `{
                     "200": {
                         "description": "修改成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "未认证或旧密码错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -101,7 +101,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.LoginRequest"
+                            "$ref": "#/definitions/dto.LoginRequest"
                         }
                     }
                 ],
@@ -109,25 +109,25 @@ const docTemplate = `{
                     "200": {
                         "description": "登录成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.LoginResponse"
+                            "$ref": "#/definitions/dto.LoginResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -152,19 +152,19 @@ const docTemplate = `{
                     "200": {
                         "description": "获取成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse"
+                            "$ref": "#/definitions/dto.GetUserProfileResponse"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -195,7 +195,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UserRechargeRequest"
+                            "$ref": "#/definitions/dto.UserRechargeRequest"
                         }
                     }
                 ],
@@ -203,25 +203,25 @@ const docTemplate = `{
                     "200": {
                         "description": "充值成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse"
+                            "$ref": "#/definitions/dto.GetUserProfileResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "未认证",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -247,7 +247,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenRequest"
+                            "$ref": "#/definitions/dto.RefreshTokenRequest"
                         }
                     }
                 ],
@@ -255,25 +255,25 @@ const docTemplate = `{
                     "200": {
                         "description": "刷新成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenResponse"
+                            "$ref": "#/definitions/dto.RefreshTokenResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "刷新令牌无效",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -299,7 +299,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RegisterRequest"
+                            "$ref": "#/definitions/dto.RegisterRequest"
                         }
                     }
                 ],
@@ -307,25 +307,25 @@ const docTemplate = `{
                     "201": {
                         "description": "注册成功",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.RegisterResponse"
+                            "$ref": "#/definitions/dto.RegisterResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "409": {
                         "description": "用户名或邮箱已存在",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -345,13 +345,13 @@ const docTemplate = `{
                     "200": {
                         "description": "健康检查通过",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "503": {
                         "description": "健康检查失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -371,7 +371,7 @@ const docTemplate = `{
                     "200": {
                         "description": "服务存活",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -391,13 +391,13 @@ const docTemplate = `{
                     "200": {
                         "description": "服务就绪",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "503": {
                         "description": "服务未就绪",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -417,13 +417,13 @@ const docTemplate = `{
                     "200": {
                         "description": "统计信息",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "获取统计失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -443,7 +443,7 @@ const docTemplate = `{
                     "200": {
                         "description": "版本信息",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -496,7 +496,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.ActionRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -504,25 +505,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -555,7 +560,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.BlendRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -563,25 +569,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -614,7 +624,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.CancelRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -622,25 +633,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -673,7 +688,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.DescribeRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -681,25 +697,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -732,7 +752,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.ImagineRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -740,25 +761,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -791,7 +816,8 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.ModalRequest"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -799,25 +825,29 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -856,31 +886,36 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJTaskResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/internal_presentation_handlers.MJResponse"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -890,7 +925,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "创建聊天补全请求，兼容OpenAI API格式。支持流式和非流式响应。",
@@ -911,7 +946,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest"
+                            "$ref": "#/definitions/clients.ChatCompletionRequest"
                         }
                     }
                 ],
@@ -919,31 +954,31 @@ const docTemplate = `{
                     "200": {
                         "description": "聊天补全响应",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse"
+                            "$ref": "#/definitions/clients.AIResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "429": {
                         "description": "请求过于频繁",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -953,7 +988,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "创建文本补全请求，兼容OpenAI API格式",
@@ -974,7 +1009,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.CompletionRequest"
+                            "$ref": "#/definitions/clients.CompletionRequest"
                         }
                     }
                 ],
@@ -982,31 +1017,108 @@ const docTemplate = `{
                     "200": {
                         "description": "文本补全响应",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse"
+                            "$ref": "#/definitions/clients.AIResponse"
                         }
                     },
                     "400": {
                         "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "429": {
                         "description": "请求过于频繁",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/messages": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "完全兼容 Anthropic Messages API 的消息创建接口。支持文本对话、工具调用、流式响应等功能。\n\n**支持的功能：**\n- 文本对话（单轮和多轮）\n- 系统提示（system prompt）\n- 流式响应（Server-Sent Events）\n- 工具调用（Function Calling）\n- 温度控制、Top-K、Top-P 采样\n- 停止序列、最大token限制\n\n**认证方式：**\n- Bearer Token: ` + "`" + `Authorization: Bearer YOUR_API_KEY` + "`" + `\n- API Key Header: ` + "`" + `x-api-key: YOUR_API_KEY` + "`" + `\n\n**版本控制：**\n- 推荐添加版本头: ` + "`" + `anthropic-version: 2023-06-01` + "`" + `\n\n**流式响应：**\n- 设置 ` + "`" + `stream: true` + "`" + ` 启用流式响应\n- 响应格式为 Server-Sent Events (text/event-stream)\n- 每个数据块以 ` + "`" + `data: ` + "`" + ` 开头，结束时发送 ` + "`" + `data: [DONE]` + "`" + `",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "AI接口"
+                ],
+                "summary": "Anthropic Messages API - 创建消息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "2023-06-01",
+                        "description": "Anthropic API版本",
+                        "name": "anthropic-version",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "API密钥（可替代Authorization头）",
+                        "name": "x-api-key",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Anthropic消息请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/clients.AnthropicMessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "流式响应 (当stream=true时)\" format(text/event-stream)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误\" example({\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"model is required\"}})",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败\" example({\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Authentication required\"}})",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁\" example({\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"Rate limit exceeded\"}})",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误\" example({\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"Internal server error\"}})",
+                        "schema": {
+                            "type": "object"
                         }
                     }
                 }
@@ -1016,7 +1128,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "获取可用的AI模型列表",
@@ -1031,19 +1143,19 @@ const docTemplate = `{
                     "200": {
                         "description": "模型列表",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ModelsResponse"
+                            "$ref": "#/definitions/clients.ModelsResponse"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -1053,7 +1165,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "获取当前用户的API使用统计",
@@ -1068,19 +1180,19 @@ const docTemplate = `{
                     "200": {
                         "description": "使用统计信息",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UsageResponse"
+                            "$ref": "#/definitions/dto.UsageResponse"
                         }
                     },
                     "401": {
                         "description": "认证失败",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
-                            "$ref": "#/definitions/ai-api-gateway_internal_application_dto.Response"
+                            "$ref": "#/definitions/dto.Response"
                         }
                     }
                 }
@@ -1088,248 +1200,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "ai-api-gateway_internal_application_dto.ChangePasswordRequest": {
-            "type": "object",
-            "required": [
-                "new_password",
-                "old_password"
-            ],
-            "properties": {
-                "new_password": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 6
-                },
-                "old_password": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.ErrorInfo": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "details": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.GetUserProfileResponse": {
-            "type": "object",
-            "properties": {
-                "balance": {
-                    "type": "number"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 6
-                },
-                "username": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 3
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.LoginResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_application_dto.UserInfo"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.RefreshTokenRequest": {
-            "type": "object",
-            "required": [
-                "refresh_token"
-            ],
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.RefreshTokenResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password",
-                "username"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string",
-                    "maxLength": 100
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 6
-                },
-                "username": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 3
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.RegisterResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.Response": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "error": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_application_dto.ErrorInfo"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                },
-                "timestamp": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.UsageResponse": {
-            "type": "object",
-            "properties": {
-                "total_cost": {
-                    "type": "number",
-                    "example": 1.25
-                },
-                "total_requests": {
-                    "type": "integer",
-                    "example": 100
-                },
-                "total_tokens": {
-                    "type": "integer",
-                    "example": 5000
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.UserInfo": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "full_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_application_dto.UserRechargeRequest": {
-            "type": "object",
-            "required": [
-                "amount"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "description": {
-                    "type": "string"
-                }
-            }
-        },
-        "ai-api-gateway_internal_infrastructure_clients.AIChoice": {
+        "clients.AIChoice": {
             "type": "object",
             "properties": {
                 "finish_reason": {
@@ -1339,7 +1210,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "message": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage"
+                    "$ref": "#/definitions/clients.AIMessage"
                 },
                 "text": {
                     "type": "string"
@@ -1348,12 +1219,12 @@ const docTemplate = `{
                     "description": "Function calls in streaming mode",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall"
+                        "$ref": "#/definitions/clients.ToolCall"
                     }
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.AIError": {
+        "clients.AIError": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1367,7 +1238,7 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.AIMessage": {
+        "clients.AIMessage": {
             "type": "object",
             "required": [
                 "role"
@@ -1399,12 +1270,12 @@ const docTemplate = `{
                     "description": "Function calls made by assistant",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall"
+                        "$ref": "#/definitions/clients.ToolCall"
                     }
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.AIModel": {
+        "clients.AIModel": {
             "type": "object",
             "properties": {
                 "created": {
@@ -1425,20 +1296,20 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.AIResponse": {
+        "clients.AIResponse": {
             "type": "object",
             "properties": {
                 "choices": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIChoice"
+                        "$ref": "#/definitions/clients.AIChoice"
                     }
                 },
                 "created": {
                     "type": "integer"
                 },
                 "error": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIError"
+                    "$ref": "#/definitions/clients.AIError"
                 },
                 "id": {
                     "type": "string"
@@ -1450,11 +1321,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIUsage"
+                    "$ref": "#/definitions/clients.AIUsage"
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.AIUsage": {
+        "clients.AIUsage": {
             "type": "object",
             "properties": {
                 "completion_tokens": {
@@ -1468,7 +1339,359 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest": {
+        "clients.AnthropicCacheControl": {
+            "type": "object",
+            "properties": {
+                "ttl": {
+                    "description": "\"5m\", \"1h\"",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "\"ephemeral\"",
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicCacheCreation": {
+            "type": "object",
+            "properties": {
+                "ephemeral_1h_input_tokens": {
+                    "type": "integer"
+                },
+                "ephemeral_5m_input_tokens": {
+                    "type": "integer"
+                }
+            }
+        },
+        "clients.AnthropicContainer": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicContentBlock": {
+            "type": "object",
+            "properties": {
+                "content": {},
+                "id": {
+                    "type": "string",
+                    "example": "toolu_01A09q90qw90lq917835lq9"
+                },
+                "input": {},
+                "is_error": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "get_weather"
+                },
+                "source": {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "string"
+                        },
+                        "media_type": {
+                            "type": "string",
+                            "example": "image/jpeg"
+                        },
+                        "type": {
+                            "type": "string",
+                            "example": "base64"
+                        }
+                    }
+                },
+                "text": {
+                    "type": "string",
+                    "example": "Hello, how can I help you?"
+                },
+                "tool_use_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "text"
+                }
+            }
+        },
+        "clients.AnthropicMCPServer": {
+            "type": "object",
+            "required": [
+                "name",
+                "type",
+                "url"
+            ],
+            "properties": {
+                "authorization_token": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tool_configuration": {
+                    "$ref": "#/definitions/clients.AnthropicToolConfiguration"
+                },
+                "type": {
+                    "description": "\"url\"",
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicMessage": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "example": "Hello, how are you?"
+                },
+                "role": {
+                    "type": "string",
+                    "example": "user"
+                }
+            }
+        },
+        "clients.AnthropicMessageRequest": {
+            "type": "object",
+            "required": [
+                "max_tokens",
+                "messages",
+                "model"
+            ],
+            "properties": {
+                "container": {
+                    "type": "string"
+                },
+                "max_tokens": {
+                    "type": "integer",
+                    "maximum": 4096,
+                    "minimum": 1,
+                    "example": 1024
+                },
+                "mcp_servers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/clients.AnthropicMCPServer"
+                    }
+                },
+                "messages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/clients.AnthropicMessage"
+                    }
+                },
+                "metadata": {
+                    "$ref": "#/definitions/clients.AnthropicMetadata"
+                },
+                "model": {
+                    "type": "string",
+                    "example": "claude-3-sonnet-20240229"
+                },
+                "service_tier": {
+                    "type": "string",
+                    "example": "auto"
+                },
+                "stop_sequences": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"\\n\\n\"]"
+                    ]
+                },
+                "stream": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "system": {
+                    "type": "string",
+                    "example": "You are a helpful assistant."
+                },
+                "temperature": {
+                    "type": "number",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "example": 0.7
+                },
+                "thinking": {
+                    "$ref": "#/definitions/clients.AnthropicThinkingConfig"
+                },
+                "tool_choice": {
+                    "type": "string",
+                    "example": "auto"
+                },
+                "tools": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/clients.AnthropicTool"
+                    }
+                },
+                "top_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 5
+                },
+                "top_p": {
+                    "type": "number",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "example": 0.7
+                }
+            }
+        },
+        "clients.AnthropicMessageResponse": {
+            "type": "object",
+            "properties": {
+                "container": {
+                    "$ref": "#/definitions/clients.AnthropicContainer"
+                },
+                "content": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/clients.AnthropicContentBlock"
+                    }
+                },
+                "id": {
+                    "type": "string",
+                    "example": "msg_013Zva2CMHLNnXjNJJKqJ2EF"
+                },
+                "model": {
+                    "type": "string",
+                    "example": "claude-3-sonnet-20240229"
+                },
+                "role": {
+                    "type": "string",
+                    "example": "assistant"
+                },
+                "stop_reason": {
+                    "type": "string",
+                    "example": "end_turn"
+                },
+                "stop_sequence": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "message"
+                },
+                "usage": {
+                    "$ref": "#/definitions/clients.AnthropicUsage"
+                }
+            }
+        },
+        "clients.AnthropicMetadata": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "description": "外部用户标识符",
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicServerToolUse": {
+            "type": "object",
+            "properties": {
+                "web_search_requests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "clients.AnthropicThinkingConfig": {
+            "type": "object",
+            "required": [
+                "budget_tokens",
+                "type"
+            ],
+            "properties": {
+                "budget_tokens": {
+                    "type": "integer",
+                    "minimum": 1024
+                },
+                "type": {
+                    "description": "\"enabled\"",
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicTool": {
+            "type": "object",
+            "required": [
+                "input_schema",
+                "name"
+            ],
+            "properties": {
+                "cache_control": {
+                    "$ref": "#/definitions/clients.AnthropicCacheControl"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "input_schema": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "\"custom\" 等",
+                    "type": "string"
+                }
+            }
+        },
+        "clients.AnthropicToolConfiguration": {
+            "type": "object",
+            "properties": {
+                "allowed_tools": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "clients.AnthropicUsage": {
+            "type": "object",
+            "properties": {
+                "cache_creation": {
+                    "$ref": "#/definitions/clients.AnthropicCacheCreation"
+                },
+                "cache_creation_input_tokens": {
+                    "type": "integer"
+                },
+                "cache_read_input_tokens": {
+                    "type": "integer"
+                },
+                "input_tokens": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "output_tokens": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "server_tool_use": {
+                    "$ref": "#/definitions/clients.AnthropicServerToolUse"
+                },
+                "service_tier": {
+                    "type": "string",
+                    "example": "standard"
+                }
+            }
+        },
+        "clients.ChatCompletionRequest": {
             "type": "object",
             "required": [
                 "messages",
@@ -1483,7 +1706,7 @@ const docTemplate = `{
                     "type": "array",
                     "minItems": 1,
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage"
+                        "$ref": "#/definitions/clients.AIMessage"
                     }
                 },
                 "model": {
@@ -1505,7 +1728,7 @@ const docTemplate = `{
                     "description": "Function call tools",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.Tool"
+                        "$ref": "#/definitions/clients.Tool"
                     }
                 },
                 "web_search": {
@@ -1515,7 +1738,7 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.CompletionRequest": {
+        "clients.CompletionRequest": {
             "type": "object",
             "required": [
                 "model",
@@ -1549,7 +1772,7 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.Function": {
+        "clients.Function": {
             "type": "object",
             "properties": {
                 "description": {
@@ -1565,7 +1788,7 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.FunctionCall": {
+        "clients.FunctionCall": {
             "type": "object",
             "properties": {
                 "arguments": {
@@ -1578,13 +1801,13 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.ModelsResponse": {
+        "clients.ModelsResponse": {
             "type": "object",
             "properties": {
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.AIModel"
+                        "$ref": "#/definitions/clients.AIModel"
                     }
                 },
                 "object": {
@@ -1592,11 +1815,11 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.Tool": {
+        "clients.Tool": {
             "type": "object",
             "properties": {
                 "function": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.Function"
+                    "$ref": "#/definitions/clients.Function"
                 },
                 "type": {
                     "type": "string",
@@ -1604,11 +1827,11 @@ const docTemplate = `{
                 }
             }
         },
-        "ai-api-gateway_internal_infrastructure_clients.ToolCall": {
+        "clients.ToolCall": {
             "type": "object",
             "properties": {
                 "function": {
-                    "$ref": "#/definitions/ai-api-gateway_internal_infrastructure_clients.FunctionCall"
+                    "$ref": "#/definitions/clients.FunctionCall"
                 },
                 "id": {
                     "type": "string",
@@ -1620,7 +1843,248 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.ActionRequest": {
+        "dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "new_password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "old_password": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ErrorInfo": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.GetUserProfileResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
+                }
+            }
+        },
+        "dto.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/dto.UserInfo"
+                }
+            }
+        },
+        "dto.RefreshTokenRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RefreshTokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
+                }
+            }
+        },
+        "dto.RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.Response": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/dto.ErrorInfo"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UsageResponse": {
+            "type": "object",
+            "properties": {
+                "total_cost": {
+                    "type": "number",
+                    "example": 1.25
+                },
+                "total_requests": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "total_tokens": {
+                    "type": "integer",
+                    "example": 5000
+                }
+            }
+        },
+        "dto.UserInfo": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserRechargeRequest": {
+            "type": "object",
+            "required": [
+                "amount"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ActionRequest": {
             "type": "object",
             "required": [
                 "customId",
@@ -1641,7 +2105,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.BlendRequest": {
+        "handlers.BlendRequest": {
             "type": "object",
             "required": [
                 "base64Array"
@@ -1669,7 +2133,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.CancelRequest": {
+        "handlers.CancelRequest": {
             "type": "object",
             "required": [
                 "taskId"
@@ -1680,7 +2144,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.DescribeRequest": {
+        "handlers.DescribeRequest": {
             "type": "object",
             "required": [
                 "base64"
@@ -1700,7 +2164,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.ImagineRequest": {
+        "handlers.ImagineRequest": {
             "type": "object",
             "required": [
                 "prompt"
@@ -1726,7 +2190,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.MJButton": {
+        "handlers.MJButton": {
             "type": "object",
             "properties": {
                 "customId": {
@@ -1746,7 +2210,15 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_handlers.MJResponse": {
+        "handlers.MJImageURL": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.MJResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1762,17 +2234,23 @@ const docTemplate = `{
                 "result": {}
             }
         },
-        "internal_presentation_handlers.MJTaskResponse": {
+        "handlers.MJTaskResponse": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string"
                 },
+                "botType": {
+                    "type": "string"
+                },
                 "buttons": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_presentation_handlers.MJButton"
+                        "$ref": "#/definitions/handlers.MJButton"
                     }
+                },
+                "customId": {
+                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -1786,7 +2264,25 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "imageHeight": {
+                    "type": "integer"
+                },
                 "imageUrl": {
+                    "type": "string"
+                },
+                "imageUrls": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.MJImageURL"
+                    }
+                },
+                "imageWidth": {
+                    "type": "integer"
+                },
+                "maskBase64": {
+                    "type": "string"
+                },
+                "mode": {
                     "type": "string"
                 },
                 "progress": {
@@ -1798,9 +2294,8 @@ const docTemplate = `{
                 "promptEn": {
                     "type": "string"
                 },
-                "properties": {
-                    "type": "object",
-                    "additionalProperties": true
+                "proxy": {
+                    "type": "string"
                 },
                 "startTime": {
                     "type": "integer"
@@ -1813,10 +2308,19 @@ const docTemplate = `{
                 },
                 "submitTime": {
                     "type": "integer"
+                },
+                "videoUrl": {
+                    "type": "string"
+                },
+                "videoUrls": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
-        "internal_presentation_handlers.ModalRequest": {
+        "handlers.ModalRequest": {
             "type": "object",
             "required": [
                 "base64",
@@ -1864,7 +2368,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
-	Host:             "localhost:8080",
+	Host:             "api-dev.718ai.cn",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "AI API Gateway",

@@ -1,185 +1,22 @@
 basePath: /
 definitions:
-  ai-api-gateway_internal_application_dto.ChangePasswordRequest:
-    properties:
-      new_password:
-        maxLength: 100
-        minLength: 6
-        type: string
-      old_password:
-        type: string
-    required:
-    - new_password
-    - old_password
-    type: object
-  ai-api-gateway_internal_application_dto.ErrorInfo:
-    properties:
-      code:
-        type: string
-      details:
-        additionalProperties: true
-        type: object
-      message:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.GetUserProfileResponse:
-    properties:
-      balance:
-        type: number
-      created_at:
-        type: string
-      email:
-        type: string
-      full_name:
-        type: string
-      id:
-        type: integer
-      updated_at:
-        type: string
-      username:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.LoginRequest:
-    properties:
-      password:
-        maxLength: 100
-        minLength: 6
-        type: string
-      username:
-        maxLength: 50
-        minLength: 3
-        type: string
-    required:
-    - password
-    - username
-    type: object
-  ai-api-gateway_internal_application_dto.LoginResponse:
-    properties:
-      access_token:
-        type: string
-      expires_in:
-        type: integer
-      refresh_token:
-        type: string
-      token_type:
-        type: string
-      user:
-        $ref: '#/definitions/ai-api-gateway_internal_application_dto.UserInfo'
-    type: object
-  ai-api-gateway_internal_application_dto.RefreshTokenRequest:
-    properties:
-      refresh_token:
-        type: string
-    required:
-    - refresh_token
-    type: object
-  ai-api-gateway_internal_application_dto.RefreshTokenResponse:
-    properties:
-      access_token:
-        type: string
-      expires_in:
-        type: integer
-      refresh_token:
-        type: string
-      token_type:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.RegisterRequest:
-    properties:
-      email:
-        type: string
-      full_name:
-        maxLength: 100
-        type: string
-      password:
-        maxLength: 100
-        minLength: 6
-        type: string
-      username:
-        maxLength: 50
-        minLength: 3
-        type: string
-    required:
-    - email
-    - password
-    - username
-    type: object
-  ai-api-gateway_internal_application_dto.RegisterResponse:
-    properties:
-      created_at:
-        type: string
-      email:
-        type: string
-      full_name:
-        type: string
-      id:
-        type: integer
-      message:
-        type: string
-      username:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.Response:
-    properties:
-      data: {}
-      error:
-        $ref: '#/definitions/ai-api-gateway_internal_application_dto.ErrorInfo'
-      message:
-        type: string
-      success:
-        type: boolean
-      timestamp:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.UsageResponse:
-    properties:
-      total_cost:
-        example: 1.25
-        type: number
-      total_requests:
-        example: 100
-        type: integer
-      total_tokens:
-        example: 5000
-        type: integer
-    type: object
-  ai-api-gateway_internal_application_dto.UserInfo:
-    properties:
-      email:
-        type: string
-      full_name:
-        type: string
-      id:
-        type: integer
-      username:
-        type: string
-    type: object
-  ai-api-gateway_internal_application_dto.UserRechargeRequest:
-    properties:
-      amount:
-        type: number
-      description:
-        type: string
-    required:
-    - amount
-    type: object
-  ai-api-gateway_internal_infrastructure_clients.AIChoice:
+  clients.AIChoice:
     properties:
       finish_reason:
         type: string
       index:
         type: integer
       message:
-        $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage'
+        $ref: '#/definitions/clients.AIMessage'
       text:
         type: string
       tool_calls:
         description: Function calls in streaming mode
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall'
+          $ref: '#/definitions/clients.ToolCall'
         type: array
     type: object
-  ai-api-gateway_internal_infrastructure_clients.AIError:
+  clients.AIError:
     properties:
       code:
         type: string
@@ -188,7 +25,7 @@ definitions:
       type:
         type: string
     type: object
-  ai-api-gateway_internal_infrastructure_clients.AIMessage:
+  clients.AIMessage:
     properties:
       content:
         example: Hello, how are you?
@@ -210,12 +47,12 @@ definitions:
       tool_calls:
         description: Function calls made by assistant
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.ToolCall'
+          $ref: '#/definitions/clients.ToolCall'
         type: array
     required:
     - role
     type: object
-  ai-api-gateway_internal_infrastructure_clients.AIModel:
+  clients.AIModel:
     properties:
       created:
         type: integer
@@ -229,16 +66,16 @@ definitions:
         items: {}
         type: array
     type: object
-  ai-api-gateway_internal_infrastructure_clients.AIResponse:
+  clients.AIResponse:
     properties:
       choices:
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIChoice'
+          $ref: '#/definitions/clients.AIChoice'
         type: array
       created:
         type: integer
       error:
-        $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIError'
+        $ref: '#/definitions/clients.AIError'
       id:
         type: string
       model:
@@ -246,9 +83,9 @@ definitions:
       object:
         type: string
       usage:
-        $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIUsage'
+        $ref: '#/definitions/clients.AIUsage'
     type: object
-  ai-api-gateway_internal_infrastructure_clients.AIUsage:
+  clients.AIUsage:
     properties:
       completion_tokens:
         type: integer
@@ -257,14 +94,260 @@ definitions:
       total_tokens:
         type: integer
     type: object
-  ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest:
+  clients.AnthropicCacheControl:
+    properties:
+      ttl:
+        description: '"5m", "1h"'
+        type: string
+      type:
+        description: '"ephemeral"'
+        type: string
+    type: object
+  clients.AnthropicCacheCreation:
+    properties:
+      ephemeral_1h_input_tokens:
+        type: integer
+      ephemeral_5m_input_tokens:
+        type: integer
+    type: object
+  clients.AnthropicContainer:
+    properties:
+      expires_at:
+        type: string
+      id:
+        type: string
+    type: object
+  clients.AnthropicContentBlock:
+    properties:
+      content: {}
+      id:
+        example: toolu_01A09q90qw90lq917835lq9
+        type: string
+      input: {}
+      is_error:
+        type: boolean
+      name:
+        example: get_weather
+        type: string
+      source:
+        properties:
+          data:
+            type: string
+          media_type:
+            example: image/jpeg
+            type: string
+          type:
+            example: base64
+            type: string
+        type: object
+      text:
+        example: Hello, how can I help you?
+        type: string
+      tool_use_id:
+        type: string
+      type:
+        example: text
+        type: string
+    type: object
+  clients.AnthropicMCPServer:
+    properties:
+      authorization_token:
+        type: string
+      name:
+        type: string
+      tool_configuration:
+        $ref: '#/definitions/clients.AnthropicToolConfiguration'
+      type:
+        description: '"url"'
+        type: string
+      url:
+        type: string
+    required:
+    - name
+    - type
+    - url
+    type: object
+  clients.AnthropicMessage:
+    properties:
+      content:
+        example: Hello, how are you?
+        type: string
+      role:
+        example: user
+        type: string
+    type: object
+  clients.AnthropicMessageRequest:
+    properties:
+      container:
+        type: string
+      max_tokens:
+        example: 1024
+        maximum: 4096
+        minimum: 1
+        type: integer
+      mcp_servers:
+        items:
+          $ref: '#/definitions/clients.AnthropicMCPServer'
+        type: array
+      messages:
+        items:
+          $ref: '#/definitions/clients.AnthropicMessage'
+        minItems: 1
+        type: array
+      metadata:
+        $ref: '#/definitions/clients.AnthropicMetadata'
+      model:
+        example: claude-3-sonnet-20240229
+        type: string
+      service_tier:
+        example: auto
+        type: string
+      stop_sequences:
+        example:
+        - '["\n\n"]'
+        items:
+          type: string
+        type: array
+      stream:
+        example: false
+        type: boolean
+      system:
+        example: You are a helpful assistant.
+        type: string
+      temperature:
+        example: 0.7
+        maximum: 1
+        minimum: 0
+        type: number
+      thinking:
+        $ref: '#/definitions/clients.AnthropicThinkingConfig'
+      tool_choice:
+        example: auto
+        type: string
+      tools:
+        items:
+          $ref: '#/definitions/clients.AnthropicTool'
+        type: array
+      top_k:
+        example: 5
+        minimum: 1
+        type: integer
+      top_p:
+        example: 0.7
+        maximum: 1
+        minimum: 0
+        type: number
+    required:
+    - max_tokens
+    - messages
+    - model
+    type: object
+  clients.AnthropicMessageResponse:
+    properties:
+      container:
+        $ref: '#/definitions/clients.AnthropicContainer'
+      content:
+        items:
+          $ref: '#/definitions/clients.AnthropicContentBlock'
+        type: array
+      id:
+        example: msg_013Zva2CMHLNnXjNJJKqJ2EF
+        type: string
+      model:
+        example: claude-3-sonnet-20240229
+        type: string
+      role:
+        example: assistant
+        type: string
+      stop_reason:
+        example: end_turn
+        type: string
+      stop_sequence:
+        type: string
+      type:
+        example: message
+        type: string
+      usage:
+        $ref: '#/definitions/clients.AnthropicUsage'
+    type: object
+  clients.AnthropicMetadata:
+    properties:
+      user_id:
+        description: 外部用户标识符
+        type: string
+    type: object
+  clients.AnthropicServerToolUse:
+    properties:
+      web_search_requests:
+        type: integer
+    type: object
+  clients.AnthropicThinkingConfig:
+    properties:
+      budget_tokens:
+        minimum: 1024
+        type: integer
+      type:
+        description: '"enabled"'
+        type: string
+    required:
+    - budget_tokens
+    - type
+    type: object
+  clients.AnthropicTool:
+    properties:
+      cache_control:
+        $ref: '#/definitions/clients.AnthropicCacheControl'
+      description:
+        type: string
+      input_schema:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      type:
+        description: '"custom" 等'
+        type: string
+    required:
+    - input_schema
+    - name
+    type: object
+  clients.AnthropicToolConfiguration:
+    properties:
+      allowed_tools:
+        items:
+          type: string
+        type: array
+      enabled:
+        type: boolean
+    type: object
+  clients.AnthropicUsage:
+    properties:
+      cache_creation:
+        $ref: '#/definitions/clients.AnthropicCacheCreation'
+      cache_creation_input_tokens:
+        type: integer
+      cache_read_input_tokens:
+        type: integer
+      input_tokens:
+        example: 10
+        type: integer
+      output_tokens:
+        example: 25
+        type: integer
+      server_tool_use:
+        $ref: '#/definitions/clients.AnthropicServerToolUse'
+      service_tier:
+        example: standard
+        type: string
+    type: object
+  clients.ChatCompletionRequest:
     properties:
       max_tokens:
         example: 150
         type: integer
       messages:
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIMessage'
+          $ref: '#/definitions/clients.AIMessage'
         minItems: 1
         type: array
       model:
@@ -281,7 +364,7 @@ definitions:
       tools:
         description: Function call tools
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.Tool'
+          $ref: '#/definitions/clients.Tool'
         type: array
       web_search:
         description: 是否启用联网搜索
@@ -291,7 +374,7 @@ definitions:
     - messages
     - model
     type: object
-  ai-api-gateway_internal_infrastructure_clients.CompletionRequest:
+  clients.CompletionRequest:
     properties:
       max_tokens:
         example: 150
@@ -316,7 +399,7 @@ definitions:
     - model
     - prompt
     type: object
-  ai-api-gateway_internal_infrastructure_clients.Function:
+  clients.Function:
     properties:
       description:
         example: Search for information
@@ -327,7 +410,7 @@ definitions:
       parameters:
         description: JSON Schema for function parameters
     type: object
-  ai-api-gateway_internal_infrastructure_clients.FunctionCall:
+  clients.FunctionCall:
     properties:
       arguments:
         description: JSON string of function arguments
@@ -336,27 +419,27 @@ definitions:
         example: search
         type: string
     type: object
-  ai-api-gateway_internal_infrastructure_clients.ModelsResponse:
+  clients.ModelsResponse:
     properties:
       data:
         items:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIModel'
+          $ref: '#/definitions/clients.AIModel'
         type: array
       object:
         type: string
     type: object
-  ai-api-gateway_internal_infrastructure_clients.Tool:
+  clients.Tool:
     properties:
       function:
-        $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.Function'
+        $ref: '#/definitions/clients.Function'
       type:
         example: function
         type: string
     type: object
-  ai-api-gateway_internal_infrastructure_clients.ToolCall:
+  clients.ToolCall:
     properties:
       function:
-        $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.FunctionCall'
+        $ref: '#/definitions/clients.FunctionCall'
       id:
         example: call_123
         type: string
@@ -364,7 +447,170 @@ definitions:
         example: function
         type: string
     type: object
-  internal_presentation_handlers.ActionRequest:
+  dto.ChangePasswordRequest:
+    properties:
+      new_password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  dto.ErrorInfo:
+    properties:
+      code:
+        type: string
+      details:
+        additionalProperties: true
+        type: object
+      message:
+        type: string
+    type: object
+  dto.GetUserProfileResponse:
+    properties:
+      balance:
+        type: number
+      created_at:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.LoginRequest:
+    properties:
+      password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserInfo'
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.RefreshTokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        maxLength: 100
+        type: string
+      password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  dto.RegisterResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.Response:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/dto.ErrorInfo'
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  dto.UsageResponse:
+    properties:
+      total_cost:
+        example: 1.25
+        type: number
+      total_requests:
+        example: 100
+        type: integer
+      total_tokens:
+        example: 5000
+        type: integer
+    type: object
+  dto.UserInfo:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: integer
+      username:
+        type: string
+    type: object
+  dto.UserRechargeRequest:
+    properties:
+      amount:
+        type: number
+      description:
+        type: string
+    required:
+    - amount
+    type: object
+  handlers.ActionRequest:
     properties:
       customId:
         type: string
@@ -378,7 +624,7 @@ definitions:
     - customId
     - taskId
     type: object
-  internal_presentation_handlers.BlendRequest:
+  handlers.BlendRequest:
     properties:
       base64Array:
         items:
@@ -397,14 +643,14 @@ definitions:
     required:
     - base64Array
     type: object
-  internal_presentation_handlers.CancelRequest:
+  handlers.CancelRequest:
     properties:
       taskId:
         type: string
     required:
     - taskId
     type: object
-  internal_presentation_handlers.DescribeRequest:
+  handlers.DescribeRequest:
     properties:
       base64:
         type: string
@@ -417,7 +663,7 @@ definitions:
     required:
     - base64
     type: object
-  internal_presentation_handlers.ImagineRequest:
+  handlers.ImagineRequest:
     properties:
       base64Array:
         items:
@@ -434,7 +680,7 @@ definitions:
     required:
     - prompt
     type: object
-  internal_presentation_handlers.MJButton:
+  handlers.MJButton:
     properties:
       customId:
         type: string
@@ -447,7 +693,12 @@ definitions:
       type:
         type: integer
     type: object
-  internal_presentation_handlers.MJResponse:
+  handlers.MJImageURL:
+    properties:
+      url:
+        type: string
+    type: object
+  handlers.MJResponse:
     properties:
       code:
         type: integer
@@ -458,14 +709,18 @@ definitions:
         type: object
       result: {}
     type: object
-  internal_presentation_handlers.MJTaskResponse:
+  handlers.MJTaskResponse:
     properties:
       action:
         type: string
+      botType:
+        type: string
       buttons:
         items:
-          $ref: '#/definitions/internal_presentation_handlers.MJButton'
+          $ref: '#/definitions/handlers.MJButton'
         type: array
+      customId:
+        type: string
       description:
         type: string
       failReason:
@@ -474,7 +729,19 @@ definitions:
         type: integer
       id:
         type: string
+      imageHeight:
+        type: integer
       imageUrl:
+        type: string
+      imageUrls:
+        items:
+          $ref: '#/definitions/handlers.MJImageURL'
+        type: array
+      imageWidth:
+        type: integer
+      maskBase64:
+        type: string
+      mode:
         type: string
       progress:
         type: string
@@ -482,9 +749,8 @@ definitions:
         type: string
       promptEn:
         type: string
-      properties:
-        additionalProperties: true
-        type: object
+      proxy:
+        type: string
       startTime:
         type: integer
       state:
@@ -493,8 +759,14 @@ definitions:
         type: string
       submitTime:
         type: integer
+      videoUrl:
+        type: string
+      videoUrls:
+        items:
+          type: string
+        type: array
     type: object
-  internal_presentation_handlers.ModalRequest:
+  handlers.ModalRequest:
     properties:
       base64:
         type: string
@@ -539,26 +811,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_application_dto.ChangePasswordRequest'
+          $ref: '#/definitions/dto.ChangePasswordRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 修改成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 未认证或旧密码错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
       - BearerAuth: []
       summary: 修改用户密码
@@ -575,26 +847,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_application_dto.LoginRequest'
+          $ref: '#/definitions/dto.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 登录成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.LoginResponse'
+            $ref: '#/definitions/dto.LoginResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 认证失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 用户登录
       tags:
       - 认证
@@ -607,15 +879,15 @@ paths:
         "200":
           description: 获取成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse'
+            $ref: '#/definitions/dto.GetUserProfileResponse'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
       - BearerAuth: []
       summary: 获取当前用户资料
@@ -632,26 +904,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_application_dto.UserRechargeRequest'
+          $ref: '#/definitions/dto.UserRechargeRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 充值成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.GetUserProfileResponse'
+            $ref: '#/definitions/dto.GetUserProfileResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 未认证
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
       - BearerAuth: []
       summary: 用户充值
@@ -668,26 +940,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenRequest'
+          $ref: '#/definitions/dto.RefreshTokenRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 刷新成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.RefreshTokenResponse'
+            $ref: '#/definitions/dto.RefreshTokenResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 刷新令牌无效
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 刷新访问令牌
       tags:
       - 认证
@@ -702,26 +974,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_application_dto.RegisterRequest'
+          $ref: '#/definitions/dto.RegisterRequest'
       produces:
       - application/json
       responses:
         "201":
           description: 注册成功
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.RegisterResponse'
+            $ref: '#/definitions/dto.RegisterResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "409":
           description: 用户名或邮箱已存在
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 用户注册
       tags:
       - 认证
@@ -734,11 +1006,11 @@ paths:
         "200":
           description: 健康检查通过
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "503":
           description: 健康检查失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 健康检查
       tags:
       - 健康检查
@@ -751,7 +1023,7 @@ paths:
         "200":
           description: 服务存活
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 存活检查
       tags:
       - 健康检查
@@ -764,11 +1036,11 @@ paths:
         "200":
           description: 服务就绪
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "503":
           description: 服务未就绪
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 就绪检查
       tags:
       - 健康检查
@@ -781,11 +1053,11 @@ paths:
         "200":
           description: 统计信息
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 获取统计失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 系统统计
       tags:
       - 健康检查
@@ -798,7 +1070,7 @@ paths:
         "200":
           description: 版本信息
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       summary: 版本信息
       tags:
       - 健康检查
@@ -831,26 +1103,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.ActionRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 执行操作
       tags:
       - Midjourney
@@ -870,26 +1147,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.BlendRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 混合图像
       tags:
       - Midjourney
@@ -909,26 +1191,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.CancelRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 取消任务
       tags:
       - Midjourney
@@ -948,26 +1235,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.DescribeRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 描述图像
       tags:
       - Midjourney
@@ -987,26 +1279,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.ImagineRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 生成图像
       tags:
       - Midjourney
@@ -1026,26 +1323,31 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_presentation_handlers.ModalRequest'
+          additionalProperties: true
+          type: object
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 局部重绘
       tags:
       - Midjourney
@@ -1071,23 +1373,28 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJTaskResponse'
+            additionalProperties: true
+            type: object
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/internal_presentation_handlers.MJResponse'
+            additionalProperties: true
+            type: object
       summary: 获取任务结果
       tags:
       - Midjourney
@@ -1102,32 +1409,32 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.ChatCompletionRequest'
+          $ref: '#/definitions/clients.ChatCompletionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 聊天补全响应
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse'
+            $ref: '#/definitions/clients.AIResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 认证失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "429":
           description: 请求过于频繁
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 聊天补全
       tags:
       - AI接口
@@ -1142,33 +1449,108 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.CompletionRequest'
+          $ref: '#/definitions/clients.CompletionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 文本补全响应
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.AIResponse'
+            $ref: '#/definitions/clients.AIResponse'
         "400":
           description: 请求参数错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "401":
           description: 认证失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "429":
           description: 请求过于频繁
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 文本补全
+      tags:
+      - AI接口
+  /v1/messages:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        完全兼容 Anthropic Messages API 的消息创建接口。支持文本对话、工具调用、流式响应等功能。
+
+        **支持的功能：**
+        - 文本对话（单轮和多轮）
+        - 系统提示（system prompt）
+        - 流式响应（Server-Sent Events）
+        - 工具调用（Function Calling）
+        - 温度控制、Top-K、Top-P 采样
+        - 停止序列、最大token限制
+
+        **认证方式：**
+        - Bearer Token: `Authorization: Bearer YOUR_API_KEY`
+        - API Key Header: `x-api-key: YOUR_API_KEY`
+
+        **版本控制：**
+        - 推荐添加版本头: `anthropic-version: 2023-06-01`
+
+        **流式响应：**
+        - 设置 `stream: true` 启用流式响应
+        - 响应格式为 Server-Sent Events (text/event-stream)
+        - 每个数据块以 `data: ` 开头，结束时发送 `data: [DONE]`
+      parameters:
+      - default: "2023-06-01"
+        description: Anthropic API版本
+        in: header
+        name: anthropic-version
+        type: string
+      - description: API密钥（可替代Authorization头）
+        in: header
+        name: x-api-key
+        type: string
+      - description: Anthropic消息请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/clients.AnthropicMessageRequest'
+      produces:
+      - application/json
+      - text/event-stream
+      responses:
+        "200":
+          description: 流式响应 (当stream=true时)" format(text/event-stream)
+          schema:
+            type: string
+        "400":
+          description: 请求参数错误" example({"type":"error","error":{"type":"invalid_request_error","message":"model
+            is required"}})
+          schema:
+            type: object
+        "401":
+          description: 认证失败" example({"type":"error","error":{"type":"authentication_error","message":"Authentication
+            required"}})
+          schema:
+            type: object
+        "429":
+          description: 请求过于频繁" example({"type":"error","error":{"type":"rate_limit_error","message":"Rate
+            limit exceeded"}})
+          schema:
+            type: object
+        "500":
+          description: 服务器内部错误" example({"type":"error","error":{"type":"api_error","message":"Internal
+            server error"}})
+          schema:
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Anthropic Messages API - 创建消息
       tags:
       - AI接口
   /v1/models:
@@ -1180,17 +1562,17 @@ paths:
         "200":
           description: 模型列表
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_infrastructure_clients.ModelsResponse'
+            $ref: '#/definitions/clients.ModelsResponse'
         "401":
           description: 认证失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 列出模型
       tags:
       - AI接口
@@ -1203,17 +1585,17 @@ paths:
         "200":
           description: 使用统计信息
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.UsageResponse'
+            $ref: '#/definitions/dto.UsageResponse'
         "401":
           description: 认证失败
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
         "500":
           description: 服务器内部错误
           schema:
-            $ref: '#/definitions/ai-api-gateway_internal_application_dto.Response'
+            $ref: '#/definitions/dto.Response'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 使用统计
       tags:
       - AI接口

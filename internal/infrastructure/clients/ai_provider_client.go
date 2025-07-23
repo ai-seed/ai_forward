@@ -77,7 +77,27 @@ type CompletionRequest struct {
 	WebSearch   bool    `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
 }
 
-// ClaudeMessageRequest Claude消息请求
+// AnthropicMessageRequest Anthropic Messages API 请求结构
+type AnthropicMessageRequest struct {
+	Model         string                   `json:"model" binding:"required" example:"claude-3-sonnet-20240229" swaggertype:"string" description:"要使用的模型名称，如 claude-3-sonnet-20240229, claude-3-haiku-20240307 等"`
+	Messages      []AnthropicMessage       `json:"messages" binding:"required,min=1" description:"对话消息数组，至少包含一条消息"`
+	MaxTokens     int                      `json:"max_tokens" binding:"required" example:"1024" minimum:"1" maximum:"4096" description:"生成的最大token数量"`
+	Temperature   *float64                 `json:"temperature,omitempty" example:"0.7" minimum:"0" maximum:"1" description:"控制输出随机性，0-1之间，值越高越随机"`
+	Stream        bool                     `json:"stream,omitempty" example:"false" description:"是否启用流式响应"`
+	System        interface{}              `json:"system,omitempty" swaggertype:"string" example:"You are a helpful assistant." description:"系统提示，可以是字符串或数组格式"`
+	StopSequences []string                 `json:"stop_sequences,omitempty" example:"[\"\\n\\n\"]" description:"停止序列，遇到这些字符串时停止生成"`
+	TopK          *int                     `json:"top_k,omitempty" example:"5" minimum:"1" description:"Top-K采样，从概率最高的K个token中选择"`
+	TopP          *float64                 `json:"top_p,omitempty" example:"0.7" minimum:"0" maximum:"1" description:"Top-P采样，累积概率达到P时停止"`
+	Tools         []AnthropicTool          `json:"tools,omitempty" description:"可用的工具列表"`
+	ToolChoice    interface{}              `json:"tool_choice,omitempty" swaggertype:"string" example:"auto" description:"工具选择策略：auto, any, none 或指定工具名"`
+	Metadata      *AnthropicMetadata       `json:"metadata,omitempty" description:"请求元数据"`
+	ServiceTier   string                   `json:"service_tier,omitempty" example:"auto" enum:"auto,standard_only" description:"服务层级"`
+	Container     *string                  `json:"container,omitempty" description:"容器标识符"`
+	MCPServers    []AnthropicMCPServer     `json:"mcp_servers,omitempty" description:"MCP服务器配置"`
+	Thinking      *AnthropicThinkingConfig `json:"thinking,omitempty" description:"思考配置"`
+}
+
+// ClaudeMessageRequest Claude消息请求 (保持向后兼容)
 type ClaudeMessageRequest struct {
 	Model         string          `json:"model" binding:"required" example:"claude-3-sonnet-20240229"`
 	Messages      []ClaudeMessage `json:"messages" binding:"required,min=1"`
@@ -324,6 +344,8 @@ func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entiti
 		"Content-Type": "application/json",
 	}
 
+	fmt.Printf("[AI_CLIENT] 开始处理请求 - Provider: %s (%s), Model: %s\n", provider.Name, provider.Slug, request.Model)
+
 	// 根据提供商类型设置认证头
 	switch provider.Slug {
 	case "302":
@@ -331,40 +353,82 @@ func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entiti
 			// TODO: 解密API密钥
 			headers["Authorization"] = fmt.Sprintf("Bearer %s", *provider.APIKeyEncrypted)
 		}
+		fmt.Printf("[AI_CLIENT] 使用 302 格式 - URL: %s\n", url)
 	case "openai":
 		if provider.APIKeyEncrypted != nil {
 			// TODO: 解密API密钥
 			headers["Authorization"] = fmt.Sprintf("Bearer %s", *provider.APIKeyEncrypted)
 		}
+		fmt.Printf("[AI_CLIENT] 使用 OpenAI 格式 - URL: %s\n", url)
 	case "anthropic":
 		if provider.APIKeyEncrypted != nil {
 			// TODO: 解密API密钥
 			headers["x-api-key"] = *provider.APIKeyEncrypted
 			headers["anthropic-version"] = "2023-06-01"
 		}
-		// Anthropic使用不同的端点
-		url = fmt.Sprintf("%s/messages", provider.BaseURL)
+		// Anthropic使用不同的端点 - 根据文档应该是 /v1/messages
+		url = fmt.Sprintf("%s/v1/messages", provider.BaseURL)
+		fmt.Printf("[AI_CLIENT] 使用 Anthropic 格式 - URL: %s\n", url)
+	case "your-proxy-dual":
+		// 支持双格式的中转服务
+		if provider.APIKeyEncrypted != nil {
+			headers["Authorization"] = fmt.Sprintf("Bearer %s", *provider.APIKeyEncrypted)
+		}
+		// 根据模型类型决定使用哪种端点
+		if c.isAnthropicModel(request.Model) {
+			url = fmt.Sprintf("%s/v1/messages", provider.BaseURL)
+			headers["anthropic-version"] = "2023-06-01"
+		} else {
+			url = fmt.Sprintf("%s/v1/chat/completions", provider.BaseURL)
+		}
 	}
 
+	// 打印请求详情
+	fmt.Printf("[AI_CLIENT] 准备发送 HTTP 请求:\n")
+	fmt.Printf("  - URL: %s\n", url)
+	fmt.Printf("  - Method: POST\n")
+	fmt.Printf("  - Headers: %+v\n", headers)
+	fmt.Printf("  - Model: %s\n", request.Model)
+	fmt.Printf("  - Messages Count: %d\n", len(request.Messages))
+	fmt.Printf("  - Max Tokens: %d\n", request.MaxTokens)
+	fmt.Printf("  - Stream: %t\n", request.Stream)
+
 	// 发送请求
+	fmt.Printf("[AI_CLIENT] 开始发送 HTTP 请求到: %s\n", url)
 	resp, err := c.httpClient.Post(ctx, url, request, headers)
 	if err != nil {
+		fmt.Printf("[AI_CLIENT] HTTP 请求失败: %v\n", err)
 		return nil, fmt.Errorf("failed to send request to provider %s: %w", provider.Name, err)
 	}
+
+	fmt.Printf("[AI_CLIENT] 收到 HTTP 响应:\n")
+	fmt.Printf("  - Status Code: %d\n", resp.StatusCode)
+	fmt.Printf("  - Content Length: %d bytes\n", len(resp.Body))
 
 	// 解析响应
 	var aiResp AIResponse
 
 	if err := resp.UnmarshalJSON(&aiResp); err != nil {
-
+		fmt.Printf("[AI_CLIENT] 解析响应失败: %v\n", err)
+		fmt.Printf("[AI_CLIENT] 原始响应内容: %s\n", string(resp.Body))
 		return nil, fmt.Errorf("failed to unmarshal response from provider %s: %w", provider.Name, err)
 	}
 
+	fmt.Printf("[AI_CLIENT] 响应解析成功:\n")
+	fmt.Printf("  - Response ID: %s\n", aiResp.ID)
+	fmt.Printf("  - Model: %s\n", aiResp.Model)
+	fmt.Printf("  - Choices Count: %d\n", len(aiResp.Choices))
+	fmt.Printf("  - Prompt Tokens: %d\n", aiResp.Usage.PromptTokens)
+	fmt.Printf("  - Completion Tokens: %d\n", aiResp.Usage.CompletionTokens)
+	fmt.Printf("  - Total Tokens: %d\n", aiResp.Usage.TotalTokens)
+
 	// 检查是否有错误
 	if aiResp.Error != nil {
+		fmt.Printf("[AI_CLIENT] 提供商返回错误: %s\n", aiResp.Error.Message)
 		return &aiResp, fmt.Errorf("provider %s returned error: %s", provider.Name, aiResp.Error.Message)
 	}
 
+	fmt.Printf("[AI_CLIENT] 请求处理完成，返回响应\n")
 	return &aiResp, nil
 }
 
@@ -485,8 +549,8 @@ func (c *aiProviderClientImpl) SendStreamRequest(ctx context.Context, provider *
 			headers["x-api-key"] = *provider.APIKeyEncrypted
 			headers["anthropic-version"] = "2023-06-01"
 		}
-		// Anthropic使用不同的端点
-		url = fmt.Sprintf("%s/messages", provider.BaseURL)
+		// Anthropic使用不同的端点 - 根据文档应该是 /v1/messages
+		url = fmt.Sprintf("%s/v1/messages", provider.BaseURL)
 	}
 
 	// 发送流式请求
@@ -608,4 +672,159 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 	}
 
 	return nil
+}
+
+// ===== Anthropic Messages API 结构定义 =====
+
+// AnthropicMessage Anthropic 消息格式
+type AnthropicMessage struct {
+	Role    string      `json:"role" example:"user" enum:"user,assistant" description:"消息角色：user(用户) 或 assistant(助手)"`
+	Content interface{} `json:"content" swaggertype:"string" example:"Hello, how are you?" description:"消息内容，可以是字符串或内容块数组"`
+}
+
+// GetTextContent 获取文本内容
+func (am *AnthropicMessage) GetTextContent() string {
+	switch content := am.Content.(type) {
+	case string:
+		return content
+	case []interface{}:
+		for _, block := range content {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				if blockType, ok := blockMap["type"].(string); ok && blockType == "text" {
+					if text, ok := blockMap["text"].(string); ok {
+						return text
+					}
+				}
+			}
+		}
+	case []AnthropicContentBlock:
+		for _, block := range content {
+			if block.Type == "text" {
+				return block.Text
+			}
+		}
+	}
+	return ""
+}
+
+// AnthropicContentBlock Anthropic 内容块
+type AnthropicContentBlock struct {
+	Type   string `json:"type" example:"text" enum:"text,image,tool_use,tool_result" description:"内容块类型"`
+	Text   string `json:"text,omitempty" example:"Hello, how can I help you?" description:"文本内容（当type为text时）"`
+	Source *struct {
+		Type      string `json:"type" example:"base64" description:"图片数据类型"`
+		MediaType string `json:"media_type" example:"image/jpeg" description:"图片MIME类型"`
+		Data      string `json:"data" description:"base64编码的图片数据"`
+	} `json:"source,omitempty" description:"图片源（当type为image时）"`
+	ID        string      `json:"id,omitempty" example:"toolu_01A09q90qw90lq917835lq9" description:"工具使用的唯一ID（当type为tool_use时）"`
+	Name      string      `json:"name,omitempty" example:"get_weather" description:"工具名称（当type为tool_use时）"`
+	Input     interface{} `json:"input,omitempty" description:"工具输入参数（当type为tool_use时）"`
+	ToolUseID string      `json:"tool_use_id,omitempty" description:"对应的tool_use ID（当type为tool_result时）"`
+	Content   interface{} `json:"content,omitempty" description:"工具结果内容（当type为tool_result时）"`
+	IsError   bool        `json:"is_error,omitempty" description:"是否为错误结果（当type为tool_result时）"`
+}
+
+// AnthropicTool Anthropic 工具定义
+type AnthropicTool struct {
+	Name         string                 `json:"name" binding:"required"`
+	Description  string                 `json:"description,omitempty"`
+	InputSchema  map[string]interface{} `json:"input_schema" binding:"required"`
+	Type         string                 `json:"type,omitempty"` // "custom" 等
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
+}
+
+// AnthropicCacheControl 缓存控制
+type AnthropicCacheControl struct {
+	Type string `json:"type"` // "ephemeral"
+	TTL  string `json:"ttl"`  // "5m", "1h"
+}
+
+// AnthropicMetadata Anthropic 元数据
+type AnthropicMetadata struct {
+	UserID string `json:"user_id,omitempty"` // 外部用户标识符
+}
+
+// AnthropicMCPServer MCP 服务器配置
+type AnthropicMCPServer struct {
+	Name               string                      `json:"name" binding:"required"`
+	Type               string                      `json:"type" binding:"required"` // "url"
+	URL                string                      `json:"url" binding:"required"`
+	AuthorizationToken *string                     `json:"authorization_token,omitempty"`
+	ToolConfiguration  *AnthropicToolConfiguration `json:"tool_configuration,omitempty"`
+}
+
+// AnthropicToolConfiguration 工具配置
+type AnthropicToolConfiguration struct {
+	AllowedTools []string `json:"allowed_tools,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+}
+
+// AnthropicThinkingConfig 思考配置
+type AnthropicThinkingConfig struct {
+	Type         string `json:"type" binding:"required"` // "enabled"
+	BudgetTokens int    `json:"budget_tokens" binding:"required,min=1024"`
+}
+
+// AnthropicMessageResponse Anthropic 消息响应
+type AnthropicMessageResponse struct {
+	ID           string                  `json:"id" example:"msg_013Zva2CMHLNnXjNJJKqJ2EF" description:"消息的唯一标识符"`
+	Type         string                  `json:"type" example:"message" description:"响应类型，固定为 message"`
+	Role         string                  `json:"role" example:"assistant" description:"响应角色，固定为 assistant"`
+	Content      []AnthropicContentBlock `json:"content" description:"响应内容块数组"`
+	Model        string                  `json:"model" example:"claude-3-sonnet-20240229" description:"使用的模型名称"`
+	StopReason   string                  `json:"stop_reason" example:"end_turn" enum:"end_turn,max_tokens,stop_sequence,tool_use,pause_turn,refusal" description:"停止原因"`
+	StopSequence *string                 `json:"stop_sequence,omitempty" description:"触发停止的序列（如果适用）"`
+	Usage        AnthropicUsage          `json:"usage" description:"token使用情况统计"`
+	Container    *AnthropicContainer     `json:"container,omitempty" description:"容器信息（如果适用）"`
+}
+
+// AnthropicUsage Anthropic 使用情况
+type AnthropicUsage struct {
+	InputTokens              int                     `json:"input_tokens" example:"10" description:"输入token数量"`
+	OutputTokens             int                     `json:"output_tokens" example:"25" description:"输出token数量"`
+	CacheCreationInputTokens *int                    `json:"cache_creation_input_tokens,omitempty" description:"缓存创建时的输入token数"`
+	CacheReadInputTokens     *int                    `json:"cache_read_input_tokens,omitempty" description:"缓存读取时的输入token数"`
+	CacheCreation            *AnthropicCacheCreation `json:"cache_creation,omitempty" description:"缓存创建统计"`
+	ServerToolUse            *AnthropicServerToolUse `json:"server_tool_use,omitempty" description:"服务器工具使用统计"`
+	ServiceTier              *string                 `json:"service_tier,omitempty" example:"standard" enum:"standard,priority,batch" description:"使用的服务层级"`
+}
+
+// AnthropicCacheCreation 缓存创建统计
+type AnthropicCacheCreation struct {
+	Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+}
+
+// AnthropicServerToolUse 服务器工具使用统计
+type AnthropicServerToolUse struct {
+	WebSearchRequests int `json:"web_search_requests"`
+}
+
+// AnthropicContainer 容器信息
+type AnthropicContainer struct {
+	ID        string `json:"id"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// isAnthropicModel 判断是否为Anthropic模型
+func (c *aiProviderClientImpl) isAnthropicModel(model string) bool {
+	anthropicModels := []string{
+		"claude-3-opus-20240229",
+		"claude-3-sonnet-20240229",
+		"claude-3-haiku-20240307",
+		"claude-3-5-sonnet-20240620",
+		"claude-3-5-haiku-20241022",
+		"claude-2.1",
+		"claude-2.0",
+		"claude-instant-1.2",
+	}
+
+	for _, anthropicModel := range anthropicModels {
+		if model == anthropicModel {
+			return true
+		}
+	}
+
+	// 也可以通过前缀判断
+	return strings.HasPrefix(model, "claude-")
 }
