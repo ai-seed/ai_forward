@@ -38,13 +38,13 @@ func (r *userRepositoryGorm) Create(ctx context.Context, user *entities.User) er
 // GetByID 根据ID获取用户
 func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.User, error) {
 	// 尝试从缓存获取用户
-	// if r.cache != nil {
-	// 	cacheKey := GetUserCacheKey(id)
-	// 	var cachedUser entities.User
-	// 	if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
-	// 		return &cachedUser, nil
-	// 	}
-	// }
+	if r.cache != nil {
+		cacheKey := GetUserCacheKey(id)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
+		}
+	}
 
 	// 从数据库获取用户
 	var user entities.User
@@ -56,14 +56,14 @@ func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.U
 	}
 
 	// 缓存用户信息
-	// if r.cache != nil {
-	// 	cacheKey := GetUserCacheKey(id)
-	// 	ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-	// 	if ttl == 0 {
-	// 		ttl = 5 * time.Minute // 默认5分钟
-	// 	}
-	// 	r.cache.Set(ctx, cacheKey, &user, ttl)
-	// }
+	if r.cache != nil {
+		cacheKey := GetUserCacheKey(id)
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+		r.cache.Set(ctx, cacheKey, &user, ttl)
+	}
 
 	return &user, nil
 }

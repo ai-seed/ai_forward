@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
@@ -27,6 +28,15 @@ func NewToolRepositoryGorm(db *gorm.DB, cache *redis.CacheService) repositories.
 
 // GetTools 获取工具模板列表
 func (r *toolRepositoryGorm) GetTools(ctx context.Context) ([]*entities.Tool, error) {
+	// 尝试从缓存获取工具列表
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveTools
+		var cachedTools []*entities.Tool
+		if err := r.cache.Get(ctx, cacheKey, &cachedTools); err == nil {
+			return cachedTools, nil
+		}
+	}
+
 	var tools []*entities.Tool
 	if err := r.db.WithContext(ctx).
 		Where("is_active = ?", true).
@@ -40,6 +50,13 @@ func (r *toolRepositoryGorm) GetTools(ctx context.Context) ([]*entities.Tool, er
 		if err := r.loadSupportedModels(ctx, tool); err != nil {
 			return nil, fmt.Errorf("failed to load supported models for tool %s: %w", tool.ID, err)
 		}
+	}
+
+	// 缓存工具列表
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveTools
+		ttl := 30 * time.Minute // 工具列表变化不频繁，缓存30分钟
+		r.cache.Set(ctx, cacheKey, tools, ttl)
 	}
 
 	return tools, nil

@@ -11,10 +11,11 @@ const (
 	CacheKeyActiveUsers    = "users:active"
 
 	// API密钥相关缓存key
-	CacheKeyAPIKeyByKey   = "apikey:key:%s"
-	CacheKeyAPIKeyByID    = "apikey:id:%d"
-	CacheKeyAPIKeysByUser = "apikeys:user:%d"
-	CacheKeyActiveAPIKeys = "apikeys:active:user:%d"
+	CacheKeyAPIKeyByKey    = "apikey:key:%s"
+	CacheKeyAPIKeyByID     = "apikey:id:%d"
+	CacheKeyAPIKeyByPrefix = "apikey:prefix:%s"
+	CacheKeyAPIKeysByUser  = "apikeys:user:%d"
+	CacheKeyActiveAPIKeys  = "apikeys:active:user:%d"
 
 	// 模型相关缓存key
 	CacheKeyModelByID        = "model:id:%d"
@@ -88,6 +89,14 @@ func GetAPIKeyCacheKey(key string) string {
 
 func GetAPIKeyByIDCacheKey(id int64) string {
 	return fmt.Sprintf(CacheKeyAPIKeyByID, id)
+}
+
+func GetAPIKeyByPrefixCacheKey(prefix string) string {
+	return fmt.Sprintf(CacheKeyAPIKeyByPrefix, prefix)
+}
+
+func GetAPIKeysByUserCacheKey(userID int64) string {
+	return fmt.Sprintf(CacheKeyAPIKeysByUser, userID)
 }
 
 func GetActiveAPIKeysCacheKey(userID int64) string {

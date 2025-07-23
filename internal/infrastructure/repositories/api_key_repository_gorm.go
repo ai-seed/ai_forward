@@ -101,10 +101,26 @@ func (r *apiKeyRepositoryGorm) GetByKey(ctx context.Context, key string) (*entit
 
 // GetByUserID 根据用户ID获取API密钥列表
 func (r *apiKeyRepositoryGorm) GetByUserID(ctx context.Context, userID int64) ([]*entities.APIKey, error) {
-	// 直接从数据库获取API密钥列表，不使用缓存
+	// 尝试从缓存获取API密钥列表
+	if r.cache != nil {
+		cacheKey := GetAPIKeysByUserCacheKey(userID)
+		var cachedAPIKeys []*entities.APIKey
+		if err := r.cache.Get(ctx, cacheKey, &cachedAPIKeys); err == nil {
+			return cachedAPIKeys, nil
+		}
+	}
+
+	// 从数据库获取API密钥列表
 	var apiKeys []*entities.APIKey
 	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&apiKeys).Error; err != nil {
 		return nil, fmt.Errorf("failed to get api keys by user id: %w", err)
+	}
+
+	// 缓存API密钥列表
+	if r.cache != nil {
+		cacheKey := GetAPIKeysByUserCacheKey(userID)
+		ttl := 1 * time.Minute // API密钥列表缓存10分钟
+		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
 	}
 
 	return apiKeys, nil
@@ -295,6 +311,15 @@ func (r *apiKeyRepositoryGorm) CountByUserID(ctx context.Context, userID int64) 
 
 // GetByKeyPrefix 根据密钥前缀获取API密钥
 func (r *apiKeyRepositoryGorm) GetByKeyPrefix(ctx context.Context, keyPrefix string) (*entities.APIKey, error) {
+	// 尝试从缓存获取API密钥
+	if r.cache != nil {
+		cacheKey := GetAPIKeyByPrefixCacheKey(keyPrefix)
+		var cachedAPIKey entities.APIKey
+		if err := r.cache.Get(ctx, cacheKey, &cachedAPIKey); err == nil {
+			return &cachedAPIKey, nil
+		}
+	}
+
 	var apiKey entities.APIKey
 	if err := r.db.WithContext(ctx).Where("key_prefix = ?", keyPrefix).First(&apiKey).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -302,11 +327,28 @@ func (r *apiKeyRepositoryGorm) GetByKeyPrefix(ctx context.Context, keyPrefix str
 		}
 		return nil, fmt.Errorf("failed to get api key by key prefix: %w", err)
 	}
+
+	// 缓存API密钥信息
+	if r.cache != nil {
+		cacheKey := GetAPIKeyByPrefixCacheKey(keyPrefix)
+		ttl := 10 * time.Minute // API密钥缓存10分钟
+		r.cache.Set(ctx, cacheKey, &apiKey, ttl)
+	}
+
 	return &apiKey, nil
 }
 
 // GetActiveKeys 获取活跃的API密钥列表
 func (r *apiKeyRepositoryGorm) GetActiveKeys(ctx context.Context, userID int64) ([]*entities.APIKey, error) {
+	// 尝试从缓存获取活跃API密钥列表
+	if r.cache != nil {
+		cacheKey := GetActiveAPIKeysCacheKey(userID)
+		var cachedAPIKeys []*entities.APIKey
+		if err := r.cache.Get(ctx, cacheKey, &cachedAPIKeys); err == nil {
+			return cachedAPIKeys, nil
+		}
+	}
+
 	var apiKeys []*entities.APIKey
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND status = ?", userID, entities.APIKeyStatusActive).
@@ -314,6 +356,14 @@ func (r *apiKeyRepositoryGorm) GetActiveKeys(ctx context.Context, userID int64) 
 		Find(&apiKeys).Error; err != nil {
 		return nil, fmt.Errorf("failed to get active api keys: %w", err)
 	}
+
+	// 缓存活跃API密钥列表
+	if r.cache != nil {
+		cacheKey := GetActiveAPIKeysCacheKey(userID)
+		ttl := 10 * time.Minute // 活跃API密钥列表缓存10分钟
+		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
+	}
+
 	return apiKeys, nil
 }
 

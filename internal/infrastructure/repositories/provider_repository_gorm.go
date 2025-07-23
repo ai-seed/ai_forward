@@ -258,6 +258,15 @@ func (r *providerRepositoryGorm) GetAvailableProviders(ctx context.Context) ([]*
 
 // GetProvidersByPriority 按优先级获取服务提供商列表
 func (r *providerRepositoryGorm) GetProvidersByPriority(ctx context.Context) ([]*entities.Provider, error) {
+	// 尝试从缓存获取按优先级排序的提供商列表
+	if r.cache != nil {
+		cacheKey := CacheKeyProvidersByPriority
+		var cachedProviders []*entities.Provider
+		if err := r.cache.Get(ctx, cacheKey, &cachedProviders); err == nil {
+			return cachedProviders, nil
+		}
+	}
+
 	var providers []*entities.Provider
 	if err := r.db.WithContext(ctx).
 		Where("status = ?", entities.ProviderStatusActive).
@@ -265,6 +274,14 @@ func (r *providerRepositoryGorm) GetProvidersByPriority(ctx context.Context) ([]
 		Find(&providers).Error; err != nil {
 		return nil, fmt.Errorf("failed to get providers by priority: %w", err)
 	}
+
+	// 缓存按优先级排序的提供商列表
+	if r.cache != nil {
+		cacheKey := CacheKeyProvidersByPriority
+		ttl := 15 * time.Minute // 提供商优先级列表缓存15分钟
+		r.cache.Set(ctx, cacheKey, providers, ttl)
+	}
+
 	return providers, nil
 }
 

@@ -1807,7 +1807,12 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "data: ") {
+
+		// 处理 event: 行
+		if strings.HasPrefix(line, "event: ") {
+			w.Write([]byte(line + "\n"))
+			flusher.Flush()
+		} else if strings.HasPrefix(line, "data: ") {
 			data := line[6:] // 移除 "data: " 前缀
 			if data == "[DONE]" {
 				w.Write([]byte("data: [DONE]\n\n"))
@@ -1816,7 +1821,11 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 			}
 
 			// 直接转发Anthropic格式的数据
-			w.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
+			w.Write([]byte(fmt.Sprintf("data: %s\n", data)))
+			flusher.Flush()
+		} else if line == "" {
+			// 处理空行（SSE 事件分隔符）
+			w.Write([]byte("\n"))
 			flusher.Flush()
 		}
 	}
