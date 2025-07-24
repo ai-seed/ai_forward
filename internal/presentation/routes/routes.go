@@ -101,6 +101,7 @@ func (r *Router) SetupRoutes() {
 	aiHandler := handlers.NewAIHandler(
 		r.gatewayService,
 		r.serviceFactory.ModelService(),
+		r.serviceFactory.UsageLogService(),
 		r.logger,
 		r.config,
 		functionCallHandler,

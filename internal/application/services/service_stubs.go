@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
@@ -147,6 +149,15 @@ func (s *usageLogServiceImpl) CreateUsageLog(ctx context.Context, log *entities.
 }
 
 func (s *usageLogServiceImpl) GetUsageStats(ctx context.Context, userID int64) (*repositories.UsageStats, error) {
-	// TODO: 实现获取使用统计
-	return nil, nil
+	// 设置时间范围：从很早的时间到现在，获取用户的所有历史数据
+	start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Now()
+
+	// 调用repository获取使用统计
+	stats, err := s.usageLogRepo.GetUsageStats(ctx, userID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage stats: %w", err)
+	}
+
+	return stats, nil
 }

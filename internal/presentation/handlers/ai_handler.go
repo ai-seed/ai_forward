@@ -29,6 +29,7 @@ import (
 type AIHandler struct {
 	gatewayService           gateway.GatewayService
 	modelService             services.ModelService
+	usageLogService          services.UsageLogService
 	logger                   logger.Logger
 	config                   *config.Config
 	functionCallHandler      functioncall.FunctionCallHandler
@@ -41,6 +42,7 @@ type AIHandler struct {
 func NewAIHandler(
 	gatewayService gateway.GatewayService,
 	modelService services.ModelService,
+	usageLogService services.UsageLogService,
 	logger logger.Logger,
 	config *config.Config,
 	functionCallHandler functioncall.FunctionCallHandler,
@@ -51,6 +53,7 @@ func NewAIHandler(
 	return &AIHandler{
 		gatewayService:           gatewayService,
 		modelService:             modelService,
+		usageLogService:          usageLogService,
 		logger:                   logger,
 		config:                   config,
 		functionCallHandler:      functionCallHandler,
@@ -668,11 +671,30 @@ func (h *AIHandler) Usage(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现获取使用情况
-	c.JSON(http.StatusOK, gin.H{
-		"user_id": userID,
-		"usage":   gin.H{},
-	})
+	// 获取使用统计
+	stats, err := h.usageLogService.GetUsageStats(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		}).Error("Failed to get usage stats")
+
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"USAGE_STATS_ERROR",
+			"Failed to get usage statistics",
+			nil,
+		))
+		return
+	}
+
+	// 构造响应数据
+	usageResponse := dto.UsageResponse{
+		TotalRequests: int(stats.TotalRequests),
+		TotalTokens:   int(stats.TotalTokens),
+		TotalCost:     stats.TotalCost,
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(usageResponse, "Usage statistics retrieved successfully"))
 }
 
 // handleFunctionCallResponse 处理包含 Function Call 的响应
