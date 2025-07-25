@@ -50,13 +50,18 @@ function useOAuthTokenHandler() {
       const refreshToken = urlParams.get('refresh_token');
 
       if (accessToken && refreshToken) {
+        console.log('🔑 OAuth tokens detected, processing...');
         try {
           // 存储token
+          console.log('💾 Storing tokens...');
           TokenStorage.setAccessToken(accessToken);
           TokenStorage.setRefreshToken(refreshToken);
 
           // 使用项目的AuthService获取用户信息
+          console.log('👤 Fetching user profile...');
           const userInfo = await AuthService.getProfile();
+          console.log('✅ User profile fetched:', userInfo);
+
           // 存储用户信息
           TokenStorage.setUserInfo(userInfo);
 
@@ -65,15 +70,17 @@ function useOAuthTokenHandler() {
           window.history.replaceState({}, document.title, newUrl);
 
           // 触发一个自定义事件，通知认证状态更新
+          console.log('📢 Triggering oauth-login-success event');
           window.dispatchEvent(new CustomEvent('oauth-login-success', {
             detail: { userInfo }
           }));
 
         } catch (error) {
-          console.error('Failed to process OAuth tokens:', error);
+          console.error('❌ Failed to process OAuth tokens:', error);
           // 如果出错，清除可能的无效token
           TokenStorage.clearAuthData();
           // 重定向到登录页
+          console.log('🔄 Redirecting to login page due to error');
           window.location.href = '/sign-in';
         }
       }

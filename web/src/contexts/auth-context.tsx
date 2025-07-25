@@ -103,21 +103,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 检查认证状态
   const checkAuth = () => {
+    console.log('🔍 Checking auth state...');
     dispatch({ type: 'AUTH_START' });
-    
+
     try {
       const isAuthenticated = AuthService.isAuthenticated();
       const user = AuthService.getCurrentUser();
-      
+
+      console.log('🔐 Auth check results:', { isAuthenticated, user: !!user });
+
       if (isAuthenticated && user) {
+        console.log('✅ User authenticated, dispatching AUTH_SUCCESS');
         dispatch({ type: 'AUTH_SUCCESS', payload: user });
-        
+
         // 自动刷新token（如果需要）
         AuthService.autoRefreshToken().catch((error) => {
           console.error('Auto refresh failed:', error);
           dispatch({ type: 'AUTH_LOGOUT' });
         });
       } else {
+        console.log('❌ User not authenticated, dispatching AUTH_LOGOUT');
         dispatch({ type: 'AUTH_LOGOUT' });
       }
     } catch (error) {
@@ -235,7 +240,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // 监听OAuth登录成功事件
     const handleOAuthSuccess = (event: CustomEvent) => {
-      console.log('OAuth login success detected, updating auth state');
+      console.log('🎉 OAuth login success event received, updating auth state');
+      console.log('📊 Event detail:', event.detail);
       checkAuth(); // 重新检查认证状态
     };
 
