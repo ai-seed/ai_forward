@@ -82,7 +82,7 @@ export const routesSection: RouteObject[] = [
     ),
   },
   {
-    path: 'auth/oauth/:provider/callback',
+    path: 'auth/oauth/callback',
     element: <OAuthCallbackPage />,
   },
   {

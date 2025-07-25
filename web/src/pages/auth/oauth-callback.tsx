@@ -43,36 +43,13 @@ export default function OAuthCallbackPage() {
         }
       }
 
-      // 原有的code/state处理逻辑（备用）
-      const code = searchParams.get('code');
-      const state = searchParams.get('state');
-      const provider = window.location.pathname.split('/')[3]; // 从路径中提取provider
-
-      if (!code || !state || !provider) {
-        console.error('Missing OAuth callback parameters');
-        navigate('/sign-in', {
-          replace: true,
-          state: { error: 'OAuth callback failed: missing parameters' }
-        });
-        return;
-      }
-
-      try {
-        await handleOAuthCallback({
-          provider,
-          code,
-          state,
-        });
-
-        // 登录成功，重定向到仪表板
-        navigate('/dashboard', { replace: true });
-      } catch (error) {
-        console.error('OAuth callback failed:', error);
-        navigate('/sign-in', {
-          replace: true,
-          state: { error: 'OAuth login failed' }
-        });
-      }
+      // 如果没有token参数，说明可能是错误的回调
+      console.error('Missing OAuth tokens in callback URL');
+      navigate('/sign-in', {
+        replace: true,
+        state: { error: 'OAuth callback failed: missing tokens' }
+      });
+      return;
     };
 
     handleCallback();
