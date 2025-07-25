@@ -30,8 +30,8 @@ export default function OAuthCallbackPage() {
           const userInfo = await AuthService.getProfile();
           localStorage.setItem('user_info', JSON.stringify(userInfo));
 
-          // 跳转到仪表板
-          navigate('/dashboard', { replace: true });
+          // 跳转到首页
+          navigate('/', { replace: true });
           return;
         } catch (error) {
           console.error('Failed to process OAuth tokens:', error);
