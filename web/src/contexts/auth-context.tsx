@@ -104,6 +104,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 检查认证状态
   const checkAuth = () => {
     console.log('🔍 Checking auth state...');
+
+    // 如果正在处理OAuth，跳过认证检查
+    const isOAuthProcessing = sessionStorage.getItem('oauth_processing') === 'true';
+    if (isOAuthProcessing) {
+      console.log('⏳ OAuth processing in progress, skipping auth check');
+      return;
+    }
+
     dispatch({ type: 'AUTH_START' });
 
     try {

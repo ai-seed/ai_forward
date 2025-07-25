@@ -51,6 +51,10 @@ function useOAuthTokenHandler() {
 
       if (accessToken && refreshToken) {
         console.log('🔑 OAuth tokens detected, processing...');
+
+        // 设置一个标志，表示正在处理OAuth
+        sessionStorage.setItem('oauth_processing', 'true');
+
         try {
           // 存储token
           console.log('💾 Storing tokens...');
@@ -69,6 +73,9 @@ function useOAuthTokenHandler() {
           const newUrl = window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
 
+          // 清除OAuth处理标志
+          sessionStorage.removeItem('oauth_processing');
+
           // 触发一个自定义事件，通知认证状态更新
           console.log('📢 Triggering oauth-login-success event');
           window.dispatchEvent(new CustomEvent('oauth-login-success', {
@@ -77,6 +84,8 @@ function useOAuthTokenHandler() {
 
         } catch (error) {
           console.error('❌ Failed to process OAuth tokens:', error);
+          // 清除OAuth处理标志
+          sessionStorage.removeItem('oauth_processing');
           // 如果出错，清除可能的无效token
           TokenStorage.clearAuthData();
           // 重定向到登录页
