@@ -43,23 +43,15 @@ export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
       return;
     }
 
-    // 暂时禁用重定向来调试
-    console.log('🔍 ProtectedRoute debug:', {
-      isLoading: state.isLoading,
-      isAuthenticated: state.isAuthenticated,
-      hasOAuthTokens,
-      isOAuthLoginSuccess
-    });
-
-    // 暂时注释掉重定向
-    // if (!state.isLoading && !state.isAuthenticated) {
-    //   sessionStorage.removeItem('oauth_login_success');
-    //   console.log('🔄 ProtectedRoute: Redirecting to login page');
-    //   router.replace('/sign-in');
-    // } else if (state.isAuthenticated && isOAuthLoginSuccess) {
-    //   console.log('✅ OAuth login completed, clearing flag');
-    //   sessionStorage.removeItem('oauth_login_success');
-    // }
+    // 如果认证检查完成且用户未登录，重定向到登录页
+    if (!state.isLoading && !state.isAuthenticated && !isOAuthLoginSuccess) {
+      console.log('🔄 ProtectedRoute: Redirecting to login page');
+      router.replace('/sign-in');
+    } else if (state.isAuthenticated && isOAuthLoginSuccess) {
+      // 如果已认证且是OAuth登录，清除标志
+      console.log('✅ OAuth login completed, clearing flag');
+      sessionStorage.removeItem('oauth_login_success');
+    }
   }, [state.isLoading, state.isAuthenticated, router]);
 
   // 如果正在加载认证状态，显示加载指示器
