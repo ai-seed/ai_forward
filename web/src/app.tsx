@@ -50,9 +50,12 @@ function useOAuthTokenHandler() {
       localStorage.setItem('access_token', accessToken);
       localStorage.setItem('refresh_token', refreshToken);
 
-      // 清除URL参数，但不刷新页面
+      // 清除URL参数
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
+
+      // 刷新页面以触发AuthProvider重新初始化
+      window.location.reload();
     }
   }, []);
 
