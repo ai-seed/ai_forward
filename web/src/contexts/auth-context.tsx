@@ -232,6 +232,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 组件挂载时检查认证状态
   useEffect(() => {
     checkAuth();
+
+    // 监听OAuth登录成功事件
+    const handleOAuthSuccess = (event: CustomEvent) => {
+      console.log('OAuth login success detected, updating auth state');
+      checkAuth(); // 重新检查认证状态
+    };
+
+    window.addEventListener('oauth-login-success', handleOAuthSuccess as EventListener);
+
+    return () => {
+      window.removeEventListener('oauth-login-success', handleOAuthSuccess as EventListener);
+    };
   }, []);
 
   // 定期检查token是否需要刷新

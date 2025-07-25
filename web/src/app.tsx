@@ -8,7 +8,7 @@ import TokenStorage from 'src/utils/token-storage';
 
 import AuthService from 'src/services/auth';
 import { ThemeProvider } from 'src/theme/theme-provider';
-import { AuthProvider } from 'src/contexts/auth-context';
+import { AuthProvider, useAuth } from 'src/contexts/auth-context';
 
 // ----------------------------------------------------------------------
 
@@ -64,12 +64,17 @@ function useOAuthTokenHandler() {
           const newUrl = window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
 
-          // 刷新页面以触发AuthProvider重新初始化
-          window.location.reload();
+          // 触发一个自定义事件，通知认证状态更新
+          window.dispatchEvent(new CustomEvent('oauth-login-success', {
+            detail: { userInfo }
+          }));
+
         } catch (error) {
           console.error('Failed to process OAuth tokens:', error);
           // 如果出错，清除可能的无效token
           TokenStorage.clearAuthData();
+          // 重定向到登录页
+          window.location.href = '/sign-in';
         }
       }
     };
