@@ -33,9 +33,12 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
   }, [oauthLogin]);
 
   return (
-    <Stack spacing={2}>
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={2}
+      sx={{ width: '100%' }}
+    >
       <Button
-        fullWidth
         size="large"
         color="inherit"
         variant="outlined"
@@ -43,6 +46,7 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
         startIcon={<Iconify icon="socials:google" />}
         onClick={handleGoogleLogin}
         sx={{
+          flex: 1,
           borderColor: 'divider',
           '&:hover': {
             borderColor: 'text.primary',
@@ -56,7 +60,6 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
       </Button>
 
       <Button
-        fullWidth
         size="large"
         color="inherit"
         variant="outlined"
@@ -64,6 +67,7 @@ export function OAuthButtons({ disabled = false }: OAuthButtonsProps) {
         startIcon={<Iconify icon="socials:github" />}
         onClick={handleGitHubLogin}
         sx={{
+          flex: 1,
           borderColor: 'divider',
           '&:hover': {
             borderColor: 'text.primary',
