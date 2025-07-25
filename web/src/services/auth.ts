@@ -266,7 +266,8 @@ export class AuthService {
           await this.refreshToken(refreshToken);
         } catch (error) {
           console.error('Auto refresh token failed:', error);
-          this.logout();
+          // 不要立即logout，让调用者决定如何处理
+          throw error;
         }
       }
     }

@@ -116,11 +116,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('✅ User authenticated, dispatching AUTH_SUCCESS');
         dispatch({ type: 'AUTH_SUCCESS', payload: user });
 
-        // 自动刷新token（如果需要）
-        AuthService.autoRefreshToken().catch((error) => {
-          console.error('Auto refresh failed:', error);
-          dispatch({ type: 'AUTH_LOGOUT' });
-        });
+        // 检查是否是OAuth刚登录（URL中有token参数）
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasOAuthTokens = urlParams.get('access_token') && urlParams.get('refresh_token');
+
+        if (!hasOAuthTokens) {
+          // 只有在非OAuth登录时才自动刷新token
+          AuthService.autoRefreshToken().catch((error) => {
+            console.error('Auto refresh failed:', error);
+            dispatch({ type: 'AUTH_LOGOUT' });
+          });
+        } else {
+          console.log('🔄 OAuth login detected, skipping auto refresh');
+        }
       } else {
         console.log('❌ User not authenticated, dispatching AUTH_LOGOUT');
         dispatch({ type: 'AUTH_LOGOUT' });
