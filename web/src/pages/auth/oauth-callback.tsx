@@ -9,9 +9,9 @@ export default function OAuthCallbackPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // OAuth回调页面直接重定向到首页
-    // token处理由App组件的useOAuthTokenHandler处理
-    navigate('/', { replace: true });
+    // 这个页面现在不应该被访问到，因为后端直接重定向到首页
+    // 如果用户到了这里，说明可能有问题，重定向到登录页
+    navigate('/sign-in', { replace: true });
   }, [navigate]);
 
   return (

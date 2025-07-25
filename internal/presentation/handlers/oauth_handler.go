@@ -337,8 +337,8 @@ func (h *OAuthHandler) HandleCallbackFromQuery(c *gin.Context) {
 		"username": response.User.Username,
 	}).Info("OAuth query callback login successful")
 
-	// 重定向到前端，携带token信息
-	frontendURL := fmt.Sprintf("%s/auth/oauth/callback?access_token=%s&refresh_token=%s",
+	// 重定向到前端首页，携带token信息
+	frontendURL := fmt.Sprintf("%s/?access_token=%s&refresh_token=%s",
 		h.config.OAuth.FrontendURL, response.AccessToken, response.RefreshToken)
 
 	c.Redirect(http.StatusFound, frontendURL)
