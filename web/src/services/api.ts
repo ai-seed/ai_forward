@@ -2,6 +2,7 @@ import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios';
 
 import axios from 'axios';
 
+import TokenStorage from 'src/utils/token-storage';
 import { API_CONFIG } from 'src/config/api';
 
 // 扩展AxiosRequestConfig以支持skipAuth选项
@@ -34,8 +35,8 @@ apiClient.interceptors.request.use(
 
     // 检查是否需要跳过认证
     if (!shouldSkipAuth(url, config as ApiRequestConfig)) {
-      // 从localStorage获取token
-      const token = localStorage.getItem('access_token');
+      // 从TokenStorage获取token
+      const token = TokenStorage.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -81,35 +82,33 @@ apiClient.interceptors.response.use(
     // 处理401错误（未授权）
     if (error.response?.status === 401) {
       // 尝试刷新token
-      const refreshToken = localStorage.getItem('refresh_token');
+      const refreshToken = TokenStorage.getRefreshToken();
       if (refreshToken && !error.config._retry) {
         error.config._retry = true;
-        
+
         try {
           const response = await axios.post(`${API_CONFIG.BASE_URL}/auth/refresh`, {
             refresh_token: refreshToken,
           });
-          
+
           const { access_token, refresh_token: newRefreshToken } = response.data;
-          
+
           // 更新存储的token
-          localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', newRefreshToken);
-          
+          TokenStorage.setAccessToken(access_token);
+          TokenStorage.setRefreshToken(newRefreshToken);
+
           // 重新发送原始请求
           error.config.headers.Authorization = `Bearer ${access_token}`;
           return apiClient.request(error.config);
         } catch (refreshError) {
           // 刷新失败，清除token并跳转到登录页
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          TokenStorage.clearAuthData();
           window.location.href = '/sign-in';
           return Promise.reject(refreshError);
         }
       } else {
         // 没有refresh token或已经重试过，跳转到登录页
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        TokenStorage.clearAuthData();
         window.location.href = '/sign-in';
       }
     }

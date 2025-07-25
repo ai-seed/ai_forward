@@ -1,4 +1,5 @@
 import api from './api';
+import TokenStorage from '../utils/token-storage';
 
 // 认证相关的类型定义
 export interface LoginRequest {
@@ -93,10 +94,12 @@ export class AuthService {
       const response = await api.noAuth.post<LoginResponse>('/auth/login', credentials);
 
       if (response.success && response.data) {
-        // 存储token到localStorage
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('refresh_token', response.data.refresh_token);
-        localStorage.setItem('user_info', JSON.stringify(response.data.user));
+        // 存储认证数据
+        TokenStorage.setAuthData(
+          response.data.access_token,
+          response.data.refresh_token,
+          response.data.user
+        );
 
         return response.data;
       }
@@ -142,8 +145,8 @@ export class AuthService {
 
     if (response.success && response.data) {
       // 更新存储的token
-      localStorage.setItem('access_token', response.data.access_token);
-      localStorage.setItem('refresh_token', response.data.refresh_token);
+      TokenStorage.setAccessToken(response.data.access_token);
+      TokenStorage.setRefreshToken(response.data.refresh_token);
 
       return response.data;
     }
@@ -196,10 +199,8 @@ export class AuthService {
    */
   static logout(): void {
     // 清除本地存储的认证信息
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_info');
-    
+    TokenStorage.clearAuthData();
+
     // 跳转到登录页
     window.location.href = '/sign-in';
   }
@@ -208,38 +209,28 @@ export class AuthService {
    * 检查用户是否已登录
    */
   static isAuthenticated(): boolean {
-    const token = localStorage.getItem('access_token');
-    return !!token;
+    return TokenStorage.hasValidAuthData();
   }
 
   /**
    * 获取当前用户信息
    */
   static getCurrentUser(): UserInfo | null {
-    const userInfo = localStorage.getItem('user_info');
-    if (userInfo) {
-      try {
-        return JSON.parse(userInfo);
-      } catch (error) {
-        console.error('Failed to parse user info:', error);
-        return null;
-      }
-    }
-    return null;
+    return TokenStorage.getUserInfo();
   }
 
   /**
    * 获取访问令牌
    */
   static getAccessToken(): string | null {
-    return localStorage.getItem('access_token');
+    return TokenStorage.getAccessToken();
   }
 
   /**
    * 获取刷新令牌
    */
   static getRefreshToken(): string | null {
-    return localStorage.getItem('refresh_token');
+    return TokenStorage.getRefreshToken();
   }
 
   /**
@@ -302,10 +293,12 @@ export class AuthService {
       const response = await api.noAuth.post<LoginResponse>(`/auth/oauth/${request.provider}/callback`, request);
 
       if (response.success && response.data) {
-        // 存储token到localStorage
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('refresh_token', response.data.refresh_token);
-        localStorage.setItem('user_info', JSON.stringify(response.data.user));
+        // 存储认证数据
+        TokenStorage.setAuthData(
+          response.data.access_token,
+          response.data.refresh_token,
+          response.data.user
+        );
 
         return response.data;
       }
