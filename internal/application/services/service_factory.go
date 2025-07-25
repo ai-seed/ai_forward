@@ -138,6 +138,15 @@ func (f *ServiceFactory) AuthService() AuthService {
 	)
 }
 
+// OAuthService 获取OAuth服务
+func (f *ServiceFactory) OAuthService() OAuthService {
+	return NewOAuthService(
+		f.repoFactory.UserRepository(),
+		f.JWTService(),
+		f.config,
+	)
+}
+
 // ToolService 获取工具服务
 func (f *ServiceFactory) ToolService() *ToolService {
 	return NewToolService(

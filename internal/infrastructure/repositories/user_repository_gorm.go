@@ -153,6 +153,84 @@ func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*ent
 	return &user, nil
 }
 
+// GetByGoogleID 根据Google ID获取用户
+func (r *userRepositoryGorm) GetByGoogleID(ctx context.Context, googleID string) (*entities.User, error) {
+	// 尝试从缓存获取用户
+	if r.cache != nil {
+		cacheKey := GetUserByGoogleIDCacheKey(googleID)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
+		}
+	}
+
+	// 从数据库获取用户
+	var user entities.User
+	if err := r.db.WithContext(ctx).Where("google_id = ?", googleID).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, entities.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user by google id: %w", err)
+	}
+
+	// 缓存用户信息
+	if r.cache != nil {
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+
+		// 缓存Google ID索引
+		googleIDCacheKey := GetUserByGoogleIDCacheKey(googleID)
+		r.cache.Set(ctx, googleIDCacheKey, &user, ttl)
+
+		// 同时缓存用户ID索引
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Set(ctx, userIDCacheKey, &user, ttl)
+	}
+
+	return &user, nil
+}
+
+// GetByGitHubID 根据GitHub ID获取用户
+func (r *userRepositoryGorm) GetByGitHubID(ctx context.Context, githubID string) (*entities.User, error) {
+	// 尝试从缓存获取用户
+	if r.cache != nil {
+		cacheKey := GetUserByGitHubIDCacheKey(githubID)
+		var cachedUser entities.User
+		if err := r.cache.Get(ctx, cacheKey, &cachedUser); err == nil {
+			return &cachedUser, nil
+		}
+	}
+
+	// 从数据库获取用户
+	var user entities.User
+	if err := r.db.WithContext(ctx).Where("git_hub_id = ?", githubID).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, entities.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user by github id: %w", err)
+	}
+
+	// 缓存用户信息
+	if r.cache != nil {
+		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
+		if ttl == 0 {
+			ttl = 5 * time.Minute // 默认5分钟
+		}
+
+		// 缓存GitHub ID索引
+		githubIDCacheKey := GetUserByGitHubIDCacheKey(githubID)
+		r.cache.Set(ctx, githubIDCacheKey, &user, ttl)
+
+		// 同时缓存用户ID索引
+		userIDCacheKey := GetUserCacheKey(user.ID)
+		r.cache.Set(ctx, userIDCacheKey, &user, ttl)
+	}
+
+	return &user, nil
+}
+
 // Update 更新用户
 func (r *userRepositoryGorm) Update(ctx context.Context, user *entities.User) error {
 	user.UpdatedAt = time.Now()
@@ -179,6 +257,16 @@ func (r *userRepositoryGorm) Update(ctx context.Context, user *entities.User) er
 		// 清除邮箱缓存
 		emailCacheKey := GetUserByEmailCacheKey(user.Email)
 		r.cache.Delete(ctx, emailCacheKey)
+
+		// 清除OAuth相关缓存
+		if user.GoogleID != nil {
+			googleIDCacheKey := GetUserByGoogleIDCacheKey(*user.GoogleID)
+			r.cache.Delete(ctx, googleIDCacheKey)
+		}
+		if user.GitHubID != nil {
+			githubIDCacheKey := GetUserByGitHubIDCacheKey(*user.GitHubID)
+			r.cache.Delete(ctx, githubIDCacheKey)
+		}
 	}
 
 	return nil

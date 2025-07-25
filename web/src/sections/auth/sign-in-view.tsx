@@ -18,6 +18,7 @@ import { useAuth } from 'src/contexts/auth-context';
 
 import { Iconify } from 'src/components/iconify';
 import { AuthLanguageSwitcher } from 'src/components/language-switcher';
+import { OAuthButtons } from 'src/components/oauth-buttons';
 
 // ----------------------------------------------------------------------
 
@@ -168,6 +169,8 @@ export function SignInView() {
           {t('auth.or')}
         </Typography>
       </Divider>
+
+      <OAuthButtons disabled={state.isLoading} />
     </>
   );
 }

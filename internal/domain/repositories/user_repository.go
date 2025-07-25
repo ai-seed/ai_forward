@@ -19,6 +19,12 @@ type UserRepository interface {
 	// GetByEmail 根据邮箱获取用户
 	GetByEmail(ctx context.Context, email string) (*entities.User, error)
 
+	// GetByGoogleID 根据Google ID获取用户
+	GetByGoogleID(ctx context.Context, googleID string) (*entities.User, error)
+
+	// GetByGitHubID 根据GitHub ID获取用户
+	GetByGitHubID(ctx context.Context, githubID string) (*entities.User, error)
+
 	// Update 更新用户
 	Update(ctx context.Context, user *entities.User) error
 

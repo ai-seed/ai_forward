@@ -69,6 +69,19 @@ export interface RechargeRequest {
   description?: string;
 }
 
+// OAuth登录请求类型
+export interface OAuthLoginRequest {
+  provider: string;
+  code: string;
+  state: string;
+}
+
+// OAuth URL响应类型
+export interface OAuthURLResponse {
+  auth_url: string;
+  state: string;
+}
+
 // 认证服务类
 export class AuthService {
   /**
@@ -265,6 +278,67 @@ export class AuthService {
           this.logout();
         }
       }
+    }
+  }
+
+  /**
+   * 获取OAuth认证URL
+   */
+  static async getOAuthURL(provider: string): Promise<OAuthURLResponse> {
+    const response = await api.noAuth.get<OAuthURLResponse>(`/auth/oauth/${provider}/url`);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error?.message || 'Failed to get OAuth URL');
+  }
+
+  /**
+   * 处理OAuth回调
+   */
+  static async handleOAuthCallback(request: OAuthLoginRequest): Promise<LoginResponse> {
+    try {
+      const response = await api.noAuth.post<LoginResponse>(`/auth/oauth/${request.provider}/callback`, request);
+
+      if (response.success && response.data) {
+        // 存储token到localStorage
+        localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('refresh_token', response.data.refresh_token);
+        localStorage.setItem('user_info', JSON.stringify(response.data.user));
+
+        return response.data;
+      }
+
+      throw new Error(response.error?.message || 'OAuth login failed');
+    } catch (error: any) {
+      // 处理OAuth特定错误
+      if (error.response?.status === 401) {
+        throw new Error('OAUTH_FAILED');
+      }
+
+      // 处理其他错误
+      if (error.response?.data?.error?.message) {
+        throw new Error(error.response.data.error.message);
+      }
+
+      throw new Error(error.message || 'OAuth login failed');
+    }
+  }
+
+  /**
+   * OAuth登录（完整流程）
+   */
+  static async oauthLogin(provider: string): Promise<void> {
+    try {
+      // 获取认证URL
+      const { auth_url } = await this.getOAuthURL(provider);
+
+      // 重定向到OAuth提供商
+      window.location.href = auth_url;
+    } catch (error) {
+      console.error('OAuth login failed:', error);
+      throw error;
     }
   }
 }

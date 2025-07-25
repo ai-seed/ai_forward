@@ -203,7 +203,10 @@
     "password_min_length": "パスワードは6文字以上である必要があります",
     "confirm_password_required": "パスワードを確認してください",
     "passwords_not_match": "パスワードが一致しません",
-    "invalid_credentials_error": "ユーザー名またはパスワードが間違っています"
+    "invalid_credentials_error": "ユーザー名またはパスワードが間違っています",
+    "continue_with_google": "Googleで続行",
+    "continue_with_github": "GitHubで続行",
+    "oauth_failed_error": "OAuth ログインに失敗しました"
   },
   "navigation": {
     "dashboard": "ダッシュボード",

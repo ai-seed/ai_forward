@@ -203,7 +203,10 @@
     "password_min_length": "Password must be at least 6 characters",
     "confirm_password_required": "Please confirm your password",
     "passwords_not_match": "Passwords do not match",
-    "invalid_credentials_error": "Invalid username or password"
+    "invalid_credentials_error": "Invalid username or password",
+    "continue_with_google": "Continue with Google",
+    "continue_with_github": "Continue with GitHub",
+    "oauth_failed_error": "OAuth login failed"
   },
   "navigation": {
     "dashboard": "Dashboard",

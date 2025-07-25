@@ -11,6 +11,7 @@ export const API_CONFIG = {
     '/auth/login',
     '/auth/register',
     '/auth/refresh',
+    '/auth/oauth',
     '/health',
     '/swagger',
     '/docs'
@@ -58,6 +59,8 @@ export const API_ENDPOINTS = {
     PROFILE: '/auth/profile',
     CHANGE_PASSWORD: '/auth/change-password',
     RECHARGE: '/auth/recharge',
+    OAUTH_URL: (provider: string) => `/auth/oauth/${provider}/url`,
+    OAUTH_CALLBACK: (provider: string) => `/auth/oauth/${provider}/callback`,
   },
   
   // 用户管理

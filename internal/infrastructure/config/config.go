@@ -30,6 +30,7 @@ type Config struct {
 	Monitoring   MonitoringConfig   `mapstructure:"monitoring"`
 	Billing      BillingConfig      `mapstructure:"billing"`
 	JWT          JWTConfig          `mapstructure:"jwt"`
+	OAuth        OAuthConfig        `mapstructure:"oauth"`
 	FunctionCall FunctionCallConfig `mapstructure:"function_call"`
 }
 
@@ -82,6 +83,20 @@ type JWTConfig struct {
 	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
 	Issuer          string        `mapstructure:"issuer"`
 	Audience        string        `mapstructure:"audience"`
+}
+
+// OAuthConfig OAuth认证配置
+type OAuthConfig struct {
+	Google OAuthProviderConfig `mapstructure:"google"`
+	GitHub OAuthProviderConfig `mapstructure:"github"`
+}
+
+// OAuthProviderConfig OAuth提供商配置
+type OAuthProviderConfig struct {
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+	RedirectURL  string `mapstructure:"redirect_url"`
+	Enabled      bool   `mapstructure:"enabled"`
 }
 
 // FunctionCallConfig Function Call 配置
@@ -186,6 +201,16 @@ func setDefaults() {
 	viper.SetDefault("jwt.refresh_token_ttl", "168h")
 	viper.SetDefault("jwt.issuer", "ai-api-gateway")
 	viper.SetDefault("jwt.audience", "ai-api-gateway-users")
+
+	// OAuth默认值
+	viper.SetDefault("oauth.google.enabled", false)
+	viper.SetDefault("oauth.google.client_id", "")
+	viper.SetDefault("oauth.google.client_secret", "")
+	viper.SetDefault("oauth.google.redirect_url", "http://localhost:8080/auth/oauth/google/callback")
+	viper.SetDefault("oauth.github.enabled", false)
+	viper.SetDefault("oauth.github.client_id", "")
+	viper.SetDefault("oauth.github.client_secret", "")
+	viper.SetDefault("oauth.github.redirect_url", "http://localhost:8080/auth/oauth/github/callback")
 
 	// Function Call默认值
 	viper.SetDefault("function_call.enabled", false)

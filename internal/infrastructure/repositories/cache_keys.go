@@ -8,6 +8,8 @@ const (
 	CacheKeyUserByID       = "user:id:%d"
 	CacheKeyUserByUsername = "user:username:%s"
 	CacheKeyUserByEmail    = "user:email:%s"
+	CacheKeyUserByGoogleID = "user:google_id:%s"
+	CacheKeyUserByGitHubID = "user:github_id:%s"
 	CacheKeyActiveUsers    = "users:active"
 
 	// API密钥相关缓存key
@@ -81,6 +83,14 @@ func GetUserByUsernameCacheKey(username string) string {
 
 func GetUserByEmailCacheKey(email string) string {
 	return fmt.Sprintf(CacheKeyUserByEmail, email)
+}
+
+func GetUserByGoogleIDCacheKey(googleID string) string {
+	return fmt.Sprintf(CacheKeyUserByGoogleID, googleID)
+}
+
+func GetUserByGitHubIDCacheKey(githubID string) string {
+	return fmt.Sprintf(CacheKeyUserByGitHubID, githubID)
 }
 
 func GetAPIKeyCacheKey(key string) string {

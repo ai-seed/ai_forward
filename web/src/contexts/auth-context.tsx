@@ -5,7 +5,7 @@ import React, { useEffect, useContext, useReducer, createContext } from 'react';
 
 import AuthService from '../services/auth';
 
-import type { UserInfo, LoginRequest, RegisterRequest, ChangePasswordRequest } from '../services/auth';
+import type { UserInfo, LoginRequest, RegisterRequest, ChangePasswordRequest, OAuthLoginRequest } from '../services/auth';
 
 // 认证状态类型
 export interface AuthState {
@@ -33,6 +33,8 @@ export interface AuthContextType {
   changePassword: (passwordData: ChangePasswordRequest) => Promise<void>;
   clearError: () => void;
   checkAuth: () => void;
+  oauthLogin: (provider: string) => Promise<void>;
+  handleOAuthCallback: (request: OAuthLoginRequest) => Promise<void>;
 }
 
 // 初始状态
@@ -185,6 +187,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'AUTH_CLEAR_ERROR' });
   };
 
+  // OAuth登录
+  const oauthLogin = async (provider: string) => {
+    dispatch({ type: 'AUTH_START' });
+
+    try {
+      await AuthService.oauthLogin(provider);
+      // 重定向会在AuthService中处理
+    } catch (error) {
+      let errorMessage = 'OAuth login failed';
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
+      throw error;
+    }
+  };
+
+  // 处理OAuth回调
+  const handleOAuthCallback = async (request: OAuthLoginRequest) => {
+    dispatch({ type: 'AUTH_START' });
+
+    try {
+      const response = await AuthService.handleOAuthCallback(request);
+      dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
+    } catch (error) {
+      let errorMessage = 'OAuth callback failed';
+
+      if (error instanceof Error) {
+        if (error.message === 'OAUTH_FAILED') {
+          errorMessage = t('auth.oauth_failed_error');
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
+      throw error;
+    }
+  };
+
   // 组件挂载时检查认证状态
   useEffect(() => {
     checkAuth();
@@ -213,6 +257,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     changePassword,
     clearError,
     checkAuth,
+    oauthLogin,
+    handleOAuthCallback,
   };
 
   return (

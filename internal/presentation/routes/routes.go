@@ -119,6 +119,7 @@ func (r *Router) SetupRoutes() {
 	)
 	healthHandler := handlers.NewHealthHandler(r.gatewayService, r.logger)
 	authHandler := handlers.NewAuthHandler(r.serviceFactory.AuthService(), r.logger)
+	oauthHandler := handlers.NewOAuthHandler(r.serviceFactory.OAuthService(), r.logger)
 	toolHandler := handlers.NewToolHandler(r.serviceFactory.ToolService(), r.logger)
 	quotaHandler := handlers.NewQuotaHandler(r.serviceFactory.QuotaService(), r.logger)
 	midjourneyHandler := handlers.NewMidjourneyHandler(
@@ -141,6 +142,15 @@ func (r *Router) SetupRoutes() {
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/refresh", authHandler.RefreshToken)
+
+		// OAuth路由（无需认证）
+		oauth := auth.Group("/oauth")
+		{
+			oauth.GET("/:provider/url", oauthHandler.GetAuthURL)
+			oauth.POST("/:provider/callback", oauthHandler.HandleCallback)
+			oauth.GET("/:provider/redirect", oauthHandler.GetAuthURLFromQuery)
+			oauth.GET("/:provider/callback", oauthHandler.HandleCallbackFromQuery)
+		}
 
 		// 需要认证的认证路由
 		authProtected := auth.Group("/")

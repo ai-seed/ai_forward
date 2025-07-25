@@ -64,7 +64,7 @@ func NewGormDB(config GormConfig) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	// 定义所有需要迁移的模型
 	models := []interface{}{
-		// &entities.User{},
+		&entities.User{}, // 启用用户表迁移以支持OAuth字段
 		// &entities.APIKey{},
 		// &entities.Provider{},
 		// &entities.Model{},

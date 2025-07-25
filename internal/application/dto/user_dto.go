@@ -23,14 +23,16 @@ type UpdateUserRequest struct {
 
 // UserResponse 用户响应
 type UserResponse struct {
-	ID        int64               `json:"id"`
-	Username  string              `json:"username"`
-	Email     string              `json:"email"`
-	FullName  *string             `json:"full_name,omitempty"`
-	Status    entities.UserStatus `json:"status"`
-	Balance   float64             `json:"balance"`
-	CreatedAt time.Time           `json:"created_at"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	ID         int64               `json:"id"`
+	Username   string              `json:"username"`
+	Email      string              `json:"email"`
+	FullName   *string             `json:"full_name,omitempty"`
+	Avatar     *string             `json:"avatar,omitempty"`
+	Status     entities.UserStatus `json:"status"`
+	Balance    float64             `json:"balance"`
+	AuthMethod string              `json:"auth_method"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
 }
 
 // UserListResponse 用户列表响应
@@ -55,28 +57,47 @@ type UserRechargeRequest struct {
 	Description string  `json:"description,omitempty"`
 }
 
+// OAuthUserInfo OAuth用户信息
+type OAuthUserInfo struct {
+	ID       string  `json:"id"`
+	Email    string  `json:"email"`
+	Name     string  `json:"name"`
+	Avatar   *string `json:"avatar,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
+// OAuthLoginRequest OAuth登录请求
+type OAuthLoginRequest struct {
+	Provider string `json:"provider" validate:"required,oneof=google github"`
+	Code     string `json:"code" validate:"required"`
+	State    string `json:"state" validate:"required"`
+}
+
 // ToEntity 转换为实体
 func (r *CreateUserRequest) ToEntity() *entities.User {
 	return &entities.User{
-		Username: r.Username,
-		Email:    r.Email,
-		FullName: r.FullName,
-		Status:   entities.UserStatusActive,
-		Balance:  0.000001,
+		Username:   r.Username,
+		Email:      r.Email,
+		FullName:   r.FullName,
+		Status:     entities.UserStatusActive,
+		Balance:    0.000001,
+		AuthMethod: string(entities.AuthMethodPassword),
 	}
 }
 
 // FromEntity 从实体转换
 func (r *UserResponse) FromEntity(user *entities.User) *UserResponse {
 	return &UserResponse{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		FullName:  user.FullName,
-		Status:    user.Status,
-		Balance:   user.Balance,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		ID:         user.ID,
+		Username:   user.Username,
+		Email:      user.Email,
+		FullName:   user.FullName,
+		Avatar:     user.Avatar,
+		Status:     user.Status,
+		Balance:    user.Balance,
+		AuthMethod: user.AuthMethod,
+		CreatedAt:  user.CreatedAt,
+		UpdatedAt:  user.UpdatedAt,
 	}
 }
 
