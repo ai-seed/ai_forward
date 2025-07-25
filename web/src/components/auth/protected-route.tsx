@@ -22,44 +22,24 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
   const { state } = useAuth();
   const router = useRouter();
-  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   useEffect(() => {
     // 检查是否有OAuth token在URL中
     const urlParams = new URLSearchParams(window.location.search);
     const hasOAuthTokens = urlParams.get('access_token') && urlParams.get('refresh_token');
 
-    if (!state.isLoading && !state.isAuthenticated) {
-      if (hasOAuthTokens) {
-        // 如果有OAuth tokens，给OAuth处理一些时间
-        console.log('🔄 OAuth tokens detected, delaying redirect...');
-        const timer = setTimeout(() => {
-          // 再次检查认证状态
-          if (!state.isAuthenticated) {
-            console.log('⏰ OAuth processing timeout, redirecting to login');
-            setShouldRedirect(true);
-          }
-        }, 2000); // 给OAuth处理2秒时间
-
-        return () => clearTimeout(timer);
-      } else {
-        // 没有OAuth tokens，立即重定向
-        setShouldRedirect(true);
-      }
-    } else if (state.isAuthenticated) {
-      // 如果已认证，取消重定向
-      setShouldRedirect(false);
+    // 如果有OAuth tokens，不要重定向，让OAuth处理完成
+    if (hasOAuthTokens) {
+      console.log('🔄 OAuth tokens detected, waiting for processing...');
+      return;
     }
 
-    return undefined;
-  }, [state.isLoading, state.isAuthenticated]);
-
-  useEffect(() => {
-    if (shouldRedirect) {
+    // 如果认证检查完成且用户未登录，重定向到登录页
+    if (!state.isLoading && !state.isAuthenticated) {
       console.log('🔄 Redirecting to login page');
       router.replace('/sign-in');
     }
-  }, [shouldRedirect, router]);
+  }, [state.isLoading, state.isAuthenticated, router]);
 
   // 如果正在加载认证状态，显示加载指示器
   if (state.isLoading) {

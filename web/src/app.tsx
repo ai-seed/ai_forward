@@ -63,6 +63,12 @@ function useOAuthTokenHandler() {
           const userInfo = await AuthService.getProfile();
           console.log('✅ User profile fetched:', userInfo);
 
+          // 检查用户信息是否完整
+          if (!userInfo || !userInfo.id || !userInfo.email) {
+            console.error('❌ Incomplete user info:', userInfo);
+            throw new Error('Incomplete user information received');
+          }
+
           // 存储用户信息
           TokenStorage.setUserInfo(userInfo);
 
