@@ -28,17 +28,38 @@ export function ProtectedRoute({ children, fallback }: ProtectedRouteProps) {
     const urlParams = new URLSearchParams(window.location.search);
     const hasOAuthTokens = urlParams.get('access_token') && urlParams.get('refresh_token');
 
+    // 检查是否是OAuth登录成功后的页面刷新
+    const isOAuthLoginSuccess = sessionStorage.getItem('oauth_login_success') === 'true';
+
     // 如果有OAuth tokens，不要重定向，让OAuth处理完成
     if (hasOAuthTokens) {
       console.log('🔄 OAuth tokens detected, waiting for processing...');
       return;
     }
 
-    // 如果认证检查完成且用户未登录，重定向到登录页
-    if (!state.isLoading && !state.isAuthenticated) {
-      console.log('🔄 Redirecting to login page');
-      router.replace('/sign-in');
+    // 如果是OAuth登录成功后的页面刷新，给认证状态更新一些时间
+    if (isOAuthLoginSuccess && state.isLoading) {
+      console.log('🔄 OAuth login success detected, waiting for auth state update...');
+      return;
     }
+
+    // 暂时禁用重定向来调试
+    console.log('🔍 ProtectedRoute debug:', {
+      isLoading: state.isLoading,
+      isAuthenticated: state.isAuthenticated,
+      hasOAuthTokens,
+      isOAuthLoginSuccess
+    });
+
+    // 暂时注释掉重定向
+    // if (!state.isLoading && !state.isAuthenticated) {
+    //   sessionStorage.removeItem('oauth_login_success');
+    //   console.log('🔄 ProtectedRoute: Redirecting to login page');
+    //   router.replace('/sign-in');
+    // } else if (state.isAuthenticated && isOAuthLoginSuccess) {
+    //   console.log('✅ OAuth login completed, clearing flag');
+    //   sessionStorage.removeItem('oauth_login_success');
+    // }
   }, [state.isLoading, state.isAuthenticated, router]);
 
   // 如果正在加载认证状态，显示加载指示器

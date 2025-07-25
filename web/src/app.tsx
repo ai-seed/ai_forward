@@ -78,6 +78,9 @@ function useOAuthTokenHandler() {
 
           console.log('🎉 OAuth login completed successfully!');
 
+          // 设置OAuth登录标志，防止页面刷新后被重定向
+          sessionStorage.setItem('oauth_login_success', 'true');
+
           // 延迟一下再刷新页面，确保所有数据都已存储
           setTimeout(() => {
             window.location.reload();
