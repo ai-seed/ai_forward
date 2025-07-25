@@ -87,8 +87,9 @@ type JWTConfig struct {
 
 // OAuthConfig OAuth认证配置
 type OAuthConfig struct {
-	Google OAuthProviderConfig `mapstructure:"google"`
-	GitHub OAuthProviderConfig `mapstructure:"github"`
+	Google      OAuthProviderConfig `mapstructure:"google"`
+	GitHub      OAuthProviderConfig `mapstructure:"github"`
+	FrontendURL string              `mapstructure:"frontend_url"`
 }
 
 // OAuthProviderConfig OAuth提供商配置
@@ -203,6 +204,7 @@ func setDefaults() {
 	viper.SetDefault("jwt.audience", "ai-api-gateway-users")
 
 	// OAuth默认值
+	viper.SetDefault("oauth.frontend_url", "http://localhost:3000")
 	viper.SetDefault("oauth.google.enabled", false)
 	viper.SetDefault("oauth.google.client_id", "")
 	viper.SetDefault("oauth.google.client_secret", "")

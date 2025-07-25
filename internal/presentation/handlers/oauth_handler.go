@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
 	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
+	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/logger"
 
 	"github.com/gin-gonic/gin"
@@ -15,13 +17,15 @@ import (
 type OAuthHandler struct {
 	oauthService services.OAuthService
 	logger       logger.Logger
+	config       *config.Config
 }
 
 // NewOAuthHandler 创建OAuth处理器
-func NewOAuthHandler(oauthService services.OAuthService, logger logger.Logger) *OAuthHandler {
+func NewOAuthHandler(oauthService services.OAuthService, logger logger.Logger, config *config.Config) *OAuthHandler {
 	return &OAuthHandler{
 		oauthService: oauthService,
 		logger:       logger,
+		config:       config,
 	}
 }
 
@@ -54,7 +58,7 @@ func (h *OAuthHandler) GetAuthURL(c *gin.Context) {
 		h.logger.WithFields(map[string]interface{}{
 			"provider": provider,
 		}).Warn("Unsupported OAuth provider")
-		
+
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
 			"UNSUPPORTED_PROVIDER",
 			"Unsupported OAuth provider",
@@ -121,7 +125,7 @@ func (h *OAuthHandler) HandleCallback(c *gin.Context) {
 		h.logger.WithFields(map[string]interface{}{
 			"provider": provider,
 		}).Warn("Unsupported OAuth provider in callback")
-		
+
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
 			"UNSUPPORTED_PROVIDER",
 			"Unsupported OAuth provider",
@@ -212,7 +216,7 @@ func (h *OAuthHandler) GetAuthURLFromQuery(c *gin.Context) {
 		h.logger.WithFields(map[string]interface{}{
 			"provider": provider,
 		}).Warn("Unsupported OAuth provider for redirect")
-		
+
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
 			"UNSUPPORTED_PROVIDER",
 			"Unsupported OAuth provider",
@@ -265,8 +269,8 @@ func (h *OAuthHandler) HandleCallbackFromQuery(c *gin.Context) {
 
 	if provider == "" || code == "" || state == "" {
 		h.logger.WithFields(map[string]interface{}{
-			"provider": provider,
-			"has_code": code != "",
+			"provider":  provider,
+			"has_code":  code != "",
 			"has_state": state != "",
 		}).Warn("Missing required OAuth callback parameters")
 
@@ -284,7 +288,7 @@ func (h *OAuthHandler) HandleCallbackFromQuery(c *gin.Context) {
 		h.logger.WithFields(map[string]interface{}{
 			"provider": provider,
 		}).Warn("Unsupported OAuth provider in query callback")
-		
+
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
 			"UNSUPPORTED_PROVIDER",
 			"Unsupported OAuth provider",
@@ -333,5 +337,9 @@ func (h *OAuthHandler) HandleCallbackFromQuery(c *gin.Context) {
 		"username": response.User.Username,
 	}).Info("OAuth query callback login successful")
 
-	c.JSON(http.StatusOK, dto.SuccessResponse(response, "OAuth login successful"))
+	// 重定向到前端，携带token信息
+	frontendURL := fmt.Sprintf("%s/auth/oauth/callback?access_token=%s&refresh_token=%s",
+		h.config.OAuth.FrontendURL, response.AccessToken, response.RefreshToken)
+
+	c.Redirect(http.StatusFound, frontendURL)
 }

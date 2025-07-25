@@ -119,7 +119,7 @@ func (r *Router) SetupRoutes() {
 	)
 	healthHandler := handlers.NewHealthHandler(r.gatewayService, r.logger)
 	authHandler := handlers.NewAuthHandler(r.serviceFactory.AuthService(), r.logger)
-	oauthHandler := handlers.NewOAuthHandler(r.serviceFactory.OAuthService(), r.logger)
+	oauthHandler := handlers.NewOAuthHandler(r.serviceFactory.OAuthService(), r.logger, r.config)
 	toolHandler := handlers.NewToolHandler(r.serviceFactory.ToolService(), r.logger)
 	quotaHandler := handlers.NewQuotaHandler(r.serviceFactory.QuotaService(), r.logger)
 	midjourneyHandler := handlers.NewMidjourneyHandler(
