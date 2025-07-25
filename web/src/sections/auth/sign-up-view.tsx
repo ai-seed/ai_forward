@@ -17,7 +17,6 @@ import { useRouter } from 'src/routes/hooks';
 import { useAuth } from 'src/contexts/auth-context';
 
 import { Iconify } from 'src/components/iconify';
-import { AuthLanguageSwitcher } from 'src/components/language-switcher';
 
 // ----------------------------------------------------------------------
 
@@ -33,7 +32,6 @@ export function SignUpView() {
     email: '',
     password: '',
     confirmPassword: '',
-    full_name: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
@@ -102,7 +100,6 @@ export function SignUpView() {
         username: formData.username,
         email: formData.email,
         password: formData.password,
-        full_name: formData.full_name || undefined,
       });
       
       // 注册成功
@@ -144,7 +141,7 @@ export function SignUpView() {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 3,
+        gap: 2,
       }}
     >
       {state.error && (
@@ -179,18 +176,6 @@ export function SignUpView() {
         required
         error={!!formErrors.email}
         helperText={formErrors.email}
-        slotProps={{
-          inputLabel: { shrink: true },
-        }}
-      />
-
-      <TextField
-        fullWidth
-        name="full_name"
-        label={t('users.full_name')}
-        value={formData.full_name}
-        onChange={handleInputChange}
-        disabled={state.isLoading}
         slotProps={{
           inputLabel: { shrink: true },
         }}
@@ -269,23 +254,12 @@ export function SignUpView() {
   );
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* 语言切换器 */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          mb: 3,
-        }}
-      >
-        <AuthLanguageSwitcher variant="icon" />
-      </Box>
-
-      <Typography variant="h3" sx={{ mb: 2 }}>
+    <Box sx={{ p: 2 }}>
+      <Typography variant="h4" sx={{ mb: 1.5 }}>
         {t('auth.register')}
       </Typography>
 
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 5 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
         {t('auth.have_account')}{' '}
         <Link
           variant="subtitle2"
@@ -298,7 +272,7 @@ export function SignUpView() {
 
       {renderForm}
 
-      <Divider sx={{ my: 3 }}>
+      <Divider sx={{ my: 2 }}>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {t('auth.or')}
         </Typography>

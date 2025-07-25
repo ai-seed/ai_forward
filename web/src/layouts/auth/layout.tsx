@@ -9,6 +9,7 @@ import Alert from '@mui/material/Alert';
 import { RouterLink } from 'src/routes/components';
 
 import { Logo } from 'src/components/logo';
+import { AuthLanguageSwitcher } from 'src/components/language-switcher';
 
 import { AuthContent } from './content';
 import { MainSection } from '../core/main-section';
@@ -57,6 +58,8 @@ export function AuthLayout({
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
+          {/** @slot Language switcher */}
+          <AuthLanguageSwitcher variant="icon" />
           {/** @slot Help link */}
           <Link href="#" component={RouterLink} color="inherit" sx={{ typography: 'subtitle2' }}>
             Need help?

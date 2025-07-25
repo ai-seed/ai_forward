@@ -17,7 +17,6 @@ import { useRouter } from 'src/routes/hooks';
 import { useAuth } from 'src/contexts/auth-context';
 
 import { Iconify } from 'src/components/iconify';
-import { AuthLanguageSwitcher } from 'src/components/language-switcher';
 import { OAuthButtons } from 'src/components/oauth-buttons';
 
 // ----------------------------------------------------------------------
@@ -61,8 +60,8 @@ export function SignInView() {
   }, [formData, login, router]);
 
   const renderForm = (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
           fullWidth
           name="username"
@@ -114,7 +113,7 @@ export function SignInView() {
         variant="contained"
         disabled={state.isLoading}
         startIcon={state.isLoading ? <CircularProgress size={20} /> : null}
-        sx={{ mt: 3 }}
+        sx={{ mt: 2 }}
       >
         {state.isLoading ? t('common.loading') : t('auth.login')}
       </Button>
@@ -123,24 +122,13 @@ export function SignInView() {
 
   return (
     <>
-      {/* 语言切换器 */}
       <Box
         sx={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          mb: 3,
-        }}
-      >
-        <AuthLanguageSwitcher variant="icon" />
-      </Box>
-
-      <Box
-        sx={{
-          gap: 1.5,
+          gap: 1,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          mb: 5,
+          mb: 3,
         }}
       >
         <Typography variant="h5">{t('auth.login')}</Typography>
@@ -161,7 +149,7 @@ export function SignInView() {
         </Typography>
       </Box>
       {renderForm}
-      <Divider sx={{ my: 3, '&::before, &::after': { borderTopStyle: 'dashed' } }}>
+      <Divider sx={{ my: 2, '&::before, &::after': { borderTopStyle: 'dashed' } }}>
         <Typography
           variant="overline"
           sx={{ color: 'text.disabled', fontWeight: 'fontWeightMedium' }}
