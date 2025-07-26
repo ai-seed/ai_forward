@@ -2,15 +2,18 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import Grid from '@mui/system/Grid';
 import Chip from '@mui/material/Chip';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import Paper from '@mui/material/Paper';
 
 import { Iconify } from 'src/components/iconify';
 import { api } from 'src/services/api';
@@ -240,45 +243,25 @@ export function ModelsView() {
     }
   };
 
+
+
+  // 获取模型类型图标（用于筛选器）
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'text':
-        return 'solar:pen-bold';
+      case 'chat':
+        return 'solar:chat-round-dots-bold';
       case 'image':
         return 'solar:eye-bold';
       case 'audio':
         return 'solar:share-bold';
-      case 'video':
-        return 'solar:cart-3-bold';
-      case 'multimodal':
-        return 'solar:restart-bold';
+      case 'embedding':
+        return 'solar:pen-bold';
       default:
         return 'solar:pen-bold';
     }
   };
 
-  const formatPricing = (model: Model) => {
-    if (model.type === 'text' || model.type === 'multimodal') {
-      return `$${model.pricing.input}/$${model.pricing.output} per ${model.pricing.unit}`;
-    }
-    return `$${model.pricing.input} per ${model.pricing.unit}`;
-  };
 
-  // 获取厂商标签颜色
-  const getProviderColor = (provider: string): 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' => {
-    const colorMap: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'> = {
-      'OpenAI': 'success',
-      'Anthropic': 'secondary',
-      'Google': 'primary',
-      'Meta': 'info',
-      'Midjourney': 'warning',
-      'Stability AI': 'error',
-      'Mistral AI': 'secondary',
-      'Cohere': 'primary',
-      'Microsoft': 'info'
-    };
-    return colorMap[provider] || 'primary';
-  };
 
   // 如果正在加载，显示加载状态
   if (loading) {
@@ -354,122 +337,110 @@ export function ModelsView() {
         </Box>
       </Box>
 
-      {/* 模型网格 */}
-      <Grid container spacing={3}>
-        {filteredModels.map((model) => (
-          <Grid key={model.id} size={{ xs: 12, md: 6, lg: 4 }}>
-            <Card 
-              sx={{ 
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: (theme) => theme.shadows[8],
-                }
-              }}
-            >
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <Box
+      {/* 模型表格 */}
+      <TableContainer component={Paper}>
+        <Table sx={{ minWidth: 650 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('models.name', '模型名称')}</TableCell>
+              <TableCell>{t('models.provider', '提供商')}</TableCell>
+              <TableCell>{t('models.type', '类型')}</TableCell>
+              <TableCell>{t('models.description', '描述')}</TableCell>
+              <TableCell align="center">{t('models.context_length', '上下文长度')}</TableCell>
+              <TableCell align="center">{t('models.capabilities', '功能特性')}</TableCell>
+              <TableCell align="center">{t('common.status', '状态')}</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredModels.map((model) => (
+              <TableRow
+                key={model.id}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: 'action.hover'
+                  }
+                }}
+              >
+                <TableCell>
+                  <Typography variant="subtitle2" fontWeight="medium">
+                    {model.name}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={model.provider}
+                    size="small"
                     sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2,
                       bgcolor: model.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mr: 2,
+                      color: 'white',
+                      fontWeight: 'medium'
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2">
+                    {model.type}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      maxWidth: 300,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    <Iconify
-                      icon={getTypeIcon(model.type)}
-                      sx={{ width: 24, height: 24, color: 'white' }}
-                    />
-                  </Box>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                      <Typography variant="h6">
-                        {model.name}
-                      </Typography>
-                      <Chip
-                        label={model.provider}
-                        size="small"
-                        color={getProviderColor(model.provider)}
-                        variant="filled"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.7rem',
-                          fontWeight: 600
-                        }}
-                      />
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {model.type} • {model.category}
+                    {model.description}
+                  </Typography>
+                </TableCell>
+                <TableCell align="center">
+                  {model.maxTokens > 0 ? (
+                    <Typography variant="body2">
+                      {model.maxTokens.toLocaleString()}
                     </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      -
+                    </Typography>
+                  )}
+                </TableCell>
+                <TableCell align="center">
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {model.capabilities.slice(0, 2).map((capability, index) => (
+                      <Chip
+                        key={index}
+                        label={capability}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                      />
+                    ))}
+                    {model.capabilities.length > 2 && (
+                      <Chip
+                        label={`+${model.capabilities.length - 2}`}
+                        size="small"
+                        variant="outlined"
+                        color="default"
+                      />
+                    )}
                   </Box>
+                </TableCell>
+                <TableCell align="center">
                   <Chip
                     label={model.status}
                     size="small"
                     color={getStatusColor(model.status) as any}
                     variant="outlined"
                   />
-                </Box>
-
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {model.description}
-                </Typography>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                    {t('models.pricing')}:
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                    {formatPricing(model)}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                    {t('models.capabilities')}:
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {model.capabilities.map((capability, index) => (
-                      <Chip
-                        key={index}
-                        label={capability}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: '0.75rem' }}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-
-                {model.maxTokens > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('models.max_tokens')}: {model.maxTokens.toLocaleString()}
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-
-              <CardActions sx={{ p: 2, pt: 0 }}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  startIcon={<Iconify icon="solar:eye-bold" />}
-                >
-                  {t('models.view_details')}
-                </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {/* 空状态 */}
       {filteredModels.length === 0 && (
