@@ -103,58 +103,58 @@ function CreateQuotaDialog({ open, onClose, onSuccess, apiKeyId }: CreateQuotaDi
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>创建配额限制</DialogTitle>
+      <DialogTitle>{t('quota.create_quota')}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
           <FormControl fullWidth>
-            <InputLabel>配额类型</InputLabel>
+            <InputLabel>{t('quota.quota_type')}</InputLabel>
             <Select
               value={quotaType}
-              label="配额类型"
+              label={t('quota.quota_type')}
               onChange={(e) => setQuotaType(e.target.value as any)}
             >
-              <MenuItem value="requests">请求次数</MenuItem>
-              <MenuItem value="tokens">Token数量</MenuItem>
-              <MenuItem value="cost">费用金额</MenuItem>
+              <MenuItem value="requests">{t('quota.quota_types.requests')}</MenuItem>
+              <MenuItem value="tokens">{t('quota.quota_types.tokens')}</MenuItem>
+              <MenuItem value="cost">{t('quota.quota_types.cost')}</MenuItem>
             </Select>
           </FormControl>
 
           <FormControl fullWidth>
-            <InputLabel>周期类型</InputLabel>
+            <InputLabel>{t('quota.period_type')}</InputLabel>
             <Select
               value={period}
-              label="周期类型"
+              label={t('quota.period_type')}
               onChange={(e) => setPeriod(e.target.value as any)}
             >
-              <MenuItem value="total">总限额（不分周期）</MenuItem>
-              <MenuItem value="minute">每分钟</MenuItem>
-              <MenuItem value="hour">每小时</MenuItem>
-              <MenuItem value="day">每天</MenuItem>
-              <MenuItem value="month">每月</MenuItem>
+              <MenuItem value="total">{t('quota.periods.total')}</MenuItem>
+              <MenuItem value="minute">{t('quota.periods.minute')}</MenuItem>
+              <MenuItem value="hour">{t('quota.periods.hour')}</MenuItem>
+              <MenuItem value="day">{t('quota.periods.day')}</MenuItem>
+              <MenuItem value="month">{t('quota.periods.month')}</MenuItem>
             </Select>
           </FormControl>
 
           <TextField
             fullWidth
-            label="限制值"
+            label={t('quota.limit_value')}
             type="number"
             value={limitValue}
             onChange={(e) => setLimitValue(e.target.value)}
             helperText={
-              quotaType === 'requests' ? '请求次数' :
-              quotaType === 'tokens' ? 'Token数量' :
-              '费用金额（美元）'
+              quotaType === 'requests' ? t('quota.quota_types.requests') :
+              quotaType === 'tokens' ? t('quota.quota_types.tokens') :
+              t('quota.quota_types.cost')
             }
           />
 
           {(period === 'day' || period === 'month') && (
             <TextField
               fullWidth
-              label="重置时间"
+              label={t('quota.reset_time')}
               type="time"
               value={resetTime}
               onChange={(e) => setResetTime(e.target.value)}
-              helperText="配额重置的具体时间点"
+              helperText={t('quota.helper_text.total_quota')}
               InputLabelProps={{
                 shrink: true,
               }}
@@ -163,13 +163,13 @@ function CreateQuotaDialog({ open, onClose, onSuccess, apiKeyId }: CreateQuotaDi
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>取消</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
           disabled={loading || !limitValue}
         >
-          {loading ? <CircularProgress size={20} /> : '创建'}
+          {loading ? <CircularProgress size={20} /> : t('common.create')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -254,20 +254,20 @@ export function ApiKeyQuotaManagement({ apiKeyId }: ApiKeyQuotaManagementProps) 
 
   const getQuotaTypeLabel = (type: string) => {
     switch (type) {
-      case 'requests': return '请求次数';
-      case 'tokens': return 'Token数量';
-      case 'cost': return '费用金额';
+      case 'requests': return t('quota.quota_types.requests');
+      case 'tokens': return t('quota.quota_types.tokens');
+      case 'cost': return t('quota.quota_types.cost');
       default: return type;
     }
   };
 
   const getPeriodLabel = (period: string | null | undefined) => {
-    if (!period) return '总限额';
+    if (!period) return t('quota.periods.total');
     switch (period) {
-      case 'minute': return '每分钟';
-      case 'hour': return '每小时';
-      case 'day': return '每天';
-      case 'month': return '每月';
+      case 'minute': return t('quota.periods.minute');
+      case 'hour': return t('quota.periods.hour');
+      case 'day': return t('quota.periods.day');
+      case 'month': return t('quota.periods.month');
       default: return period;
     }
   };
@@ -287,16 +287,24 @@ export function ApiKeyQuotaManagement({ apiKeyId }: ApiKeyQuotaManagementProps) 
     return status === 'active' ? 'success' : 'default';
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return t('quota.status.active');
+      case 'inactive': return t('quota.status.inactive');
+      default: return status;
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6">配额管理</Typography>
+        <Typography variant="h6">{t('quota.management')}</Typography>
         <Button
           variant="contained"
           startIcon={<Iconify icon="solar:check-circle-bold" />}
           onClick={() => setCreateDialogOpen(true)}
         >
-          添加配额
+          {t('quota.add_quota')}
         </Button>
       </Box>
 
@@ -306,20 +314,20 @@ export function ApiKeyQuotaManagement({ apiKeyId }: ApiKeyQuotaManagementProps) 
         </Box>
       ) : quotas.length === 0 ? (
         <Alert severity="info">
-          暂无配额限制。点击"添加配额"按钮创建新的配额限制。
+          {t('quota.no_quota_limits')}
         </Alert>
       ) : (
         <TableContainer component={Card}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>配额类型</TableCell>
-                <TableCell>周期</TableCell>
-                <TableCell>限制值</TableCell>
-                <TableCell>已使用</TableCell>
-                <TableCell>使用率</TableCell>
-                <TableCell>状态</TableCell>
-                <TableCell>操作</TableCell>
+                <TableCell>{t('quota.quota_type')}</TableCell>
+                <TableCell>{t('quota.period')}</TableCell>
+                <TableCell>{t('quota.limit_value')}</TableCell>
+                <TableCell>{t('quota.used_value')}</TableCell>
+                <TableCell>{t('quota.usage_rate')}</TableCell>
+                <TableCell>{t('common.status')}</TableCell>
+                <TableCell>{t('common.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -355,7 +363,7 @@ export function ApiKeyQuotaManagement({ apiKeyId }: ApiKeyQuotaManagementProps) 
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={quota.status}
+                      label={getStatusLabel(quota.status)}
                       color={getStatusColor(quota.status) as any}
                       size="small"
                     />

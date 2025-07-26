@@ -155,7 +155,7 @@ export function ApiKeyTableRow({ row, selected, onSelectRow, onViewDetails, onSt
         <TableCell align="center">
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
             <Chip
-              label="配额管理"
+              label={t('quota.management')}
               size="small"
               variant="outlined"
               color="primary"

@@ -320,7 +320,7 @@ export function ApiKeysView() {
                   { id: 'name', label: t('common.name') },
                   { id: 'key_prefix', label: t('api_keys.key_prefix') },
                   { id: 'status', label: t('common.status') },
-                  { id: 'quotas', label: '限额配置', align: 'center' as const },
+                  { id: 'quotas', label: t('quota.title'), align: 'center' as const },
                   { id: 'last_used_at', label: t('api_keys.last_used') },
                   { id: 'created_at', label: t('common.created_at') },
                   { id: '', label: '' },

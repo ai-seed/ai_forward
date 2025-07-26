@@ -9,7 +9,7 @@ import { useTheme } from '@mui/material/styles';
 
 import { NavMobile, NavDesktop } from './nav';
 import { layoutClasses } from '../core/classes';
-import { _account } from '../nav-config-account';
+import { useAccountConfig } from '../nav-config-account';
 import { dashboardLayoutVars } from './css-vars';
 import { useNavData } from '../nav-config-dashboard';
 import { MainSection } from '../core/main-section';
@@ -44,6 +44,7 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const theme = useTheme();
   const navData = useNavData();
+  const accountData = useAccountConfig();
 
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
   const { value: navOpen, onToggle: onNavToggle } = useBoolean(true);
@@ -77,7 +78,7 @@ export function DashboardLayout({
           <LanguagePopover />
 
           {/** @slot Account drawer */}
-          <AccountPopover data={_account} />
+          <AccountPopover data={accountData} />
         </Box>
       ),
     };

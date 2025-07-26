@@ -31,7 +31,8 @@
     "total": "总计",
     "items": "项",
     "enable": "启用",
-    "disable": "禁用"
+    "disable": "禁用",
+    "need_help": "需要帮助？"
   },
   "profile": {
     "title": "个人中心",
@@ -209,6 +210,7 @@
     "oauth_failed_error": "OAuth 登录失败"
   },
   "navigation": {
+    "home": "首页",
     "dashboard": "仪表板",
     "api_keys": "API 密钥",
     "wallet": "钱包",
@@ -313,7 +315,6 @@
     "refund": "退款",
     "adjustment": "调整"
   },
-
   "settings": {
     "title": "设置",
     "general": "常规",
@@ -343,23 +344,28 @@
   },
   "quota": {
     "title": "配额配置",
+    "management": "配额管理",
+    "create_quota": "创建配额限制",
     "current_quotas": "当前配额",
     "add_quota": "添加配额",
     "add_new_quota": "添加新配额",
     "quota_type": "配额类型",
     "period": "周期",
+    "period_type": "周期类型",
     "limit_value": "限制值",
     "used_value": "已使用",
     "remaining": "剩余",
     "usage_rate": "使用率",
+    "reset_time": "重置时间",
     "no_quotas": "暂无配额配置",
+    "no_quota_limits": "暂无配额限制。点击\"添加配额\"按钮创建新的配额限制。",
     "quota_types": {
       "requests": "请求次数",
       "tokens": "Token数量",
-      "cost": "费用"
+      "cost": "费用金额"
     },
     "periods": {
-      "total": "总限额",
+      "total": "总限额（不分周期）",
       "minute": "每分钟",
       "hour": "每小时",
       "day": "每天",

@@ -31,7 +31,8 @@
     "total": "Total",
     "items": "items",
     "enable": "Enable",
-    "disable": "Disable"
+    "disable": "Disable",
+    "need_help": "Need help?"
   },
   "profile": {
     "title": "Profile",
@@ -204,6 +205,11 @@
     "confirm_password_required": "Please confirm your password",
     "passwords_not_match": "Passwords do not match",
     "invalid_credentials_error": "Invalid username or password",
+  "navigation": {
+    "home": "Home",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
     "continue_with_google": "Continue with Google",
     "continue_with_github": "Continue with GitHub",
     "oauth_failed_error": "OAuth login failed"
@@ -343,23 +349,28 @@
   },
   "quota": {
     "title": "Quota Configuration",
+    "management": "Quota Management",
+    "create_quota": "Create Quota Limit",
     "current_quotas": "Current Quotas",
     "add_quota": "Add Quota",
     "add_new_quota": "Add New Quota",
     "quota_type": "Quota Type",
     "period": "Period",
+    "period_type": "Period Type",
     "limit_value": "Limit Value",
     "used_value": "Used",
     "remaining": "Remaining",
     "usage_rate": "Usage Rate",
+    "reset_time": "Reset Time",
     "no_quotas": "No quota configurations",
+    "no_quota_limits": "No quota limits. Click \"Add Quota\" button to create new quota limits.",
     "quota_types": {
       "requests": "Requests",
       "tokens": "Tokens",
       "cost": "Cost"
     },
     "periods": {
-      "total": "Total Limit",
+      "total": "Total Limit (No Period)",
       "minute": "Per Minute",
       "hour": "Per Hour",
       "day": "Per Day",

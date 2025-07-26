@@ -31,7 +31,8 @@
     "total": "合計",
     "items": "件",
     "enable": "有効化",
-    "disable": "無効化"
+    "disable": "無効化",
+    "need_help": "ヘルプが必要ですか？"
   },
   "profile": {
     "title": "プロフィール",
@@ -217,6 +218,7 @@
     "profile": "プロフィール",
     "settings": "設定",
     "documentation": "ドキュメント",
+    "home": "ホーム",
     "support": "サポート"
   },
   "dashboard": {
@@ -343,23 +345,28 @@
   },
   "quota": {
     "title": "クォータ設定",
+    "management": "クォータ管理",
+    "create_quota": "クォータ制限を作成",
     "current_quotas": "現在のクォータ",
     "add_quota": "クォータを追加",
     "add_new_quota": "新しいクォータを追加",
     "quota_type": "クォータタイプ",
     "period": "期間",
+    "period_type": "期間タイプ",
     "limit_value": "制限値",
     "used_value": "使用済み",
     "remaining": "残り",
     "usage_rate": "使用率",
+    "reset_time": "リセット時間",
     "no_quotas": "クォータ設定がありません",
+    "no_quota_limits": "クォータ制限がありません。「クォータを追加」ボタンをクリックして新しいクォータ制限を作成してください。",
     "quota_types": {
       "requests": "リクエスト数",
       "tokens": "トークン数",
-      "cost": "コスト"
+      "cost": "コスト金額"
     },
     "periods": {
-      "total": "総制限",
+      "total": "総制限（期間なし）",
       "minute": "毎分",
       "hour": "毎時",
       "day": "毎日",

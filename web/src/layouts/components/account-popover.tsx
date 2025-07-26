@@ -1,6 +1,7 @@
 import type { IconButtonProps } from '@mui/material/IconButton';
 
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -29,6 +30,7 @@ export type AccountPopoverProps = IconButtonProps & {
 };
 
 export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { state, logout } = useAuth();
 
@@ -147,7 +149,7 @@ export function AccountPopover({ data = [], sx, ...other }: AccountPopoverProps)
             variant="text"
             onClick={handleLogout}
           >
-            Logout
+            {t('auth.logout')}
           </Button>
         </Box>
       </Popover>
