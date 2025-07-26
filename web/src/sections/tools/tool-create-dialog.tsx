@@ -57,58 +57,16 @@ type Props = {
   onSuccess: () => void;
 };
 
-// 硬编码的工具类型（只在创建时使用）
-const TOOL_TYPES: ToolType[] = [
-  {
-    id: 'chatbot',
-    name: 'AI Chatbot',
-    description: 'Create intelligent conversational AI',
-    icon: 'solar:chat-round-bold-duotone',
-    color: '#45B7D1',
-    supported_models: ['gpt-4o', 'gpt-4-turbo', 'claude-3-5-sonnet']
-  },
-  {
-    id: 'image_generator',
-    name: 'Image Generator',
-    description: 'Generate images from text descriptions',
-    icon: 'solar:gallery-bold-duotone',
-    color: '#4ECDC4',
-    supported_models: ['dall-e-3', 'stable-diffusion-xl']
-  },
-  {
-    id: 'text_generator',
-    name: 'Text Generator',
-    description: 'Generate and edit text content',
-    icon: 'solar:text-bold-duotone',
-    color: '#FF6B6B',
-    supported_models: ['gpt-4o', 'gpt-4-turbo', 'claude-3-5-sonnet']
-  },
-  {
-    id: 'code_assistant',
-    name: 'Code Assistant',
-    description: 'AI-powered coding helper',
-    icon: 'solar:code-bold-duotone',
-    color: '#FFEAA7',
-    supported_models: ['gpt-4o', 'claude-3-5-sonnet']
-  }
-];
-
-// 硬编码的模型数据
-const AVAILABLE_MODELS = [
-  { id: 1, name: 'gpt-4o', display_name: 'GPT-4o', model_type: 'text', status: 'active', provider: 'OpenAI' },
-  { id: 2, name: 'gpt-4-turbo', display_name: 'GPT-4 Turbo', model_type: 'text', status: 'active', provider: 'OpenAI' },
-  { id: 3, name: 'claude-3-5-sonnet', display_name: 'Claude 3.5 Sonnet', model_type: 'text', status: 'active', provider: 'Anthropic' },
-  { id: 4, name: 'dall-e-3', display_name: 'DALL-E 3', model_type: 'image', status: 'active', provider: 'OpenAI' },
-  { id: 5, name: 'stable-diffusion-xl', display_name: 'Stable Diffusion XL', model_type: 'image', status: 'active', provider: 'Stability AI' }
-];
+// 移除硬编码数据，改为从API获取
 
 // ----------------------------------------------------------------------
 
 export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
   const { t } = useTranslation();
   const { state } = useAuthContext();
-  
+
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
   const [models, setModels] = useState<Model[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [toolTypes, setToolTypes] = useState<any[]>([]);
@@ -136,59 +94,56 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
     }
   }, [state.isAuthenticated]);
 
-  // 获取工具类型列表
-  const fetchToolTypes = useCallback(async () => {
-    try {
-      const response = await api.noAuth.get('/tools/types');
-      if (response.success && response.data) {
-        setToolTypes(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch tool types:', error);
-    }
-  }, []);
+  // 获取所有数据
+  const fetchAllData = useCallback(async () => {
+    if (!open) return;
 
-  // 获取模型列表
-  const fetchModels = useCallback(async () => {
+    setDataLoading(true);
     try {
-      const response = await api.noAuth.get('/tools/models');
-      if (response.success && response.data) {
-        setModels(response.data);
+      const [toolTypesResponse, modelsResponse] = await Promise.all([
+        api.noAuth.get('/tools/types'),
+        api.noAuth.get('/tools/models')
+      ]);
+
+      if (toolTypesResponse.success && toolTypesResponse.data) {
+        setToolTypes(toolTypesResponse.data);
+      }
+
+      if (modelsResponse.success && modelsResponse.data) {
+        setModels(modelsResponse.data);
+      }
+
+      // 获取API Keys（需要认证）
+      if (state.isAuthenticated) {
+        const apiKeysResponse = await api.get('/admin/tools/api-keys');
+        if (apiKeysResponse.success && apiKeysResponse.data) {
+          setApiKeys(apiKeysResponse.data);
+        }
       }
     } catch (error) {
-      console.error('Failed to fetch models:', error);
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setDataLoading(false);
     }
-  }, []);
+  }, [open, state.isAuthenticated]);
 
   useEffect(() => {
-    if (open) {
-      fetchToolTypes();
-      fetchApiKeys();
-      fetchModels();
-    }
-  }, [open, fetchToolTypes, fetchApiKeys, fetchModels]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // 根据选择的工具类型获取支持的模型
   const getSupportedModels = useCallback(() => {
-    // 优先使用从API获取的工具类型数据
-    if (toolTypes.length > 0) {
-      const apiToolType = toolTypes.find(t => t.id === selectedToolType);
-      if (apiToolType && apiToolType.supported_models) {
-        return apiToolType.supported_models;
-      }
+    if (!selectedToolType || toolTypes.length === 0 || models.length === 0) {
+      return [];
     }
 
-    // 如果API数据不可用，回退到硬编码数据
-    const toolType = TOOL_TYPES.find(t => t.id === selectedToolType);
-    if (!toolType) return [];
+    const toolType = toolTypes.find(t => t.id === selectedToolType);
+    if (!toolType || !toolType.supported_models) {
+      return [];
+    }
 
-    // 使用从API获取的模型数据，如果没有则使用硬编码数据
-    const availableModels = models.length > 0 ? models : AVAILABLE_MODELS;
-
-    return availableModels.filter(model => {
-      // 对于API数据，使用name字段匹配；对于硬编码数据，使用name字段匹配
-      const modelIdentifier = model.name;
-      return toolType.supported_models.includes(modelIdentifier);
+    return models.filter(model => {
+      return toolType.supported_models.includes(model.name);
     });
   }, [selectedToolType, models, toolTypes]);
 
@@ -241,7 +196,7 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
     onClose();
   }, [onClose]);
 
-  const selectedToolTypeData = TOOL_TYPES.find(type => type.id === selectedToolType);
+  const selectedToolTypeData = toolTypes.find(type => type.id === selectedToolType);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -259,8 +214,13 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
             <Typography variant="subtitle1" sx={{ mb: 2 }}>
               {t('tools.select_tool_type')}
             </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
-              {(toolTypes.length > 0 ? toolTypes : TOOL_TYPES).map((toolType) => (
+            {dataLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                {toolTypes.map((toolType) => (
                 <Card
                   key={toolType.id}
                   sx={{
@@ -298,8 +258,9 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
                     {toolType.description}
                   </Typography>
                 </Card>
-              ))}
-            </Box>
+                ))}
+              </Box>
+            )}
           </Box>
 
           {/* 工具配置 */}

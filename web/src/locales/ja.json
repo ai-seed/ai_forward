@@ -384,6 +384,10 @@
     },
     "helper_text": {
       "total_quota": "総制限：時間制限なし"
+    },
+    "status": {
+      "active": "アクティブ",
+      "inactive": "非アクティブ"
     }
   }
 }

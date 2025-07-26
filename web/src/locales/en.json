@@ -388,6 +388,10 @@
     },
     "helper_text": {
       "total_quota": "Total limit: no time period restriction"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
     }
   }
 }
