@@ -119,7 +119,7 @@ func (r *apiKeyRepositoryGorm) GetByUserID(ctx context.Context, userID int64) ([
 	// 缓存API密钥列表
 	if r.cache != nil {
 		cacheKey := GetAPIKeysByUserCacheKey(userID)
-		ttl := 1 * time.Minute // API密钥列表缓存10分钟
+		ttl := 1 * time.Second // API密钥列表缓存10分钟
 		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
 	}
 

@@ -238,7 +238,7 @@ export function useUserTools() {
 // 模型列表数据获取Hook
 export function useModels() {
   const fetcher = useCallback(async () => {
-    return api.get('/tools/models');
+    return api.noAuth.get('/tools/models');
   }, []);
 
   return useData(fetcher, {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Box from '@mui/material/Box';
@@ -9,12 +9,42 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
 
 import { Iconify } from 'src/components/iconify';
+import { api } from 'src/services/api';
 
 // ----------------------------------------------------------------------
 
-// 模型数据类型
+// 厂商信息类型
+interface ProviderInfo {
+  id: number;
+  name: string;
+  display_name: string;
+  color: string;
+  sort_order: number;
+}
+
+// 数据库模型数据类型
+interface DatabaseModel {
+  id: number;
+  name: string;
+  slug: string;
+  display_name?: string;
+  description?: string;
+  model_type: 'chat' | 'completion' | 'embedding' | 'image' | 'audio';
+  provider: ProviderInfo;
+  context_length?: number;
+  max_tokens?: number;
+  supports_streaming: boolean;
+  supports_functions: boolean;
+  status: 'active' | 'deprecated' | 'disabled';
+  created_at: string;
+  updated_at: string;
+}
+
+// 前端展示用的模型数据类型
 interface Model {
   id: string;
   name: string;
@@ -34,95 +64,83 @@ interface Model {
   color: string;
 }
 
-// 硬编码的模型数据
-const MODELS_DATA: Model[] = [
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    provider: 'OpenAI',
-    description: 'Most advanced multimodal model with vision, audio, and text capabilities',
-    category: 'Premium',
-    type: 'multimodal',
-    pricing: { input: 0.005, output: 0.015, unit: '1K tokens' },
-    capabilities: ['Text Generation', 'Vision', 'Audio', 'Code', 'Reasoning'],
-    maxTokens: 128000,
-    status: 'available',
-    icon: 'solar:cpu-bolt-bold-duotone',
-    color: '#10B981'
-  },
-  {
-    id: 'gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    provider: 'OpenAI',
-    description: 'High-performance model optimized for speed and efficiency',
-    category: 'Premium',
-    type: 'text',
-    pricing: { input: 0.01, output: 0.03, unit: '1K tokens' },
-    capabilities: ['Text Generation', 'Code', 'Analysis', 'Reasoning'],
-    maxTokens: 128000,
-    status: 'available',
-    icon: 'solar:cpu-bolt-bold-duotone',
-    color: '#3B82F6'
-  },
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'Anthropic',
-    description: 'Advanced reasoning and analysis with excellent safety features',
-    category: 'Premium',
-    type: 'text',
-    pricing: { input: 0.003, output: 0.015, unit: '1K tokens' },
-    capabilities: ['Text Generation', 'Analysis', 'Code', 'Safety'],
-    maxTokens: 200000,
-    status: 'available',
-    icon: 'solar:brain-bold-duotone',
-    color: '#8B5CF6'
-  },
-  {
-    id: 'dall-e-3',
-    name: 'DALL-E 3',
-    provider: 'OpenAI',
-    description: 'State-of-the-art image generation from text descriptions',
-    category: 'Creative',
-    type: 'image',
-    pricing: { input: 0.04, output: 0, unit: 'image' },
-    capabilities: ['Text to Image', 'High Quality', 'Style Control'],
-    maxTokens: 4000,
-    status: 'available',
-    icon: 'solar:gallery-bold-duotone',
-    color: '#F59E0B'
-  },
-  {
-    id: 'stable-diffusion-xl',
-    name: 'Stable Diffusion XL',
-    provider: 'Stability AI',
-    description: 'Open-source image generation with fine-tuning capabilities',
-    category: 'Creative',
-    type: 'image',
-    pricing: { input: 0.02, output: 0, unit: 'image' },
-    capabilities: ['Text to Image', 'Style Transfer', 'Fine-tuning'],
-    maxTokens: 2000,
-    status: 'available',
-    icon: 'solar:palette-bold-duotone',
-    color: '#EC4899'
-  },
-  {
-    id: 'whisper-1',
-    name: 'Whisper',
-    provider: 'OpenAI',
-    description: 'Automatic speech recognition and transcription',
-    category: 'Audio',
-    type: 'audio',
-    pricing: { input: 0.006, output: 0, unit: 'minute' },
-    capabilities: ['Speech to Text', 'Multi-language', 'Noise Robust'],
-    maxTokens: 0,
-    status: 'available',
-    icon: 'solar:microphone-bold-duotone',
-    color: '#06B6D4'
-  }
-];
+// 将数据库模型转换为前端展示格式
+const convertDatabaseModelToDisplayModel = (dbModel: DatabaseModel): Model => {
+  // 这些函数不再需要，因为我们直接使用数据库中的厂商信息
 
-const CATEGORIES = ['All', 'Premium', 'Creative', 'Audio', 'Experimental'];
+  // 根据模型类型转换为前端类型
+  const getDisplayType = (modelType: string): 'text' | 'image' | 'audio' | 'video' | 'multimodal' => {
+    switch (modelType) {
+      case 'chat':
+      case 'completion':
+        return 'text';
+      case 'image':
+        return 'image';
+      case 'audio':
+        return 'audio';
+      case 'embedding':
+        return 'text';
+      default:
+        return 'text';
+    }
+  };
+
+  // 根据模型类型获取图标
+  const getIcon = (modelType: string): string => {
+    switch (modelType) {
+      case 'image':
+        return 'solar:gallery-bold-duotone';
+      case 'audio':
+        return 'solar:microphone-bold-duotone';
+      default:
+        return 'solar:cpu-bolt-bold-duotone';
+    }
+  };
+
+  // getColor函数不再需要，直接使用厂商的品牌颜色
+
+  // 根据模型类型获取能力
+  const getCapabilities = (modelType: string, supportsFunctions: boolean): string[] => {
+    const capabilities = [];
+    if (modelType === 'chat' || modelType === 'completion') {
+      capabilities.push('Text Generation');
+      if (supportsFunctions) capabilities.push('Function Calling');
+      capabilities.push('Reasoning');
+    }
+    if (modelType === 'image') {
+      capabilities.push('Image Generation');
+      capabilities.push('Text to Image');
+    }
+    if (modelType === 'audio') {
+      capabilities.push('Speech Processing');
+    }
+    return capabilities;
+  };
+
+  const providerDisplayName = dbModel.provider.display_name;
+  const displayType = getDisplayType(dbModel.model_type);
+
+  return {
+    id: dbModel.slug,
+    name: dbModel.display_name || dbModel.name,
+    provider: providerDisplayName,
+    description: dbModel.description || `${providerDisplayName} ${dbModel.name} model`,
+    category: providerDisplayName, // 按厂商分类
+    type: displayType,
+    pricing: {
+      input: 0.003, // 默认价格，后续可以从定价表获取
+      output: 0.015,
+      unit: displayType === 'image' ? 'image' : '1K tokens'
+    },
+    capabilities: getCapabilities(dbModel.model_type, dbModel.supports_functions),
+    maxTokens: dbModel.max_tokens || dbModel.context_length || 0,
+    status: dbModel.status === 'active' ? 'available' : 'deprecated',
+    icon: getIcon(dbModel.model_type),
+    color: dbModel.provider.color // 使用厂商的品牌颜色
+  };
+};
+
+// 模型类型常量（保持不变）
 const TYPES = ['All', 'text', 'image', 'audio', 'video', 'multimodal'];
 
 // ----------------------------------------------------------------------
@@ -131,6 +149,62 @@ export function ModelsView() {
   const { t } = useTranslation();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
+  const [models, setModels] = useState<Model[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 获取模型数据
+  const fetchModels = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 从tools/models获取数据（公开接口）
+      const response = await api.noAuth.get('/tools/models');
+
+      if (response.success && response.data) {
+        // tools/models返回的是直接的数组格式
+        const dbModels: DatabaseModel[] = response.data.map((item: any) => ({
+          id: item.id || 0,
+          name: item.name || '',
+          slug: item.slug || '',
+          display_name: item.display_name || item.name,
+          description: item.description || '',
+          model_type: item.model_type || 'chat',
+          provider: item.provider || {
+            id: 0,
+            name: 'unknown',
+            display_name: 'Unknown',
+            color: '#6B7280',
+            sort_order: 999
+          },
+          context_length: item.context_length,
+          max_tokens: item.max_tokens,
+          supports_streaming: item.supports_streaming || false,
+          supports_functions: item.supports_functions || false,
+          status: item.status || 'active',
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
+
+        const convertedModels = dbModels.map(convertDatabaseModelToDisplayModel);
+        setModels(convertedModels);
+      } else {
+        throw new Error('Failed to fetch models');
+      }
+    } catch (err) {
+      console.error('Error fetching models:', err);
+      setError('Failed to load models');
+      // 设置一些默认模型作为后备
+      setModels([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
 
   const handleCategoryChange = useCallback((category: string) => {
     setSelectedCategory(category);
@@ -140,7 +214,14 @@ export function ModelsView() {
     setSelectedType(type);
   }, []);
 
-  const filteredModels = MODELS_DATA.filter(model => {
+  // 动态生成厂商分类列表（按排序顺序）
+  const categories = useMemo(() => {
+    const providerCategories = Array.from(new Set(models.map(model => model.category)))
+      .sort(); // 按字母顺序排序，后续可以按厂商的sort_order排序
+    return ['All', ...providerCategories];
+  }, [models]);
+
+  const filteredModels = models.filter(model => {
     const categoryMatch = selectedCategory === 'All' || model.category === selectedCategory;
     const typeMatch = selectedType === 'All' || model.type === selectedType;
     return categoryMatch && typeMatch;
@@ -183,6 +264,45 @@ export function ModelsView() {
     return `$${model.pricing.input} per ${model.pricing.unit}`;
   };
 
+  // 获取厂商标签颜色
+  const getProviderColor = (provider: string): 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' => {
+    const colorMap: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'> = {
+      'OpenAI': 'success',
+      'Anthropic': 'secondary',
+      'Google': 'primary',
+      'Meta': 'info',
+      'Midjourney': 'warning',
+      'Stability AI': 'error',
+      'Mistral AI': 'secondary',
+      'Cohere': 'primary',
+      'Microsoft': 'info'
+    };
+    return colorMap[provider] || 'primary';
+  };
+
+  // 如果正在加载，显示加载状态
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // 如果有错误，显示错误信息
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button variant="contained" onClick={fetchModels}>
+          {t('common.retry', 'Retry')}
+        </Button>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ mb: 4 }}>
@@ -201,10 +321,10 @@ export function ModelsView() {
             {t('models.categories')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <Chip
                 key={category}
-                label={t(`models.category_${category.toLowerCase()}`)}
+                label={category === 'All' ? t('models.all_providers', 'All Providers') : category}
                 onClick={() => handleCategoryChange(category)}
                 variant={selectedCategory === category ? 'filled' : 'outlined'}
                 color={selectedCategory === category ? 'primary' : 'default'}
@@ -270,11 +390,24 @@ export function ModelsView() {
                     />
                   </Box>
                   <Box sx={{ flexGrow: 1 }}>
-                    <Typography variant="h6" sx={{ mb: 0.5 }}>
-                      {model.name}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Typography variant="h6">
+                        {model.name}
+                      </Typography>
+                      <Chip
+                        label={model.provider}
+                        size="small"
+                        color={getProviderColor(model.provider)}
+                        variant="filled"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.7rem',
+                          fontWeight: 600
+                        }}
+                      />
+                    </Box>
                     <Typography variant="caption" color="text.secondary">
-                      {model.provider}
+                      {model.type} • {model.category}
                     </Typography>
                   </Box>
                   <Chip

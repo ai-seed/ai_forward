@@ -49,6 +49,11 @@ func (f *RepositoryFactory) ModelRepository() repositories.ModelRepository {
 	return NewModelRepositoryGorm(f.gormDB, f.cache)
 }
 
+// ModelProviderRepository 获取模型厂商仓储
+func (f *RepositoryFactory) ModelProviderRepository() repositories.ModelProviderRepository {
+	return NewModelProviderRepository(f.gormDB)
+}
+
 // ModelPricingRepository 获取模型定价仓储
 func (f *RepositoryFactory) ModelPricingRepository() repositories.ModelPricingRepository {
 	return NewModelPricingRepositoryGorm(f.gormDB, f.cache)

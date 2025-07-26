@@ -153,6 +153,7 @@ func (f *ServiceFactory) ToolService() *ToolService {
 		f.repoFactory.ToolRepository(),
 		f.repoFactory.APIKeyRepository(),
 		f.repoFactory.ModelRepository(),
+		f.repoFactory.ModelProviderRepository(),
 	)
 }
 

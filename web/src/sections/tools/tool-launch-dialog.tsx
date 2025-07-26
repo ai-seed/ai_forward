@@ -18,7 +18,7 @@ import InputLabel from '@mui/material/InputLabel';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import { useAuthContext } from 'src/contexts/auth-context';
-import api from 'src/services/api';
+import { api } from 'src/services/api';
 
 import { Iconify } from 'src/components/iconify';
 
@@ -32,15 +32,26 @@ interface ApiKey {
 }
 
 interface Model {
-  id: string;
+  id: number;
   name: string;
-  provider: string;
-  type: string;
-  pricing: {
-    input: number;
-    output: number;
-    unit: string;
+  slug: string;
+  display_name: string;
+  description: string;
+  model_type: 'chat' | 'completion' | 'embedding' | 'image' | 'audio';
+  provider: {
+    id: number;
+    name: string;
+    display_name: string;
+    color: string;
+    sort_order: number;
   };
+  context_length?: number;
+  max_tokens?: number;
+  supports_streaming: boolean;
+  supports_functions: boolean;
+  status: 'active' | 'deprecated' | 'disabled';
+  created_at: string;
+  updated_at: string;
 }
 
 interface Tool {
@@ -59,37 +70,7 @@ type Props = {
   onLaunch: (apiKey: string, model: string) => void;
 };
 
-// 模拟的模型数据（应该从API获取）
-const AVAILABLE_MODELS: Model[] = [
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    provider: 'OpenAI',
-    type: 'multimodal',
-    pricing: { input: 0.005, output: 0.015, unit: '1K tokens' }
-  },
-  {
-    id: 'gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    provider: 'OpenAI',
-    type: 'text',
-    pricing: { input: 0.01, output: 0.03, unit: '1K tokens' }
-  },
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'Anthropic',
-    type: 'text',
-    pricing: { input: 0.003, output: 0.015, unit: '1K tokens' }
-  },
-  {
-    id: 'dall-e-3',
-    name: 'DALL-E 3',
-    provider: 'OpenAI',
-    type: 'image',
-    pricing: { input: 0.04, output: 0, unit: 'image' }
-  }
-];
+// 从API获取的模型数据将在组件中动态加载
 
 // ----------------------------------------------------------------------
 
@@ -98,15 +79,15 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
   const { state } = useAuthContext();
   const [loading, setLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
   const [selectedApiKey, setSelectedApiKey] = useState('');
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState<number | ''>('');
   const [estimatedCost, setEstimatedCost] = useState(0);
 
   // 获取用户的API Keys
   const fetchApiKeys = useCallback(async () => {
     if (!state.isAuthenticated) return;
 
-    setLoading(true);
     try {
       const response = await api.get('/admin/api-keys/');
 
@@ -119,33 +100,50 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
       }
     } catch (error) {
       console.error('Failed to fetch API keys:', error);
-    } finally {
-      setLoading(false);
     }
   }, [state.isAuthenticated]);
 
+  // 获取可用模型
+  const fetchModels = useCallback(async () => {
+    try {
+      const response = await api.noAuth.get('/tools/models');
+
+      if (response.success && response.data) {
+        setModels(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch models:', error);
+    }
+  }, []);
+
   useEffect(() => {
     if (open) {
-      fetchApiKeys();
+      setLoading(true);
+      Promise.all([
+        fetchApiKeys(),
+        fetchModels()
+      ]).finally(() => {
+        setLoading(false);
+      });
     }
-  }, [open, fetchApiKeys]);
+  }, [open, fetchApiKeys, fetchModels]);
 
   // 根据工具类型筛选可用模型
   const getAvailableModels = useCallback(() => {
-    if (!tool) return [];
-    
-    return AVAILABLE_MODELS.filter(model => {
+    if (!tool || !models.length) return [];
+
+    return models.filter(model => {
       // 根据工具类型筛选模型
       if (tool.id === 'image-generator') {
-        return model.type === 'image';
+        return model.model_type === 'image';
       }
       if (tool.id === 'chatbot') {
-        return model.type === 'text' || model.type === 'multimodal';
+        return model.model_type === 'chat' || model.model_type === 'completion';
       }
-      // 默认返回所有文本模型
-      return model.type === 'text' || model.type === 'multimodal';
+      // 默认返回所有聊天模型
+      return model.model_type === 'chat' || model.model_type === 'completion';
     });
-  }, [tool]);
+  }, [tool, models]);
 
   const availableModels = getAvailableModels();
 
@@ -155,17 +153,19 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
   }, []);
 
   const handleModelChange = useCallback((event: any) => {
-    setSelectedModel(event.target.value);
+    const modelId = Number(event.target.value);
+    setSelectedModel(modelId);
     // 计算预估费用（简单示例）
-    const model = availableModels.find(m => m.id === event.target.value);
+    const model = availableModels.find(m => m.id === modelId);
     if (model) {
-      setEstimatedCost(model.pricing.input * 10); // 假设10K tokens
+      // 使用默认价格，因为数据库模型可能没有定价信息
+      setEstimatedCost(0.003 * 10); // 假设10K tokens，默认价格
     }
   }, [availableModels]);
 
   const handleLaunch = useCallback(() => {
     if (selectedApiKey && selectedModel) {
-      onLaunch(selectedApiKey, selectedModel);
+      onLaunch(selectedApiKey, selectedModel.toString());
       onClose();
     }
   }, [selectedApiKey, selectedModel, onLaunch, onClose]);
@@ -177,7 +177,7 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
     onClose();
   }, [onClose]);
 
-  const selectedModelData = availableModels.find(m => m.id === selectedModel);
+  // 移除这行，因为event在这里不可用
 
   if (!tool) return null;
 
@@ -285,13 +285,28 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
                         <MenuItem key={model.id} value={model.id}>
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                             <Box>
-                              <Typography>{model.name}</Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography>{model.display_name || model.name}</Typography>
+                                <Chip
+                                  label={model.provider.display_name}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{
+                                    height: 18,
+                                    fontSize: '0.65rem',
+                                    textTransform: 'capitalize',
+                                    backgroundColor: model.provider.color + '20',
+                                    borderColor: model.provider.color,
+                                    color: model.provider.color
+                                  }}
+                                />
+                              </Box>
                               <Typography variant="caption" color="text.secondary">
-                                {model.provider}
+                                {model.model_type}
                               </Typography>
                             </Box>
                             <Typography variant="caption" color="primary.main">
-                              ${model.pricing.input}/{model.pricing.unit}
+                              {model.status}
                             </Typography>
                           </Box>
                         </MenuItem>
@@ -303,7 +318,7 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
             )}
 
             {/* 模型详情和费用预估 */}
-            {selectedModelData && (
+            {selectedModel && (
               <Card variant="outlined">
                 <Box sx={{ p: 2 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -311,20 +326,21 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
                   </Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {t('tools.provider')}:
+                      {t('tools.model_type')}:
                     </Typography>
                     <Typography variant="body2">
-                      {selectedModelData.provider}
+                      {availableModels.find(m => m.id === selectedModel)?.model_type || 'Unknown'}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {t('tools.type')}:
+                      {t('tools.status')}:
                     </Typography>
-                    <Chip 
-                      label={selectedModelData.type} 
-                      size="small" 
+                    <Chip
+                      label={availableModels.find(m => m.id === selectedModel)?.status || 'Unknown'}
+                      size="small"
                       variant="outlined"
+                      color={availableModels.find(m => m.id === selectedModel)?.status === 'active' ? 'success' : 'default'}
                     />
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -348,7 +364,7 @@ export function ToolLaunchDialog({ open, tool, onClose, onLaunch }: Props) {
             )}
 
             {/* 余额不足警告 */}
-            {selectedModelData && state.user?.balance && state.user.balance < estimatedCost && (
+            {selectedModel && state.user?.balance && state.user.balance < estimatedCost && (
               <Alert severity="error">
                 {t('tools.insufficient_balance')}
                 <Button 

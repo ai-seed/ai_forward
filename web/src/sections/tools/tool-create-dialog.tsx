@@ -40,8 +40,14 @@ interface Model {
   name: string;
   display_name: string;
   model_type: string;
+  provider: {
+    id: number;
+    name: string;
+    display_name: string;
+    color: string;
+    sort_order: number;
+  };
   status: string;
-  provider?: string;
 }
 
 interface ApiKey {
@@ -102,7 +108,7 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
     try {
       const [toolTypesResponse, modelsResponse] = await Promise.all([
         api.noAuth.get('/tools/types'),
-        api.noAuth.get('/tools/models')
+        api.noAuth.get('/tools/models') // 公开接口
       ]);
 
       if (toolTypesResponse.success && toolTypesResponse.data) {
@@ -300,7 +306,7 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                         <Typography>{model.display_name || model.name}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {model.model_type || model.provider}
+                          {model.model_type} • {model.provider.display_name}
                         </Typography>
                       </Box>
                     </MenuItem>

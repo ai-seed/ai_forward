@@ -195,6 +195,11 @@ func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.
 		return nil, fmt.Errorf("failed to get active models: %w", err)
 	}
 
+	// 手动加载厂商信息
+	if err := r.loadProvidersForModels(ctx, models); err != nil {
+		return nil, fmt.Errorf("failed to load providers for models: %w", err)
+	}
+
 	// 缓存活跃模型列表（模型列表变化不频繁，缓存15分钟）
 	if r.cache != nil {
 		cacheKey := CacheKeyActiveModels
@@ -203,6 +208,46 @@ func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.
 	}
 
 	return models, nil
+}
+
+// loadProvidersForModels 手动加载模型的厂商信息
+func (r *modelRepositoryGorm) loadProvidersForModels(ctx context.Context, models []*entities.Model) error {
+	if len(models) == 0 {
+		return nil
+	}
+
+	// 收集所有需要的厂商ID
+	providerIDs := make([]int64, 0)
+	providerIDSet := make(map[int64]bool)
+	for _, model := range models {
+		if !providerIDSet[model.ProviderID] {
+			providerIDs = append(providerIDs, model.ProviderID)
+			providerIDSet[model.ProviderID] = true
+		}
+	}
+
+	// 批量查询厂商信息
+	var providers []entities.ModelProvider
+	if err := r.db.WithContext(ctx).
+		Where("id IN ?", providerIDs).
+		Find(&providers).Error; err != nil {
+		return fmt.Errorf("failed to load providers: %w", err)
+	}
+
+	// 创建厂商ID到厂商对象的映射
+	providerMap := make(map[int64]*entities.ModelProvider)
+	for i := range providers {
+		providerMap[providers[i].ID] = &providers[i]
+	}
+
+	// 为每个模型设置厂商信息
+	for _, model := range models {
+		if provider, exists := providerMap[model.ProviderID]; exists {
+			model.Provider = provider
+		}
+	}
+
+	return nil
 }
 
 // GetModelsByType 根据类型获取模型列表

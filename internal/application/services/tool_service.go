@@ -15,17 +15,19 @@ import (
 
 // ToolService 工具服务
 type ToolService struct {
-	toolRepo   repositories.ToolRepository
-	apiKeyRepo repositories.APIKeyRepository
-	modelRepo  repositories.ModelRepository
+	toolRepo          repositories.ToolRepository
+	apiKeyRepo        repositories.APIKeyRepository
+	modelRepo         repositories.ModelRepository
+	modelProviderRepo repositories.ModelProviderRepository
 }
 
 // NewToolService 创建工具服务
-func NewToolService(toolRepo repositories.ToolRepository, apiKeyRepo repositories.APIKeyRepository, modelRepo repositories.ModelRepository) *ToolService {
+func NewToolService(toolRepo repositories.ToolRepository, apiKeyRepo repositories.APIKeyRepository, modelRepo repositories.ModelRepository, modelProviderRepo repositories.ModelProviderRepository) *ToolService {
 	return &ToolService{
-		toolRepo:   toolRepo,
-		apiKeyRepo: apiKeyRepo,
-		modelRepo:  modelRepo,
+		toolRepo:          toolRepo,
+		apiKeyRepo:        apiKeyRepo,
+		modelRepo:         modelRepo,
+		modelProviderRepo: modelProviderRepo,
 	}
 }
 
@@ -338,10 +340,10 @@ func (s *ToolService) GetToolInstanceByCode(ctx context.Context, code string) (*
 	return response, nil
 }
 
-// GetAvailableModels 获取可用模型列表
+// GetAvailableModels 获取可用模型列表（按厂商分组）
 func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]interface{}, error) {
-	// 获取聊天类型的活跃模型
-	models, err := s.modelRepo.GetModelsByType(ctx, entities.ModelTypeChat)
+	// 获取所有活跃模型（已包含厂商信息）
+	models, err := s.modelRepo.GetActiveModels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
@@ -353,12 +355,47 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 			displayName = *model.DisplayName
 		}
 
+		description := ""
+		if model.Description != nil {
+			description = *model.Description
+		}
+
+		// 构建厂商信息（如果厂商信息存在）
+		var providerInfo map[string]interface{}
+		if model.Provider != nil {
+			providerInfo = map[string]interface{}{
+				"id":           model.Provider.ID,
+				"name":         model.Provider.Name,
+				"display_name": model.Provider.DisplayName,
+				"color":        model.Provider.Color,
+				"sort_order":   model.Provider.SortOrder,
+			}
+		} else {
+			// 如果厂商信息不存在，提供默认值
+			providerInfo = map[string]interface{}{
+				"id":           0,
+				"name":         "unknown",
+				"display_name": "Unknown",
+				"color":        "#6B7280",
+				"sort_order":   999,
+			}
+		}
+
 		result = append(result, map[string]interface{}{
-			"id":           model.ID,
-			"name":         model.Name,
-			"display_name": displayName,
-			"model_type":   model.ModelType,
-			"status":       model.Status,
+			"id":                 model.ID,
+			"name":               model.Name,
+			"slug":               model.Slug,
+			"display_name":       displayName,
+			"description":        description,
+			"model_type":         model.ModelType,
+			"provider":           providerInfo,
+			"context_length":     model.ContextLength,
+			"max_tokens":         model.MaxTokens,
+			"supports_streaming": model.SupportsStreaming,
+			"supports_functions": model.SupportsFunctions,
+			"status":             model.Status,
+			"created_at":         model.CreatedAt,
+			"updated_at":         model.UpdatedAt,
 		})
 	}
 
