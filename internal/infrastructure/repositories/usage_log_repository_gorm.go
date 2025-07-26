@@ -387,6 +387,90 @@ func (r *usageLogRepositoryGorm) GetModelStats(ctx context.Context, modelID int6
 	return &stats, nil
 }
 
+// GetAPIKeyTotalCost 获取API密钥的总成本
+func (r *usageLogRepositoryGorm) GetAPIKeyTotalCost(ctx context.Context, apiKeyID int64) (float64, error) {
+	// 尝试从缓存获取
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("api_key_total_cost:%d", apiKeyID)
+		var cachedCost float64
+		if err := r.cache.Get(ctx, cacheKey, &cachedCost); err == nil {
+			return cachedCost, nil
+		}
+	}
+
+	var totalCost float64
+	query := `
+		SELECT COALESCE(SUM(cost::numeric), 0)::float8 as total_cost
+		FROM usage_logs
+		WHERE api_key_id = ?
+	`
+
+	if err := r.db.WithContext(ctx).Raw(query, apiKeyID).Scan(&totalCost).Error; err != nil {
+		return 0, fmt.Errorf("failed to get api key total cost: %w", err)
+	}
+
+	// 添加调试日志
+	fmt.Printf("DEBUG: API Key %d total cost: %f (type: %T)\n", apiKeyID, totalCost, totalCost)
+
+	// 缓存结果（缓存5分钟）
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("api_key_total_cost:%d", apiKeyID)
+		ttl := 5 * time.Minute
+		r.cache.Set(ctx, cacheKey, totalCost, ttl)
+	}
+
+	return totalCost, nil
+}
+
+// GetAPIKeyTotalCostDebug 获取API密钥的总成本（调试版本）
+func (r *usageLogRepositoryGorm) GetAPIKeyTotalCostDebug(ctx context.Context, apiKeyID int64) (float64, error) {
+	// 先查看详细的成本数据
+	var costs []float64
+	detailQuery := `
+		SELECT cost
+		FROM usage_logs
+		WHERE api_key_id = ? AND cost > 0
+		ORDER BY created_at DESC
+		LIMIT 10
+	`
+
+	if err := r.db.WithContext(ctx).Raw(detailQuery, apiKeyID).Scan(&costs).Error; err != nil {
+		fmt.Printf("DEBUG: Failed to get cost details: %v\n", err)
+	} else {
+		fmt.Printf("DEBUG: API Key %d recent costs: %v\n", apiKeyID, costs)
+	}
+
+	// 获取统计信息
+	var stats struct {
+		TotalRecords    int     `json:"total_records"`
+		RecordsWithCost int     `json:"records_with_cost"`
+		MinCost         float64 `json:"min_cost"`
+		MaxCost         float64 `json:"max_cost"`
+		AvgCost         float64 `json:"avg_cost"`
+		TotalCost       float64 `json:"total_cost"`
+	}
+
+	statsQuery := `
+		SELECT
+			COUNT(*) as total_records,
+			COUNT(CASE WHEN cost > 0 THEN 1 END) as records_with_cost,
+			COALESCE(MIN(cost), 0) as min_cost,
+			COALESCE(MAX(cost), 0) as max_cost,
+			COALESCE(AVG(cost), 0) as avg_cost,
+			COALESCE(SUM(cost::numeric), 0)::float8 as total_cost
+		FROM usage_logs
+		WHERE api_key_id = ?
+	`
+
+	if err := r.db.WithContext(ctx).Raw(statsQuery, apiKeyID).Scan(&stats).Error; err != nil {
+		return 0, fmt.Errorf("failed to get cost stats: %w", err)
+	}
+
+	fmt.Printf("DEBUG: API Key %d stats: %+v\n", apiKeyID, stats)
+
+	return stats.TotalCost, nil
+}
+
 // CleanupOldLogs 清理旧日志
 func (r *usageLogRepositoryGorm) CleanupOldLogs(ctx context.Context, before time.Time) error {
 	result := r.db.WithContext(ctx).

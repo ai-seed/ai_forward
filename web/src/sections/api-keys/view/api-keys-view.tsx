@@ -45,6 +45,7 @@ interface ApiKey {
   };
   expires_at?: string;
   last_used_at?: string;
+  total_cost: number; // 总成本
   created_at: string;
   updated_at: string;
 }
@@ -321,6 +322,7 @@ export function ApiKeysView() {
                   { id: 'key_prefix', label: t('api_keys.key_prefix') },
                   { id: 'status', label: t('common.status') },
                   { id: 'quotas', label: t('quota.title'), align: 'center' as const },
+                  { id: 'total_cost', label: t('api_keys.total_cost', 'Total Cost'), align: 'right' as const },
                   { id: 'last_used_at', label: t('api_keys.last_used') },
                   { id: 'created_at', label: t('common.created_at') },
                   { id: '', label: '' },

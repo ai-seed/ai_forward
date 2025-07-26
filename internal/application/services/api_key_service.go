@@ -58,18 +58,21 @@ type APIKeyService interface {
 
 // apiKeyServiceImpl API密钥服务实现
 type apiKeyServiceImpl struct {
-	apiKeyRepo repositories.APIKeyRepository
-	userRepo   repositories.UserRepository
-	keyGen     *values.APIKeyGenerator
-	cache      *redisInfra.CacheService
+	apiKeyRepo   repositories.APIKeyRepository
+	userRepo     repositories.UserRepository
+	usageLogRepo repositories.UsageLogRepository
+	keyGen       *values.APIKeyGenerator
+	cache        *redisInfra.CacheService
 }
 
 // NewAPIKeyService 创建API密钥服务
-func NewAPIKeyService(apiKeyRepo repositories.APIKeyRepository, userRepo repositories.UserRepository) APIKeyService {
+func NewAPIKeyService(apiKeyRepo repositories.APIKeyRepository, userRepo repositories.UserRepository, usageLogRepo repositories.UsageLogRepository) APIKeyService {
 	return &apiKeyServiceImpl{
-		apiKeyRepo: apiKeyRepo,
-		userRepo:   userRepo,
-		keyGen:     values.NewAPIKeyGenerator(),
+		apiKeyRepo:   apiKeyRepo,
+		userRepo:     userRepo,
+		usageLogRepo: usageLogRepo,
+		keyGen:       values.NewAPIKeyGenerator(),
+		cache:        nil, // 暂时不使用缓存
 	}
 }
 
@@ -151,7 +154,20 @@ func (s *apiKeyServiceImpl) GetUserAPIKeys(ctx context.Context, userID int64) ([
 		return nil, fmt.Errorf("failed to get user api keys: %w", err)
 	}
 
-	return dto.FromAPIKeyEntities(apiKeys), nil
+	// 转换为DTO并添加成本信息
+	apiKeyDTOs := dto.FromAPIKeyEntities(apiKeys)
+
+	// 为每个API密钥添加总成本信息
+	for i, apiKey := range apiKeys {
+		totalCost, err := s.usageLogRepo.GetAPIKeyTotalCost(ctx, apiKey.ID)
+		if err != nil {
+			// 如果获取成本失败，记录错误但不中断流程，设置成本为0
+			totalCost = 0
+		}
+		apiKeyDTOs[i].TotalCost = totalCost
+	}
+
+	return apiKeyDTOs, nil
 }
 
 // UpdateAPIKey 更新API密钥
@@ -213,9 +229,22 @@ func (s *apiKeyServiceImpl) ListAPIKeys(ctx context.Context, pagination *dto.Pag
 		return nil, fmt.Errorf("failed to count api keys: %w", err)
 	}
 
+	// 转换为DTO并添加成本信息
+	apiKeyDTOs := dto.FromAPIKeyEntities(apiKeys)
+
+	// 为每个API密钥添加总成本信息
+	for i, apiKey := range apiKeys {
+		totalCost, err := s.usageLogRepo.GetAPIKeyTotalCost(ctx, apiKey.ID)
+		if err != nil {
+			// 如果获取成本失败，记录错误但不中断流程，设置成本为0
+			totalCost = 0
+		}
+		apiKeyDTOs[i].TotalCost = totalCost
+	}
+
 	// 构造响应
 	response := &dto.APIKeyListResponse{
-		APIKeys:  dto.FromAPIKeyEntities(apiKeys),
+		APIKeys:  apiKeyDTOs,
 		Total:    total,
 		Page:     pagination.Page,
 		PageSize: pagination.PageSize,

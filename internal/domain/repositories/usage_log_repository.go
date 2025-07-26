@@ -62,6 +62,9 @@ type UsageLogRepository interface {
 	// GetModelStats 获取模型使用统计
 	GetModelStats(ctx context.Context, modelID int64, start, end time.Time) (*ModelStats, error)
 
+	// GetAPIKeyTotalCost 获取API密钥的总成本
+	GetAPIKeyTotalCost(ctx context.Context, apiKeyID int64) (float64, error)
+
 	// CleanupOldLogs 清理旧的日志记录
 	CleanupOldLogs(ctx context.Context, before time.Time) error
 }

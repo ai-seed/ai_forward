@@ -43,6 +43,7 @@ interface ApiKey {
   };
   expires_at?: string;
   last_used_at?: string;
+  total_cost: number; // 总成本
   created_at: string;
   updated_at: string;
 }
@@ -111,8 +112,6 @@ export function ApiKeyDetailDialog({
   const [loading, setLoading] = useState(false);
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
   const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([]);
-  const [totalCost, setTotalCost] = useState(0);
-  const [totalTokens, setTotalTokens] = useState(0);
 
   // 分页状态
   const [usageLogsPage, setUsageLogsPage] = useState(0);
@@ -168,12 +167,7 @@ export function ApiKeyDetailDialog({
         setUsageLogs(data.data || []);
         setUsageLogsTotal(data.total || 0);
 
-        // 计算总计
-        const logs = data.data || [];
-        const totalCostCalc = logs.reduce((sum: number, log: UsageLog) => sum + log.cost, 0);
-        const totalTokensCalc = logs.reduce((sum: number, log: UsageLog) => sum + log.tokens_used, 0);
-        setTotalCost(totalCostCalc);
-        setTotalTokens(totalTokensCalc);
+
       }
     } catch (error) {
       console.error('Error fetching usage logs:', error);
@@ -319,77 +313,12 @@ export function ApiKeyDetailDialog({
       <DialogContent>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={tabValue} onChange={handleTabChange}>
-            <Tab label={t('dashboard.overview')} />
             <Tab label={t('api_keys.usage_logs')} />
             <Tab label={t('api_keys.billing_records')} />
           </Tabs>
         </Box>
 
         <TabPanel value={tabValue} index={0}>
-          <Box sx={{ display: 'grid', gap: 3 }}>
-            {/* 基本信息 */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  {t('api_keys.basic_information')}
-                </Typography>
-                <Box sx={{ display: 'grid', gap: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">{t('common.name')}:</Typography>
-                    <Typography>{apiKey.name}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">{t('api_keys.key')}:</Typography>
-                    <Typography sx={{ fontFamily: 'monospace' }}>{apiKey.key_prefix}••••••••••••</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">{t('common.status')}:</Typography>
-                    <Chip
-                      label={apiKey.status}
-                      color={getStatusColor(apiKey.status) as any}
-                      size="small"
-                    />
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">{t('common.created_at')}:</Typography>
-                    <Typography>{formatDate(apiKey.created_at)}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography color="text.secondary">{t('api_keys.last_used')}:</Typography>
-                    <Typography>
-                      {apiKey.last_used_at ? formatDate(apiKey.last_used_at) : t('api_keys.never')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* 使用统计 */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  {t('api_keys.usage_statistics')}
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                    <Typography variant="h4" color="primary">
-                      {totalTokens.toLocaleString()}
-                    </Typography>
-                    <Typography color="text.secondary">{t('api_keys.total_tokens')}</Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-                    <Typography variant="h4" color="error">
-                      {formatCurrency(totalCost)}
-                    </Typography>
-                    <Typography color="text.secondary">{t('api_keys.total_cost')}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Box>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
           {/* 日期过滤器 */}
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <DateRangePicker
@@ -460,7 +389,7 @@ export function ApiKeyDetailDialog({
           )}
         </TabPanel>
 
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={1}>
           {/* 日期过滤器 */}
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <DateRangePicker

@@ -29,6 +29,7 @@ interface ApiKey {
   };
   expires_at?: string;
   last_used_at?: string;
+  total_cost: number; // 总成本
   created_at: string;
   updated_at: string;
 }
@@ -174,6 +175,12 @@ export function ApiKeyTableRow({ row, selected, onSelectRow, onViewDetails, onSt
               }}
             />
           </Box>
+        </TableCell>
+
+        <TableCell align="right">
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            ${row.total_cost.toFixed(4)}
+          </Typography>
         </TableCell>
 
         <TableCell>{formatDate(row.last_used_at)}</TableCell>

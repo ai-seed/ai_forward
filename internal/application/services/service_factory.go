@@ -48,6 +48,7 @@ func (f *ServiceFactory) APIKeyService() APIKeyService {
 	return NewAPIKeyService(
 		f.repoFactory.APIKeyRepository(),
 		f.repoFactory.UserRepository(),
+		f.repoFactory.UsageLogRepository(),
 	)
 }
 

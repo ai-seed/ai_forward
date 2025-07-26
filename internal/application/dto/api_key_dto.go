@@ -32,6 +32,7 @@ type APIKeyResponse struct {
 	Permissions *entities.APIKeyPermissions `json:"permissions,omitempty"`
 	ExpiresAt   *time.Time                  `json:"expires_at,omitempty"`
 	LastUsedAt  *time.Time                  `json:"last_used_at,omitempty"`
+	TotalCost   float64                     `json:"total_cost"` // 总成本
 	CreatedAt   time.Time                   `json:"created_at"`
 	UpdatedAt   time.Time                   `json:"updated_at"`
 }
