@@ -73,7 +73,6 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
 
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
-  const [models, setModels] = useState<Model[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [toolTypes, setToolTypes] = useState<any[]>([]);
   const [selectedToolType, setSelectedToolType] = useState('');
@@ -106,17 +105,11 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
 
     setDataLoading(true);
     try {
-      const [toolTypesResponse, modelsResponse] = await Promise.all([
-        api.noAuth.get('/tools/types'),
-        api.noAuth.get('/tools/models') // 公开接口
-      ]);
+      // 只需要获取工具类型，每个工具类型已经包含了支持的模型列表
+      const toolTypesResponse = await api.noAuth.get('/tools/types');
 
       if (toolTypesResponse.success && toolTypesResponse.data) {
         setToolTypes(toolTypesResponse.data);
-      }
-
-      if (modelsResponse.success && modelsResponse.data) {
-        setModels(modelsResponse.data);
       }
 
       // 获取API Keys（需要认证）
@@ -139,7 +132,7 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
 
   // 根据选择的工具类型获取支持的模型
   const getSupportedModels = useCallback(() => {
-    if (!selectedToolType || toolTypes.length === 0 || models.length === 0) {
+    if (!selectedToolType || toolTypes.length === 0) {
       return [];
     }
 
@@ -148,10 +141,9 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
       return [];
     }
 
-    return models.filter(model => {
-      return toolType.supported_models.includes(model.name);
-    });
-  }, [selectedToolType, models, toolTypes]);
+    // 直接返回工具类型中的支持模型列表
+    return toolType.supported_models;
+  }, [selectedToolType, toolTypes]);
 
   const supportedModels = getSupportedModels();
 
@@ -301,12 +293,12 @@ export function ToolCreateDialog({ open, onClose, onSuccess }: Props) {
                   onChange={(e) => setFormData(prev => ({ ...prev, model_id: e.target.value as number }))}
                   label={t('tools.select_model')}
                 >
-                  {supportedModels.map((model: Model) => (
+                  {supportedModels.map((model: any) => (
                     <MenuItem key={model.id} value={model.id}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                         <Typography>{model.display_name || model.name}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {model.model_type} • {model.provider.display_name}
+                          {model.model_type}
                         </Typography>
                       </Box>
                     </MenuItem>
