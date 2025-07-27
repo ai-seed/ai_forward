@@ -19,7 +19,6 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
-  full_name?: string;
 }
 
 export interface RegisterResponse {
@@ -29,6 +28,45 @@ export interface RegisterResponse {
   full_name?: string;
   message: string;
   created_at: string;
+}
+
+// 验证码相关接口
+export interface SendVerificationCodeRequest {
+  email: string;
+  type: 'register' | 'password_reset';
+}
+
+export interface SendVerificationCodeResponse {
+  message: string;
+  expires_in: number;
+}
+
+export interface VerifyCodeRequest {
+  email: string;
+  code: string;
+  type: 'register' | 'password_reset';
+}
+
+export interface VerifyCodeResponse {
+  valid: boolean;
+  message: string;
+}
+
+export interface RegisterWithCodeRequest {
+  username: string;
+  email: string;
+  password: string;
+  verification_code: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  new_password: string;
+  verification_code: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
 }
 
 export interface RefreshTokenRequest {
@@ -124,14 +162,29 @@ export class AuthService {
    * 用户注册 - 不需要token认证
    */
   static async register(userData: RegisterRequest): Promise<RegisterResponse> {
-    // 使用noAuth方法，确保不会注入token
-    const response = await api.noAuth.post<RegisterResponse>('/auth/register', userData);
+    try {
+      // 使用noAuth方法，确保不会注入token
+      const response = await api.noAuth.post<RegisterResponse>('/auth/register', userData);
 
-    if (response.success && response.data) {
-      return response.data;
+      if (response.success && response.data) {
+        return response.data;
+      }
+
+      throw new Error(response.error?.message || 'Registration failed');
+    } catch (error: any) {
+      // 处理409冲突错误（用户已存在）
+      if (error.response?.status === 409) {
+        const errorCode = error.response?.data?.error?.code;
+        if (errorCode === 'USER_EXISTS') {
+          const customError = new Error('User already exists');
+          (customError as any).code = 'USER_ALREADY_EXISTS';
+          throw customError;
+        }
+      }
+
+      // 其他错误
+      throw new Error(error.response?.data?.error?.message || error.message || 'Registration failed');
     }
-
-    throw new Error(response.error?.message || 'Registration failed');
   }
 
   /**
@@ -333,6 +386,98 @@ export class AuthService {
     } catch (error) {
       console.error('OAuth login failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * 发送验证码
+   */
+  static async sendVerificationCode(request: SendVerificationCodeRequest): Promise<SendVerificationCodeResponse> {
+    const response = await api.noAuth.post<SendVerificationCodeResponse>('/auth/send-verification-code', request);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error?.message || 'Failed to send verification code');
+  }
+
+  /**
+   * 验证验证码
+   */
+  static async verifyCode(request: VerifyCodeRequest): Promise<VerifyCodeResponse> {
+    const response = await api.noAuth.post<VerifyCodeResponse>('/auth/verify-code', request);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error?.message || 'Failed to verify code');
+  }
+
+  /**
+   * 带验证码的用户注册
+   */
+  static async registerWithCode(userData: RegisterWithCodeRequest): Promise<RegisterResponse> {
+    try {
+      const response = await api.noAuth.post<RegisterResponse>('/auth/register-with-code', userData);
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+
+      throw new Error(response.error?.message || 'Registration failed');
+    } catch (error: any) {
+      // 处理409冲突错误（用户已存在）
+      if (error.response?.status === 409) {
+        const errorCode = error.response?.data?.error?.code;
+        if (errorCode === 'USER_EXISTS') {
+          const customError = new Error('User already exists');
+          (customError as any).code = 'USER_ALREADY_EXISTS';
+          throw customError;
+        }
+      }
+
+      // 处理400错误（验证码错误等）
+      if (error.response?.status === 400) {
+        const errorCode = error.response?.data?.error?.code;
+        if (errorCode === 'INVALID_VERIFICATION_CODE') {
+          const customError = new Error('Verification code error');
+          (customError as any).code = 'VERIFICATION_CODE_ERROR';
+          throw customError;
+        }
+      }
+
+      // 其他错误
+      throw new Error(error.response?.data?.error?.message || error.message || 'Registration failed');
+    }
+  }
+
+  /**
+   * 重置密码
+   */
+  static async resetPassword(request: ResetPasswordRequest): Promise<ResetPasswordResponse> {
+    try {
+      const response = await api.noAuth.post<ResetPasswordResponse>('/auth/reset-password', request);
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+
+      throw new Error(response.error?.message || 'Password reset failed');
+    } catch (error: any) {
+      // 处理400错误（验证码错误等）
+      if (error.response?.status === 400) {
+        const errorCode = error.response?.data?.error?.code;
+        if (errorCode === 'INVALID_VERIFICATION_CODE') {
+          const customError = new Error('Verification code error');
+          (customError as any).code = 'VERIFICATION_CODE_ERROR';
+          throw customError;
+        }
+      }
+
+      // 其他错误
+      throw new Error(error.response?.data?.error?.message || error.message || 'Password reset failed');
     }
   }
 }

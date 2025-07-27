@@ -65,7 +65,8 @@ export function SignInView() {
         <TextField
           fullWidth
           name="username"
-          label={t('auth.username')}
+          label={t('auth.email')}
+          type="email"
           value={formData.username}
           onChange={handleInputChange('username')}
           slotProps={{
@@ -73,7 +74,12 @@ export function SignInView() {
           }}
         />
 
-        <Link variant="body2" color="inherit" sx={{ alignSelf: 'flex-end' }}>
+        <Link
+          variant="body2"
+          color="inherit"
+          sx={{ alignSelf: 'flex-end', cursor: 'pointer' }}
+          onClick={() => router.push('/reset-password')}
+        >
           {t('auth.forgot_password')}
         </Link>
 

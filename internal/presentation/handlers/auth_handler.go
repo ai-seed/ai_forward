@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
@@ -114,7 +115,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		// 根据错误类型返回不同的状态码
 		statusCode := http.StatusInternalServerError
 		errorCode := "REGISTRATION_FAILED"
-		if err.Error() == "username already exists" || err.Error() == "email already exists" {
+		if err.Error() == "email already exists" {
 			statusCode = http.StatusConflict
 			errorCode = "USER_EXISTS"
 		}
@@ -375,4 +376,234 @@ func (h *AuthHandler) Recharge(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.SuccessResponse(response, "Account recharged successfully"))
+}
+
+// SendVerificationCode 发送验证码
+// @Summary 发送验证码
+// @Description 发送邮箱验证码（注册或密码重置）
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.SendVerificationCodeRequest true "发送验证码请求"
+// @Success 200 {object} dto.SendVerificationCodeResponse "验证码发送成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 429 {object} dto.Response "发送过于频繁"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /auth/send-verification-code [post]
+func (h *AuthHandler) SendVerificationCode(c *gin.Context) {
+	var req dto.SendVerificationCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Warn("Invalid send verification code request")
+
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_REQUEST",
+			"Invalid request format",
+			map[string]interface{}{"details": err.Error()},
+		))
+		return
+	}
+
+	// 调用认证服务发送验证码
+	response, err := h.authService.SendVerificationCode(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"email": req.Email,
+			"type":  req.Type,
+			"error": err.Error(),
+		}).Warn("Failed to send verification code")
+
+		statusCode := http.StatusInternalServerError
+		errorCode := "SEND_CODE_FAILED"
+		if err.Error() == "Verification code sent too frequently" {
+			statusCode = http.StatusTooManyRequests
+			errorCode = "SEND_TOO_FREQUENT"
+		}
+
+		c.JSON(statusCode, dto.ErrorResponse(
+			errorCode,
+			err.Error(),
+			nil,
+		))
+		return
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"email": req.Email,
+		"type":  req.Type,
+	}).Info("Verification code sent successfully")
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(response, "Verification code sent successfully"))
+}
+
+// VerifyCode 验证验证码
+// @Summary 验证验证码
+// @Description 验证邮箱验证码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.VerifyCodeRequest true "验证验证码请求"
+// @Success 200 {object} dto.VerifyCodeResponse "验证结果"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /auth/verify-code [post]
+func (h *AuthHandler) VerifyCode(c *gin.Context) {
+	var req dto.VerifyCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Warn("Invalid verify code request")
+
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_REQUEST",
+			"Invalid request format",
+			map[string]interface{}{"details": err.Error()},
+		))
+		return
+	}
+
+	// 调用认证服务验证验证码
+	response, err := h.authService.VerifyCode(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"email": req.Email,
+			"type":  req.Type,
+			"error": err.Error(),
+		}).Warn("Failed to verify code")
+
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"VERIFY_CODE_FAILED",
+			err.Error(),
+			nil,
+		))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(response, "Code verification completed"))
+}
+
+// RegisterWithCode 带验证码的注册
+// @Summary 带验证码的用户注册
+// @Description 使用邮箱验证码进行用户注册
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.RegisterWithCodeRequest true "注册请求"
+// @Success 201 {object} dto.RegisterResponse "注册成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 409 {object} dto.Response "用户已存在"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /auth/register-with-code [post]
+func (h *AuthHandler) RegisterWithCode(c *gin.Context) {
+	var req dto.RegisterWithCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Warn("Invalid register with code request")
+
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_REQUEST",
+			"Invalid request format",
+			map[string]interface{}{"details": err.Error()},
+		))
+		return
+	}
+
+	// 调用认证服务进行注册
+	response, err := h.authService.RegisterWithCode(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"username": req.Username,
+			"email":    req.Email,
+			"error":    err.Error(),
+		}).Warn("Registration with code failed")
+
+		// 根据错误类型返回不同的状态码
+		statusCode := http.StatusInternalServerError
+		errorCode := "REGISTRATION_FAILED"
+		errorMsg := err.Error()
+
+		if errorMsg == "email already exists" {
+			statusCode = http.StatusConflict
+			errorCode = "USER_EXISTS"
+		} else if strings.Contains(errorMsg, "invalid verification code") {
+			statusCode = http.StatusBadRequest
+			errorCode = "INVALID_VERIFICATION_CODE"
+		}
+
+		c.JSON(statusCode, dto.ErrorResponse(
+			errorCode,
+			err.Error(),
+			nil,
+		))
+		return
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"username": req.Username,
+		"user_id":  response.ID,
+	}).Info("User registered successfully with verification code")
+
+	c.JSON(http.StatusCreated, dto.SuccessResponse(response, "User registered successfully"))
+}
+
+// ResetPassword 重置密码
+// @Summary 重置密码
+// @Description 使用邮箱验证码重置密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.ResetPasswordRequest true "重置密码请求"
+// @Success 200 {object} dto.ResetPasswordResponse "密码重置成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 404 {object} dto.Response "用户不存在"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /auth/reset-password [post]
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Warn("Invalid reset password request")
+
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"INVALID_REQUEST",
+			"Invalid request format",
+			map[string]interface{}{"details": err.Error()},
+		))
+		return
+	}
+
+	// 调用认证服务重置密码
+	response, err := h.authService.ResetPassword(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"email": req.Email,
+			"error": err.Error(),
+		}).Warn("Password reset failed")
+
+		statusCode := http.StatusInternalServerError
+		errorCode := "RESET_PASSWORD_FAILED"
+		if err.Error() == "user not found" {
+			statusCode = http.StatusNotFound
+			errorCode = "USER_NOT_FOUND"
+		} else if err.Error() == "invalid verification code" {
+			statusCode = http.StatusBadRequest
+			errorCode = "INVALID_VERIFICATION_CODE"
+		}
+
+		c.JSON(statusCode, dto.ErrorResponse(
+			errorCode,
+			err.Error(),
+			nil,
+		))
+		return
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"email": req.Email,
+	}).Info("Password reset successfully")
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(response, "Password reset successfully"))
 }

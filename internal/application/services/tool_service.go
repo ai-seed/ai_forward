@@ -19,15 +19,17 @@ type ToolService struct {
 	apiKeyRepo        repositories.APIKeyRepository
 	modelRepo         repositories.ModelRepository
 	modelProviderRepo repositories.ModelProviderRepository
+	modelPricingRepo  repositories.ModelPricingRepository
 }
 
 // NewToolService 创建工具服务
-func NewToolService(toolRepo repositories.ToolRepository, apiKeyRepo repositories.APIKeyRepository, modelRepo repositories.ModelRepository, modelProviderRepo repositories.ModelProviderRepository) *ToolService {
+func NewToolService(toolRepo repositories.ToolRepository, apiKeyRepo repositories.APIKeyRepository, modelRepo repositories.ModelRepository, modelProviderRepo repositories.ModelProviderRepository, modelPricingRepo repositories.ModelPricingRepository) *ToolService {
 	return &ToolService{
 		toolRepo:          toolRepo,
 		apiKeyRepo:        apiKeyRepo,
 		modelRepo:         modelRepo,
 		modelProviderRepo: modelProviderRepo,
+		modelPricingRepo:  modelPricingRepo,
 	}
 }
 
@@ -348,6 +350,18 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
 
+	// 收集所有模型ID
+	modelIDs := make([]int64, len(models))
+	for i, model := range models {
+		modelIDs[i] = model.ID
+	}
+
+	// 批量获取所有模型的价格信息
+	pricingMap, err := s.modelPricingRepo.GetCurrentPricingBatch(ctx, modelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pricing batch: %w", err)
+	}
+
 	var result []map[string]interface{}
 	for _, model := range models {
 		displayName := model.Name
@@ -381,6 +395,14 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 			}
 		}
 
+		// 从批量获取的数据中获取模型定价信息
+		pricingInfo := s.buildModelPricingInfo(pricingMap[model.ID])
+
+		// 添加调试日志
+		fmt.Printf("[DEBUG] GetAvailableModels: model %d (%s) - pricingInfo: %+v\n", model.ID, model.Name, pricingInfo)
+		fmt.Printf("[DEBUG] GetAvailableModels: model %d - rate_multiplier value: %v (type: %T)\n",
+			model.ID, pricingInfo["rate_multiplier"], pricingInfo["rate_multiplier"])
+
 		result = append(result, map[string]interface{}{
 			"id":                 model.ID,
 			"name":               model.Name,
@@ -394,12 +416,63 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 			"supports_streaming": model.SupportsStreaming,
 			"supports_functions": model.SupportsFunctions,
 			"status":             model.Status,
+			"pricing":            pricingInfo["pricing"],
+			"rate_multiplier":    pricingInfo["rate_multiplier"],
 			"created_at":         model.CreatedAt,
 			"updated_at":         model.UpdatedAt,
 		})
 	}
 
 	return result, nil
+}
+
+// buildModelPricingInfo 构建模型定价信息（从已获取的定价数据）
+func (s *ToolService) buildModelPricingInfo(pricings []*entities.ModelPricing) map[string]interface{} {
+	// 如果没有定价信息，返回默认值
+	if len(pricings) == 0 {
+		return map[string]interface{}{
+			"pricing": map[string]interface{}{
+				"input":  0.003,
+				"output": 0.015,
+				"unit":   "1K tokens",
+			},
+			"rate_multiplier": 1.0,
+		}
+	}
+
+	// 构建定价信息
+	pricingData := map[string]interface{}{
+		"input":  0.003, // 默认输入价格
+		"output": 0.015, // 默认输出价格
+		"unit":   "1K tokens",
+	}
+
+	var multiplier float64 = 1.0 // 默认倍率
+
+	// 解析定价信息
+	for _, pricing := range pricings {
+		// 获取倍率（所有定价类型都应该有相同的倍率）
+		if pricing.Multiplier > 0 {
+			multiplier = pricing.Multiplier
+		}
+
+		switch pricing.PricingType {
+		case entities.PricingTypeInput:
+			pricingData["input"] = pricing.PricePerUnit
+		case entities.PricingTypeOutput:
+			pricingData["output"] = pricing.PricePerUnit
+		case entities.PricingTypeRequest:
+			// 对于按请求计费的模型（如图像生成）
+			pricingData["input"] = pricing.PricePerUnit
+			pricingData["output"] = 0.0
+			pricingData["unit"] = string(pricing.Unit)
+		}
+	}
+
+	return map[string]interface{}{
+		"pricing":         pricingData,
+		"rate_multiplier": multiplier,
+	}
 }
 
 // GetUserAPIKeys 获取用户API密钥列表

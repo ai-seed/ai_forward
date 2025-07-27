@@ -66,6 +66,9 @@ type ModelPricingRepository interface {
 
 	// GetPricingByType 根据定价类型获取定价
 	GetPricingByType(ctx context.Context, modelID int64, pricingType entities.PricingType) (*entities.ModelPricing, error)
+
+	// GetCurrentPricingBatch 批量获取多个模型的当前有效定价
+	GetCurrentPricingBatch(ctx context.Context, modelIDs []int64) (map[int64][]*entities.ModelPricing, error)
 }
 
 // ProviderModelSupportRepository 提供商模型支持仓储接口

@@ -438,3 +438,29 @@ func (r *modelPricingRepositoryGorm) GetPricingByType(ctx context.Context, model
 	}
 	return &pricing, nil
 }
+
+// GetCurrentPricingBatch 批量获取多个模型的当前有效定价
+func (r *modelPricingRepositoryGorm) GetCurrentPricingBatch(ctx context.Context, modelIDs []int64) (map[int64][]*entities.ModelPricing, error) {
+	if len(modelIDs) == 0 {
+		return make(map[int64][]*entities.ModelPricing), nil
+	}
+
+	var pricings []*entities.ModelPricing
+	now := time.Now()
+
+	if err := r.db.WithContext(ctx).
+		Where("model_id IN ? AND effective_from <= ? AND (effective_until IS NULL OR effective_until > ?)",
+			modelIDs, now, now).
+		Order("model_id ASC, pricing_type ASC").
+		Find(&pricings).Error; err != nil {
+		return nil, fmt.Errorf("failed to get current model pricing batch: %w", err)
+	}
+
+	// 按模型ID分组
+	result := make(map[int64][]*entities.ModelPricing)
+	for _, pricing := range pricings {
+		result[pricing.ModelID] = append(result[pricing.ModelID], pricing)
+	}
+
+	return result, nil
+}

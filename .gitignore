@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+config.yaml
+configs/config.yaml
 
 # Test binary, built with `go test -c`
 *.test
@@ -55,4 +57,4 @@ bin/
 # Temporary files
 tmp/
 temp/
-node_modules/
+node_modules/"configs/config.yaml" 

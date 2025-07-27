@@ -43,6 +43,12 @@ interface DatabaseModel {
   supports_streaming: boolean;
   supports_functions: boolean;
   status: 'active' | 'deprecated' | 'disabled';
+  pricing?: {
+    input: number;
+    output: number;
+    unit: string;
+  };
+  rate_multiplier?: number;
   created_at: string;
   updated_at: string;
 }
@@ -62,6 +68,7 @@ interface Model {
   };
   capabilities: string[];
   maxTokens: number;
+  rateMultiplier?: number; // 倍率 (浮点数)
   status: 'available' | 'beta' | 'deprecated';
   icon: string;
   color: string;
@@ -123,24 +130,31 @@ const convertDatabaseModelToDisplayModel = (dbModel: DatabaseModel): Model => {
   const providerDisplayName = dbModel.provider.display_name;
   const displayType = getDisplayType(dbModel.model_type);
 
-  return {
+
+
+  const result = {
     id: dbModel.slug,
     name: dbModel.display_name || dbModel.name,
     provider: providerDisplayName,
     description: dbModel.description || `${providerDisplayName} ${dbModel.name} model`,
     category: providerDisplayName, // 按厂商分类
     type: displayType,
-    pricing: {
-      input: 0.003, // 默认价格，后续可以从定价表获取
+    pricing: dbModel.pricing || {
+      input: 0.003, // 默认价格
       output: 0.015,
       unit: displayType === 'image' ? 'image' : '1K tokens'
     },
     capabilities: getCapabilities(dbModel.model_type, dbModel.supports_functions),
     maxTokens: dbModel.max_tokens || dbModel.context_length || 0,
-    status: dbModel.status === 'active' ? 'available' : 'deprecated',
+    rateMultiplier: dbModel.rate_multiplier ?? 1.0, // 从数据库获取倍率，使用nullish coalescing
+    status: (dbModel.status === 'active' ? 'available' : dbModel.status === 'disabled' ? 'deprecated' : 'deprecated') as 'available' | 'beta' | 'deprecated',
     icon: getIcon(dbModel.model_type),
     color: dbModel.provider.color // 使用厂商的品牌颜色
   };
+
+
+
+  return result;
 };
 
 // 模型类型常量（保持不变）
@@ -168,27 +182,29 @@ export function ModelsView() {
       if (response.success && response.data) {
         // tools/models返回的是直接的数组格式
         const dbModels: DatabaseModel[] = response.data.map((item: any) => ({
-          id: item.id || 0,
-          name: item.name || '',
-          slug: item.slug || '',
-          display_name: item.display_name || item.name,
-          description: item.description || '',
-          model_type: item.model_type || 'chat',
-          provider: item.provider || {
-            id: 0,
-            name: 'unknown',
-            display_name: 'Unknown',
-            color: '#6B7280',
-            sort_order: 999
-          },
-          context_length: item.context_length,
-          max_tokens: item.max_tokens,
-          supports_streaming: item.supports_streaming || false,
-          supports_functions: item.supports_functions || false,
-          status: item.status || 'active',
-          created_at: item.created_at || new Date().toISOString(),
-          updated_at: item.updated_at || new Date().toISOString()
-        }));
+            id: item.id || 0,
+            name: item.name || '',
+            slug: item.slug || '',
+            display_name: item.display_name || item.name,
+            description: item.description || '',
+            model_type: item.model_type || 'chat',
+            provider: item.provider || {
+              id: 0,
+              name: 'unknown',
+              display_name: 'Unknown',
+              color: '#6B7280',
+              sort_order: 999
+            },
+            context_length: item.context_length,
+            max_tokens: item.max_tokens,
+            supports_streaming: item.supports_streaming || false,
+            supports_functions: item.supports_functions || false,
+            status: item.status || 'active',
+            pricing: item.pricing,
+            rate_multiplier: item.rate_multiplier,
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: item.updated_at || new Date().toISOString()
+          }));
 
         const convertedModels = dbModels.map(convertDatabaseModelToDisplayModel);
         setModels(convertedModels);
@@ -347,6 +363,8 @@ export function ModelsView() {
               <TableCell>{t('models.type', '类型')}</TableCell>
               <TableCell>{t('models.description', '描述')}</TableCell>
               <TableCell align="center">{t('models.context_length', '上下文长度')}</TableCell>
+              <TableCell align="right">{t('models.pricing', '价格')}</TableCell>
+              <TableCell align="right">{t('models.rate_multiplier', '倍率')}</TableCell>
               <TableCell align="center">{t('models.capabilities', '功能特性')}</TableCell>
               <TableCell align="center">{t('common.status', '状态')}</TableCell>
             </TableRow>
@@ -406,6 +424,22 @@ export function ModelsView() {
                       -
                     </Typography>
                   )}
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    {model.pricing ? (
+                      model.pricing.unit === 'image' || model.pricing.unit === 'request' ?
+                        `$${model.pricing.input}/${model.pricing.unit}` :
+                        model.type === 'text' ?
+                          `$${model.pricing.input}/$${model.pricing.output}` :
+                          `$${model.pricing.input}`
+                    ) : '-'}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {model.rateMultiplier ? `${model.rateMultiplier.toFixed(1)}x` : '1.0x'}
+                  </Typography>
                 </TableCell>
                 <TableCell align="center">
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'center' }}>

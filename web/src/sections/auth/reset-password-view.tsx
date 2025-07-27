@@ -5,7 +5,6 @@ import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
-import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
@@ -14,17 +13,15 @@ import CircularProgress from '@mui/material/CircularProgress';
 
 import { useRouter } from 'src/routes/hooks';
 
-import { useAuth } from 'src/contexts/auth-context';
 import AuthService from 'src/services/auth';
 
 import { Iconify } from 'src/components/iconify';
 
 // ----------------------------------------------------------------------
 
-export function SignUpView() {
+export function ResetPasswordView() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { clearError } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -36,16 +33,15 @@ export function SignUpView() {
   const [countdown, setCountdown] = useState(0);
   const [sendingCode, setSendingCode] = useState(false);
 
-  // 注册表单数据
+  // 表单数据
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
-    password: '',
-    confirmPassword: '',
     verificationCode: '',
+    newPassword: '',
+    confirmPassword: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // 倒计时效果
   const startCountdown = useCallback(() => {
@@ -79,7 +75,7 @@ export function SignUpView() {
     try {
       await AuthService.sendVerificationCode({
         email: formData.email.trim(),
-        type: 'register'
+        type: 'password_reset'
       });
 
       setCodeSent(true);
@@ -122,27 +118,10 @@ export function SignUpView() {
   const validateForm = useCallback(() => {
     const errors: Record<string, string> = {};
 
-    // 用户名是可选的，如果填写了则验证长度
-    if (formData.username.trim() && formData.username.length < 3) {
-      errors.username = t('auth.username_min_length');
-    }
-
     if (!formData.email.trim()) {
       errors.email = t('auth.email_required');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errors.email = t('auth.email_invalid');
-    }
-
-    if (!formData.password) {
-      errors.password = t('auth.password_required');
-    } else if (formData.password.length < 6) {
-      errors.password = t('auth.password_min_length');
-    }
-
-    if (!formData.confirmPassword) {
-      errors.confirmPassword = t('auth.confirm_password_required');
-    } else if (formData.password !== formData.confirmPassword) {
-      errors.confirmPassword = t('auth.passwords_not_match');
     }
 
     if (!formData.verificationCode.trim()) {
@@ -151,11 +130,23 @@ export function SignUpView() {
       errors.verificationCode = t('auth.verification_code_invalid');
     }
 
+    if (!formData.newPassword) {
+      errors.newPassword = t('auth.password_required');
+    } else if (formData.newPassword.length < 6) {
+      errors.newPassword = t('auth.password_min_length');
+    }
+
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = t('auth.confirm_password_required');
+    } else if (formData.newPassword !== formData.confirmPassword) {
+      errors.confirmPassword = t('auth.passwords_not_match');
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, t]);
 
-  const handleSignUp = useCallback(async (event: React.FormEvent) => {
+  const handleResetPassword = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!validateForm()) {
@@ -166,26 +157,22 @@ export function SignUpView() {
     setError('');
 
     try {
-      await AuthService.registerWithCode({
-        username: formData.username.trim(),
+      await AuthService.resetPassword({
         email: formData.email.trim(),
-        password: formData.password,
+        new_password: formData.newPassword,
         verification_code: formData.verificationCode.trim(),
       });
 
-      // 注册成功
-      setRegistrationSuccess(true);
+      // 重置成功
+      setResetSuccess(true);
     } catch (error) {
-      let errorMessage = 'Registration failed';
+      let errorMessage = 'Password reset failed';
 
       if (error instanceof Error) {
         const errorCode = (error as any).code;
 
         // 根据错误代码显示相应的翻译文本
         switch (errorCode) {
-          case 'USER_ALREADY_EXISTS':
-            errorMessage = t('auth.user_already_exists');
-            break;
           case 'VERIFICATION_CODE_ERROR':
             errorMessage = t('auth.verification_code_error');
             break;
@@ -198,7 +185,7 @@ export function SignUpView() {
     } finally {
       setIsLoading(false);
     }
-  }, [formData, validateForm]);
+  }, [formData, validateForm, t]);
 
   const handleGoToSignIn = useCallback(() => {
     router.push('/sign-in');
@@ -206,14 +193,14 @@ export function SignUpView() {
 
 
 
-  if (registrationSuccess) {
+  if (resetSuccess) {
     return (
       <Box sx={{ textAlign: 'center', p: 3 }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
-          {t('auth.registration_successful')}
+          {t('auth.password_reset_successful')}
         </Typography>
         <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
-          {t('auth.account_created')}
+          {t('auth.password_reset_complete')}
         </Typography>
         <Button
           variant="contained"
@@ -226,11 +213,13 @@ export function SignUpView() {
     );
   }
 
-  // 渲染注册表单
+
+
+  // 渲染重置密码表单
   const renderForm = (
     <Box
       component="form"
-      onSubmit={handleSignUp}
+      onSubmit={handleResetPassword}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -242,21 +231,6 @@ export function SignUpView() {
           {error}
         </Alert>
       )}
-
-      <TextField
-        fullWidth
-        name="username"
-        label={t('auth.username')}
-        placeholder={t('auth.username_optional')}
-        value={formData.username}
-        onChange={handleInputChange}
-        disabled={isLoading}
-        error={!!formErrors.username}
-        helperText={formErrors.username || t('auth.username_auto_generate')}
-        slotProps={{
-          inputLabel: { shrink: true },
-        }}
-      />
 
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
         <TextField
@@ -312,18 +286,16 @@ export function SignUpView() {
         }}
       />
 
-
-
       <TextField
         fullWidth
-        name="password"
-        label={t('auth.password')}
-        value={formData.password}
+        name="newPassword"
+        label={t('auth.new_password')}
+        value={formData.newPassword}
         onChange={handleInputChange}
         disabled={isLoading}
         required
-        error={!!formErrors.password}
-        helperText={formErrors.password}
+        error={!!formErrors.newPassword}
+        helperText={formErrors.newPassword}
         type={showPassword ? 'text' : 'password'}
         slotProps={{
           inputLabel: { shrink: true },
@@ -381,7 +353,7 @@ export function SignUpView() {
         disabled={isLoading}
         startIcon={isLoading ? <CircularProgress size={20} /> : null}
       >
-        {isLoading ? t('common.loading') : t('auth.register')}
+        {isLoading ? t('common.loading') : t('auth.reset_password')}
       </Button>
     </Box>
   );
@@ -389,38 +361,24 @@ export function SignUpView() {
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h4" sx={{ mb: 1.5 }}>
-        {t('auth.register')}
+        {t('auth.reset_password')}
       </Typography>
 
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        {t('auth.have_account')}{' '}
+        {t('auth.enter_email_and_new_password')}
+      </Typography>
+
+      {renderForm}
+
+      <Box sx={{ mt: 2, textAlign: 'center' }}>
         <Link
           variant="subtitle2"
           sx={{ cursor: 'pointer' }}
           onClick={handleGoToSignIn}
         >
-          {t('auth.login')}
+          {t('auth.back_to_signin')}
         </Link>
-      </Typography>
-
-      {renderForm}
-
-      <Divider sx={{ my: 2 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {t('auth.or')}
-        </Typography>
-      </Divider>
-
-      <Button
-        fullWidth
-        size="large"
-        color="inherit"
-        variant="outlined"
-        onClick={handleGoToSignIn}
-        startIcon={<Iconify icon="eva:arrow-ios-upward-fill" />}
-      >
-        {t('auth.back_to_signin')}
-      </Button>
+      </Box>
     </Box>
   );
 }

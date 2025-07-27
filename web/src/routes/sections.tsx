@@ -22,6 +22,7 @@ export const ToolsPage = lazy(() => import('src/pages/tools'));
 export const ModelsPage = lazy(() => import('src/pages/models'));
 export const SignInPage = lazy(() => import('src/pages/sign-in'));
 export const SignUpPage = lazy(() => import('src/pages/sign-up'));
+export const ResetPasswordPage = lazy(() => import('src/pages/reset-password'));
 export const OAuthCallbackPage = lazy(() => import('src/pages/auth/oauth-callback'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 
@@ -78,6 +79,14 @@ export const routesSection: RouteObject[] = [
     element: (
       <AuthLayout>
         <SignUpPage />
+      </AuthLayout>
+    ),
+  },
+  {
+    path: 'reset-password',
+    element: (
+      <AuthLayout>
+        <ResetPasswordPage />
       </AuthLayout>
     ),
   },

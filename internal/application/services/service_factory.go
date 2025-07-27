@@ -7,9 +7,13 @@ import (
 	"ai-api-gateway/internal/domain/services"
 	"ai-api-gateway/internal/infrastructure/async"
 	"ai-api-gateway/internal/infrastructure/config"
+	"ai-api-gateway/internal/infrastructure/email"
 	"ai-api-gateway/internal/infrastructure/logger"
 	redisInfra "ai-api-gateway/internal/infrastructure/redis"
 	infraRepos "ai-api-gateway/internal/infrastructure/repositories"
+	"ai-api-gateway/internal/infrastructure/verification"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ServiceFactory 服务工厂
@@ -131,11 +135,32 @@ func (f *ServiceFactory) JWTService() JWTService {
 	return NewJWTService(&f.config.JWT)
 }
 
+// EmailService 获取邮件服务
+func (f *ServiceFactory) EmailService() EmailService {
+	template := email.NewTemplateService()
+	// 创建一个logrus logger实例
+	logrusLogger := logrus.New()
+	return email.NewBrevoService(template, logrusLogger)
+}
+
+// VerificationService 获取验证码服务
+func (f *ServiceFactory) VerificationService() VerificationService {
+	if f.redisFactory == nil {
+		return nil
+	}
+	redisClient := f.redisFactory.GetClient()
+	// 创建一个logrus logger实例
+	logrusLogger := logrus.New()
+	return verification.NewRedisVerificationService(redisClient.GetClient(), logrusLogger)
+}
+
 // AuthService 获取认证服务
 func (f *ServiceFactory) AuthService() AuthService {
 	return NewAuthService(
 		f.repoFactory.UserRepository(),
 		f.JWTService(),
+		f.EmailService(),
+		f.VerificationService(),
 	)
 }
 
@@ -155,6 +180,7 @@ func (f *ServiceFactory) ToolService() *ToolService {
 		f.repoFactory.APIKeyRepository(),
 		f.repoFactory.ModelRepository(),
 		f.repoFactory.ModelProviderRepository(),
+		f.repoFactory.ModelPricingRepository(),
 	)
 }
 

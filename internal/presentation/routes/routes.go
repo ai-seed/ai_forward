@@ -143,6 +143,12 @@ func (r *Router) SetupRoutes() {
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/refresh", authHandler.RefreshToken)
 
+		// 验证码相关路由（无需认证）
+		auth.POST("/send-verification-code", authHandler.SendVerificationCode)
+		auth.POST("/verify-code", authHandler.VerifyCode)
+		auth.POST("/register-with-code", authHandler.RegisterWithCode)
+		auth.POST("/reset-password", authHandler.ResetPassword)
+
 		// OAuth路由（无需认证）
 		oauth := auth.Group("/oauth")
 		{

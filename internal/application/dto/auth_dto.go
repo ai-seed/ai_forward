@@ -12,11 +12,11 @@ type LoginRequest struct {
 
 // LoginResponse 用户登录响应
 type LoginResponse struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	TokenType    string    `json:"token_type"`
-	ExpiresIn    int64     `json:"expires_in"`
-	User         UserInfo  `json:"user"`
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
+	TokenType    string   `json:"token_type"`
+	ExpiresIn    int64    `json:"expires_in"`
+	User         UserInfo `json:"user"`
 }
 
 // RefreshTokenRequest 刷新Token请求
@@ -42,19 +42,18 @@ type UserInfo struct {
 
 // RegisterRequest 用户注册请求
 type RegisterRequest struct {
-	Username string `json:"username" validate:"required,min=3,max=50"`
+	Username string `json:"username" validate:"omitempty,min=3,max=50"`
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=6,max=100"`
-	FullName string `json:"full_name,omitempty" validate:"omitempty,max=100"`
 }
 
 // RegisterResponse 用户注册响应
 type RegisterResponse struct {
-	ID       int64     `json:"id"`
-	Username string    `json:"username"`
-	Email    string    `json:"email"`
-	FullName string    `json:"full_name,omitempty"`
-	Message  string    `json:"message"`
+	ID        int64     `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	FullName  string    `json:"full_name,omitempty"`
+	Message   string    `json:"message"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -78,4 +77,49 @@ type GetUserProfileResponse struct {
 	Balance   float64   `json:"balance"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SendVerificationCodeRequest 发送验证码请求
+type SendVerificationCodeRequest struct {
+	Email string `json:"email" validate:"required,email"`
+	Type  string `json:"type" validate:"required,oneof=register password_reset"`
+}
+
+// SendVerificationCodeResponse 发送验证码响应
+type SendVerificationCodeResponse struct {
+	Message   string `json:"message"`
+	ExpiresIn int    `json:"expires_in"` // 过期时间（秒）
+}
+
+// VerifyCodeRequest 验证验证码请求
+type VerifyCodeRequest struct {
+	Email string `json:"email" validate:"required,email"`
+	Code  string `json:"code" validate:"required,len=6"`
+	Type  string `json:"type" validate:"required,oneof=register password_reset"`
+}
+
+// VerifyCodeResponse 验证验证码响应
+type VerifyCodeResponse struct {
+	Valid   bool   `json:"valid"`
+	Message string `json:"message"`
+}
+
+// RegisterWithCodeRequest 带验证码的注册请求
+type RegisterWithCodeRequest struct {
+	Username         string `json:"username" validate:"omitempty,min=3,max=50"`
+	Email            string `json:"email" validate:"required,email"`
+	Password         string `json:"password" validate:"required,min=6,max=100"`
+	VerificationCode string `json:"verification_code" validate:"required,len=6"`
+}
+
+// ResetPasswordRequest 重置密码请求
+type ResetPasswordRequest struct {
+	Email            string `json:"email" validate:"required,email"`
+	NewPassword      string `json:"new_password" validate:"required,min=6,max=100"`
+	VerificationCode string `json:"verification_code" validate:"required,len=6"`
+}
+
+// ResetPasswordResponse 重置密码响应
+type ResetPasswordResponse struct {
+	Message string `json:"message"`
 }

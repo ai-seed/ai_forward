@@ -61,6 +61,11 @@ export const API_ENDPOINTS = {
     RECHARGE: '/auth/recharge',
     OAUTH_URL: (provider: string) => `/auth/oauth/${provider}/url`,
     OAUTH_CALLBACK: (provider: string) => `/auth/oauth/${provider}/callback`,
+    // 验证码相关
+    SEND_VERIFICATION_CODE: '/auth/send-verification-code',
+    VERIFY_CODE: '/auth/verify-code',
+    REGISTER_WITH_CODE: '/auth/register-with-code',
+    RESET_PASSWORD: '/auth/reset-password',
   },
   
   // 用户管理

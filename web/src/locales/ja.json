@@ -159,6 +159,7 @@
     "provider": "プロバイダー",
     "type": "タイプ",
     "context_length": "コンテキスト長",
+    "rate_multiplier": "レート倍率",
     "all_providers": "すべてのプロバイダー",
     "categories": "カテゴリ",
     "types": "タイプ",

@@ -81,7 +81,14 @@ apiClient.interceptors.response.use(
 
     // 处理401错误（未授权）
     if (error.response?.status === 401) {
-      // 尝试刷新token
+      const url = error.config?.url || '';
+
+      // 如果是登录接口的401错误，直接返回错误，不进行token刷新
+      if (url.includes('/auth/login')) {
+        return Promise.reject(error);
+      }
+
+      // 对于其他接口的401错误，尝试刷新token
       const refreshToken = TokenStorage.getRefreshToken();
       if (refreshToken && !error.config._retry) {
         error.config._retry = true;
