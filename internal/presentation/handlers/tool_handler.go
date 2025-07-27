@@ -36,32 +36,9 @@ func (h *ToolHandler) GetTools(c *gin.Context) {
 		return
 	}
 
-	// 转换为前端期望的格式
-	var result []map[string]interface{}
-	for _, tool := range tools {
-		// 获取支持的模型名称列表
-		supportedModels := tool.GetSupportedModelNames()
-
-		toolData := map[string]interface{}{
-			"id":               tool.ID,
-			"name":             tool.Name,
-			"description":      tool.Description,
-			"category":         tool.Category,
-			"icon":             tool.Icon,
-			"color":            tool.Color,
-			"path":             tool.Path,
-			"config_schema":    tool.ConfigSchema,
-			"is_active":        tool.IsActive,
-			"supported_models": supportedModels,
-			"created_at":       tool.CreatedAt,
-			"updated_at":       tool.UpdatedAt,
-		}
-		result = append(result, toolData)
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    result,
+		"data":    tools,
 	})
 }
 
