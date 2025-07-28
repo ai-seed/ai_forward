@@ -119,26 +119,7 @@ s3:
 }
 ```
 
-### 3. 获取文件信息
 
-**接口**: `GET /api/files/{key}`
-
-**认证**: 需要JWT Token
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "message": "File info retrieved successfully",
-  "data": {
-    "key": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg",
-    "url": "https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg",
-    "filename": "avatar.jpg",
-    "size": 1024000,
-    "mime_type": "image/jpeg"
-  }
-}
-```
 
 ## 使用示例
 
@@ -156,9 +137,7 @@ curl -X DELETE "http://localhost:8080/api/files/delete" \
   -H "Content-Type: application/json" \
   -d '{"key": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"}'
 
-# 获取文件信息
-curl -X GET "http://localhost:8080/api/files/uploads%2F2024%2F01%2F15%2F550e8400-e29b-41d4-a716-446655440000.jpg" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
 ```
 
 ### JavaScript示例

@@ -17,8 +17,7 @@ type FileUploadService interface {
 	UploadFile(ctx context.Context, file *multipart.FileHeader) (*dto.FileUploadResponse, error)
 	// DeleteFile 删除文件
 	DeleteFile(ctx context.Context, key string) error
-	// GetFileInfo 获取文件信息
-	GetFileInfo(ctx context.Context, key string) (*dto.FileInfoResponse, error)
+
 	// IsEnabled 检查文件上传服务是否启用
 	IsEnabled() bool
 }
@@ -130,36 +129,6 @@ func (s *fileUploadServiceImpl) DeleteFile(ctx context.Context, key string) erro
 	}).Info("File deleted successfully")
 
 	return nil
-}
-
-// GetFileInfo 获取文件信息
-func (s *fileUploadServiceImpl) GetFileInfo(ctx context.Context, key string) (*dto.FileInfoResponse, error) {
-	if !s.s3Service.IsEnabled() {
-		return nil, fmt.Errorf("file upload service is not enabled")
-	}
-
-	if key == "" {
-		return nil, fmt.Errorf("file key is required")
-	}
-
-	// 获取文件URL
-	url, err := s.s3Service.GetFileURL(ctx, key)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error": err.Error(),
-			"key":   key,
-		}).Error("Failed to get file URL")
-		return nil, fmt.Errorf("failed to get file info: %w", err)
-	}
-
-	// 构建响应（注意：这里只能返回基本信息，因为S3不存储原始文件名等元数据）
-	response := &dto.FileInfoResponse{
-		Key: key,
-		URL: url,
-		// 其他字段需要从数据库或其他存储中获取
-	}
-
-	return response, nil
 }
 
 // ValidateFile 验证文件

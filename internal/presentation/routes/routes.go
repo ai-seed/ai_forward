@@ -215,7 +215,6 @@ func (r *Router) SetupRoutes() {
 	{
 		files.POST("/upload", fileUploadHandler.UploadFile)
 		files.DELETE("/delete", fileUploadHandler.DeleteFile)
-		files.GET("/:key", fileUploadHandler.GetFileInfo)
 	}
 
 	// 管理API路由

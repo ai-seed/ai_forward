@@ -107,10 +107,10 @@ func (h *FileUploadHandler) UploadFile(c *gin.Context) {
 	contentType := file.Header.Get("Content-Type")
 	if !h.isAllowedType(contentType) {
 		h.logger.WithFields(map[string]interface{}{
-			"content_type":   contentType,
-			"allowed_types":  h.config.AllowedTypes,
-			"user_id":        userID,
-			"filename":       file.Filename,
+			"content_type":  contentType,
+			"allowed_types": h.config.AllowedTypes,
+			"user_id":       userID,
+			"filename":      file.Filename,
 		}).Warn("File type not allowed")
 		c.JSON(http.StatusUnsupportedMediaType, dto.ErrorResponse(
 			"UNSUPPORTED_FILE_TYPE",
@@ -239,76 +239,6 @@ func (h *FileUploadHandler) DeleteFile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.SuccessResponse(result, "File deleted successfully"))
-}
-
-// GetFileInfo 获取文件信息
-// @Summary 获取文件信息
-// @Description 根据文件键获取文件信息和访问URL
-// @Tags 文件管理
-// @Produce json
-// @Security BearerAuth
-// @Param key path string true "文件键"
-// @Success 200 {object} dto.Response{data=dto.FileInfoResponse} "获取成功"
-// @Failure 400 {object} dto.Response "请求参数错误"
-// @Failure 401 {object} dto.Response "认证失败"
-// @Failure 404 {object} dto.Response "文件不存在"
-// @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/files/{key} [get]
-func (h *FileUploadHandler) GetFileInfo(c *gin.Context) {
-	// 检查服务是否启用
-	if !h.fileUploadService.IsEnabled() {
-		c.JSON(http.StatusServiceUnavailable, dto.ErrorResponse(
-			"SERVICE_UNAVAILABLE",
-			"File upload service is not enabled",
-			nil,
-		))
-		return
-	}
-
-	// 获取认证信息
-	userID, exists := middleware.GetUserIDFromContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, dto.ErrorResponse(
-			"AUTHENTICATION_REQUIRED",
-			"Authentication required",
-			nil,
-		))
-		return
-	}
-
-	// 获取文件键
-	key := c.Param("key")
-	if key == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_REQUEST",
-			"File key is required",
-			nil,
-		))
-		return
-	}
-
-	h.logger.WithFields(map[string]interface{}{
-		"key":     key,
-		"user_id": userID,
-	}).Info("Getting file info")
-
-	// 获取文件信息
-	result, err := h.fileUploadService.GetFileInfo(c.Request.Context(), key)
-	if err != nil {
-		h.logger.WithFields(map[string]interface{}{
-			"error":   err.Error(),
-			"key":     key,
-			"user_id": userID,
-		}).Error("Failed to get file info")
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"GET_INFO_FAILED",
-			"Failed to get file info: "+err.Error(),
-			nil,
-		))
-		return
-	}
-
-	c.JSON(http.StatusOK, dto.SuccessResponse(result, "File info retrieved successfully"))
 }
 
 // isAllowedType 检查文件类型是否被允许

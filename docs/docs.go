@@ -178,76 +178,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/files/{key}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "根据文件键获取文件信息和访问URL",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "文件管理"
-                ],
-                "summary": "获取文件信息",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "文件键",
-                        "name": "key",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "获取成功",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/dto.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.FileInfoResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "请求参数错误",
-                        "schema": {
-                            "$ref": "#/definitions/dto.Response"
-                        }
-                    },
-                    "401": {
-                        "description": "认证失败",
-                        "schema": {
-                            "$ref": "#/definitions/dto.Response"
-                        }
-                    },
-                    "404": {
-                        "description": "文件不存在",
-                        "schema": {
-                            "$ref": "#/definitions/dto.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/dto.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/auth/change-password": {
             "post": {
                 "security": [
@@ -2559,36 +2489,6 @@ const docTemplate = `{
                     "description": "删除结果消息",
                     "type": "string",
                     "example": "File deleted successfully"
-                }
-            }
-        },
-        "dto.FileInfoResponse": {
-            "type": "object",
-            "properties": {
-                "filename": {
-                    "description": "原始文件名",
-                    "type": "string",
-                    "example": "avatar.jpg"
-                },
-                "key": {
-                    "description": "S3对象键",
-                    "type": "string",
-                    "example": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
-                },
-                "mime_type": {
-                    "description": "MIME类型",
-                    "type": "string",
-                    "example": "image/jpeg"
-                },
-                "size": {
-                    "description": "文件大小（字节）",
-                    "type": "integer",
-                    "example": 1024000
-                },
-                "url": {
-                    "description": "文件访问URL",
-                    "type": "string",
-                    "example": "https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
                 }
             }
         },
