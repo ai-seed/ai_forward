@@ -1,11 +1,13 @@
 package services
 
 import (
+	"net/http"
 	"time"
 
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/domain/services"
 	"ai-api-gateway/internal/infrastructure/async"
+	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/email"
 	"ai-api-gateway/internal/infrastructure/logger"
@@ -262,6 +264,28 @@ func (f *ServiceFactory) FileUploadService() FileUploadService {
 	}
 
 	return NewFileUploadService(s3Service, f.logger)
+}
+
+// StabilityService 获取Stability.ai服务
+func (f *ServiceFactory) StabilityService() StabilityService {
+	// 创建HTTP客户端
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// 创建Stability客户端
+	stabilityClient := clients.NewStabilityClient(httpClient)
+
+	return NewStabilityService(
+		stabilityClient,
+		f.repoFactory.ProviderRepository(),
+		f.repoFactory.ModelRepository(),
+		f.repoFactory.APIKeyRepository(),
+		f.repoFactory.UserRepository(),
+		f.BillingService(),
+		f.UsageLogService(),
+		f.logger,
+	)
 }
 
 // isAsyncQuotaEnabled 检查是否启用异步配额处理

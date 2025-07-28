@@ -137,6 +137,7 @@ func (r *Router) SetupRoutes() {
 		&r.config.S3,
 		r.logger,
 	)
+	stabilityHandler := handlers.NewStabilityHandler(r.serviceFactory.StabilityService(), r.logger)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
@@ -312,6 +313,73 @@ func (r *Router) SetupRoutes() {
 		mjTask.Use(rateLimitMiddleware.RateLimit())
 		{
 			mjTask.GET("/:id/fetch", midjourneyHandler.Fetch)
+		}
+	}
+
+	// Stability.ai兼容的API路由（302AI格式）
+	sd := r.engine.Group("/sd")
+	sd.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
+	{
+		// Stability.ai图像生成路由（需要认证和配额检查）
+		sdV1 := sd.Group("/v1/generation")
+		sdV1.Use(authMiddleware.Authenticate())
+		sdV1.Use(rateLimitMiddleware.RateLimit())
+		sdV1.Use(quotaMiddleware.CheckQuota())
+		sdV1.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		{
+			// V1 Text-to-Image (原有接口)
+			sdV1.POST("/stable-diffusion-xl-1024-v1-0/text-to-image", stabilityHandler.TextToImage)
+		}
+
+		// Stability.ai V2 Beta API路由
+		sdV2Beta := sd.Group("/v2beta/stable-image")
+		sdV2Beta.Use(authMiddleware.Authenticate())
+		sdV2Beta.Use(rateLimitMiddleware.RateLimit())
+		sdV2Beta.Use(quotaMiddleware.CheckQuota())
+		sdV2Beta.Use(quotaMiddleware.ConsumeQuota())
+		{
+			// 图片生成接口
+			generate := sdV2Beta.Group("/generate")
+			{
+				generate.POST("/sd", stabilityHandler.GenerateSD2)
+				generate.POST("/sd3", stabilityHandler.GenerateSD3)
+				generate.POST("/ultra", stabilityHandler.GenerateSD3Ultra)
+				generate.POST("/sd3-large", stabilityHandler.GenerateSD35Large)
+				generate.POST("/sd3-medium", stabilityHandler.GenerateSD35Medium)
+			}
+
+			// 图生图接口
+			control := sdV2Beta.Group("/control")
+			{
+				control.POST("/sd3", stabilityHandler.ImageToImageSD3)
+				control.POST("/sd3-large", stabilityHandler.ImageToImageSD35Large)
+				control.POST("/sd3-medium", stabilityHandler.ImageToImageSD35Medium)
+				control.POST("/sketch", stabilityHandler.Sketch)
+				control.POST("/structure", stabilityHandler.Structure)
+				control.POST("/style", stabilityHandler.Style)
+			}
+
+			// 图片放大接口
+			upscale := sdV2Beta.Group("/upscale")
+			{
+				upscale.POST("/fast", stabilityHandler.FastUpscale)
+				upscale.POST("/creative", stabilityHandler.CreativeUpscale)
+				upscale.POST("/conservative", stabilityHandler.ConservativeUpscale)
+				upscale.GET("/creative/result/:id", stabilityHandler.FetchCreativeUpscale)
+			}
+
+			// 图片编辑接口
+			edit := sdV2Beta.Group("/edit")
+			{
+				edit.POST("/erase", stabilityHandler.Erase)
+				edit.POST("/inpaint", stabilityHandler.Inpaint)
+				edit.POST("/outpaint", stabilityHandler.Outpaint)
+				edit.POST("/search-and-replace", stabilityHandler.SearchAndReplace)
+				edit.POST("/search-and-recolor", stabilityHandler.SearchAndRecolor)
+				edit.POST("/remove-background", stabilityHandler.RemoveBackground)
+				edit.POST("/style-transfer", stabilityHandler.StyleTransfer)
+				edit.POST("/replace-background", stabilityHandler.ReplaceBackground)
+			}
 		}
 	}
 
