@@ -132,6 +132,11 @@ func (r *Router) SetupRoutes() {
 		r.serviceFactory.ProviderModelSupportRepository(),
 		r.logger,
 	)
+	fileUploadHandler := handlers.NewFileUploadHandler(
+		r.serviceFactory.FileUploadService(),
+		&r.config.S3,
+		r.logger,
+	)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
@@ -201,6 +206,16 @@ func (r *Router) SetupRoutes() {
 			infoRoutes.GET("/models", aiHandler.Models)
 			infoRoutes.GET("/usage", aiHandler.Usage)
 		}
+	}
+
+	// 文件管理API路由
+	files := r.engine.Group("/api/files")
+	files.Use(rateLimitMiddleware.RateLimit())
+	files.Use(authMiddleware.Authenticate()) // 需要JWT认证
+	{
+		files.POST("/upload", fileUploadHandler.UploadFile)
+		files.DELETE("/delete", fileUploadHandler.DeleteFile)
+		files.GET("/:key", fileUploadHandler.GetFileInfo)
 	}
 
 	// 管理API路由

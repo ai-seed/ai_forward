@@ -32,6 +32,7 @@ type Config struct {
 	JWT          JWTConfig          `mapstructure:"jwt"`
 	OAuth        OAuthConfig        `mapstructure:"oauth"`
 	FunctionCall FunctionCallConfig `mapstructure:"function_call"`
+	S3           S3Config           `mapstructure:"s3"`
 }
 
 // ServerConfig 服务器配置
@@ -119,6 +120,19 @@ type SearchConfig struct {
 	SerpAPIKey     string `mapstructure:"serpapi_key"`      // SerpAPI密钥
 	SerperKey      string `mapstructure:"serper_key"`       // Serper密钥
 	SearXNGBaseURL string `mapstructure:"searxng_base_url"` // SearXNG服务地址
+}
+
+// S3Config S3存储配置
+type S3Config struct {
+	Enabled         bool     `mapstructure:"enabled"`           // 是否启用S3存储
+	Region          string   `mapstructure:"region"`            // AWS区域
+	Bucket          string   `mapstructure:"bucket"`            // S3存储桶名称
+	AccessKeyID     string   `mapstructure:"access_key_id"`     // AWS访问密钥ID
+	SecretAccessKey string   `mapstructure:"secret_access_key"` // AWS秘密访问密钥
+	Endpoint        string   `mapstructure:"endpoint"`          // 自定义端点（用于兼容S3的服务）
+	UsePathStyle    bool     `mapstructure:"use_path_style"`    // 是否使用路径样式URL
+	MaxFileSize     int64    `mapstructure:"max_file_size"`     // 最大文件大小（字节）
+	AllowedTypes    []string `mapstructure:"allowed_types"`     // 允许的文件类型
 }
 
 // LoadConfig 加载配置
@@ -219,6 +233,17 @@ func setDefaults() {
 	viper.SetDefault("function_call.search_service.service", "duckduckgo")
 	viper.SetDefault("function_call.search_service.max_results", 10)
 	viper.SetDefault("function_call.search_service.crawl_results", 0)
+
+	// S3存储默认值
+	viper.SetDefault("s3.enabled", false)
+	viper.SetDefault("s3.region", "us-east-1")
+	viper.SetDefault("s3.bucket", "")
+	viper.SetDefault("s3.access_key_id", "")
+	viper.SetDefault("s3.secret_access_key", "")
+	viper.SetDefault("s3.endpoint", "")
+	viper.SetDefault("s3.use_path_style", false)
+	viper.SetDefault("s3.max_file_size", 10*1024*1024) // 10MB
+	viper.SetDefault("s3.allowed_types", []string{"image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"})
 }
 
 // validateConfig 验证配置

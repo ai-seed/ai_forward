@@ -245,3 +245,30 @@ verification:
   send_interval: "1m"
   # 验证码最大尝试次数
   max_attempts: 5
+
+# S3存储配置
+s3:
+  # 是否启用S3存储
+  enabled: false
+  # AWS区域
+  region: "us-east-1"
+  # S3存储桶名称
+  bucket: "your-s3-bucket-name"
+  # AWS访问密钥ID
+  access_key_id: "your-aws-access-key-id"
+  # AWS秘密访问密钥
+  secret_access_key: "your-aws-secret-access-key"
+  # 自定义端点（用于兼容S3的服务，如MinIO）
+  endpoint: ""
+  # 是否使用路径样式URL（MinIO等服务需要设置为true）
+  use_path_style: false
+  # 最大文件大小（字节，默认10MB）
+  max_file_size: 10485760
+  # 允许的文件类型
+  allowed_types:
+    - "image/jpeg"
+    - "image/png"
+    - "image/gif"
+    - "image/webp"
+    - "application/pdf"
+    - "text/plain"

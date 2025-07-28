@@ -469,6 +469,75 @@ definitions:
       message:
         type: string
     type: object
+  dto.FileDeleteRequest:
+    properties:
+      key:
+        description: S3对象键
+        example: uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+    required:
+    - key
+    type: object
+  dto.FileDeleteResponse:
+    properties:
+      key:
+        description: 已删除的S3对象键
+        example: uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+      message:
+        description: 删除结果消息
+        example: File deleted successfully
+        type: string
+    type: object
+  dto.FileInfoResponse:
+    properties:
+      filename:
+        description: 原始文件名
+        example: avatar.jpg
+        type: string
+      key:
+        description: S3对象键
+        example: uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+      mime_type:
+        description: MIME类型
+        example: image/jpeg
+        type: string
+      size:
+        description: 文件大小（字节）
+        example: 1024000
+        type: integer
+      url:
+        description: 文件访问URL
+        example: https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+    type: object
+  dto.FileUploadResponse:
+    properties:
+      filename:
+        description: 原始文件名
+        example: avatar.jpg
+        type: string
+      key:
+        description: S3对象键
+        example: uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+      mime_type:
+        description: MIME类型
+        example: image/jpeg
+        type: string
+      size:
+        description: 文件大小（字节）
+        example: 1024000
+        type: integer
+      uploaded_at:
+        description: 上传时间
+        type: string
+      url:
+        description: 文件访问URL
+        example: https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg
+        type: string
+    type: object
   dto.GetUserProfileResponse:
     properties:
       balance:
@@ -513,6 +582,22 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserInfo'
     type: object
+  dto.OAuthLoginRequest:
+    properties:
+      code:
+        type: string
+      provider:
+        enum:
+        - google
+        - github
+        type: string
+      state:
+        type: string
+    required:
+    - code
+    - provider
+    - state
+    type: object
   dto.RefreshTokenRequest:
     properties:
       refresh_token:
@@ -535,9 +620,6 @@ definitions:
     properties:
       email:
         type: string
-      full_name:
-        maxLength: 100
-        type: string
       password:
         maxLength: 100
         minLength: 6
@@ -549,7 +631,6 @@ definitions:
     required:
     - email
     - password
-    - username
     type: object
   dto.RegisterResponse:
     properties:
@@ -566,6 +647,45 @@ definitions:
       username:
         type: string
     type: object
+  dto.RegisterWithCodeRequest:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+      verification_code:
+        type: string
+    required:
+    - email
+    - password
+    - verification_code
+    type: object
+  dto.ResetPasswordRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        maxLength: 100
+        minLength: 6
+        type: string
+      verification_code:
+        type: string
+    required:
+    - email
+    - new_password
+    - verification_code
+    type: object
+  dto.ResetPasswordResponse:
+    properties:
+      message:
+        type: string
+    type: object
   dto.Response:
     properties:
       data: {}
@@ -576,6 +696,27 @@ definitions:
       success:
         type: boolean
       timestamp:
+        type: string
+    type: object
+  dto.SendVerificationCodeRequest:
+    properties:
+      email:
+        type: string
+      type:
+        enum:
+        - register
+        - password_reset
+        type: string
+    required:
+    - email
+    - type
+    type: object
+  dto.SendVerificationCodeResponse:
+    properties:
+      expires_in:
+        description: 过期时间（秒）
+        type: integer
+      message:
         type: string
     type: object
   dto.UsageResponse:
@@ -609,6 +750,29 @@ definitions:
         type: string
     required:
     - amount
+    type: object
+  dto.VerifyCodeRequest:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      type:
+        enum:
+        - register
+        - password_reset
+        type: string
+    required:
+    - code
+    - email
+    - type
+    type: object
+  dto.VerifyCodeResponse:
+    properties:
+      message:
+        type: string
+      valid:
+        type: boolean
     type: object
   handlers.ActionRequest:
     properties:
@@ -800,6 +964,141 @@ info:
   title: AI API Gateway
   version: 1.0.0
 paths:
+  /api/files/{key}:
+    get:
+      description: 根据文件键获取文件信息和访问URL
+      parameters:
+      - description: 文件键
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FileInfoResponse'
+              type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: 认证失败
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - BearerAuth: []
+      summary: 获取文件信息
+      tags:
+      - 文件管理
+  /api/files/delete:
+    delete:
+      consumes:
+      - application/json
+      description: 根据文件键删除S3中的文件
+      parameters:
+      - description: 删除请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FileDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FileDeleteResponse'
+              type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: 认证失败
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "404":
+          description: 文件不存在
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - BearerAuth: []
+      summary: 删除S3文件
+      tags:
+      - 文件管理
+  /api/files/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传文件到S3存储，支持图片、PDF等多种文件类型
+      parameters:
+      - description: 要上传的文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FileUploadResponse'
+              type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: 认证失败
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "413":
+          description: 文件过大
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "415":
+          description: 不支持的文件类型
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      security:
+      - BearerAuth: []
+      summary: 上传文件到S3
+      tags:
+      - 文件管理
   /auth/change-password:
     post:
       consumes:
@@ -870,6 +1169,159 @@ paths:
       summary: 用户登录
       tags:
       - 认证
+  /auth/oauth/{provider}/callback:
+    get:
+      description: 处理OAuth提供商的回调，从查询参数获取code和state
+      parameters:
+      - description: OAuth提供商
+        enum:
+        - google
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: 授权码
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: 状态参数
+        in: query
+        name: state
+        required: true
+        type: string
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: 认证失败
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 从查询参数处理OAuth回调
+      tags:
+      - OAuth
+    post:
+      consumes:
+      - application/json
+      description: 处理OAuth提供商的回调，完成用户登录
+      parameters:
+      - description: OAuth提供商
+        enum:
+        - google
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: OAuth回调请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.OAuthLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "401":
+          description: 认证失败
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 处理OAuth回调
+      tags:
+      - OAuth
+  /auth/oauth/{provider}/redirect:
+    get:
+      description: 获取指定提供商的OAuth认证URL并重定向
+      parameters:
+      - description: OAuth提供商
+        enum:
+        - google
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      responses:
+        "302":
+          description: 重定向到OAuth提供商
+          schema:
+            type: string
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 从查询参数获取OAuth认证URL
+      tags:
+      - OAuth
+  /auth/oauth/{provider}/url:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定提供商的OAuth认证URL
+      parameters:
+      - description: OAuth提供商
+        enum:
+        - google
+        - github
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 获取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.Response'
+            - properties:
+                data:
+                  properties:
+                    auth_url:
+                      type: string
+                    state:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 获取OAuth认证URL
+      tags:
+      - OAuth
   /auth/profile:
     get:
       description: 获取当前登录用户的详细信息
@@ -995,6 +1447,138 @@ paths:
           schema:
             $ref: '#/definitions/dto.Response'
       summary: 用户注册
+      tags:
+      - 认证
+  /auth/register-with-code:
+    post:
+      consumes:
+      - application/json
+      description: 使用邮箱验证码进行用户注册
+      parameters:
+      - description: 注册请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterWithCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 注册成功
+          schema:
+            $ref: '#/definitions/dto.RegisterResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "409":
+          description: 用户已存在
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 带验证码的用户注册
+      tags:
+      - 认证
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 使用邮箱验证码重置密码
+      parameters:
+      - description: 重置密码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 密码重置成功
+          schema:
+            $ref: '#/definitions/dto.ResetPasswordResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 重置密码
+      tags:
+      - 认证
+  /auth/send-verification-code:
+    post:
+      consumes:
+      - application/json
+      description: 发送邮箱验证码（注册或密码重置）
+      parameters:
+      - description: 发送验证码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendVerificationCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证码发送成功
+          schema:
+            $ref: '#/definitions/dto.SendVerificationCodeResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "429":
+          description: 发送过于频繁
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 发送验证码
+      tags:
+      - 认证
+  /auth/verify-code:
+    post:
+      consumes:
+      - application/json
+      description: 验证邮箱验证码
+      parameters:
+      - description: 验证验证码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.VerifyCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            $ref: '#/definitions/dto.VerifyCodeResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/dto.Response'
+      summary: 验证验证码
       tags:
       - 认证
   /health:

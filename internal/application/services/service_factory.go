@@ -11,6 +11,7 @@ import (
 	"ai-api-gateway/internal/infrastructure/logger"
 	redisInfra "ai-api-gateway/internal/infrastructure/redis"
 	infraRepos "ai-api-gateway/internal/infrastructure/repositories"
+	"ai-api-gateway/internal/infrastructure/storage"
 	"ai-api-gateway/internal/infrastructure/verification"
 
 	"github.com/sirupsen/logrus"
@@ -246,6 +247,21 @@ func (f *ServiceFactory) ProviderRepository() repositories.ProviderRepository {
 // ProviderModelSupportRepository 获取提供商模型支持仓储
 func (f *ServiceFactory) ProviderModelSupportRepository() repositories.ProviderModelSupportRepository {
 	return f.repoFactory.ProviderModelSupportRepository()
+}
+
+// FileUploadService 获取文件上传服务
+func (f *ServiceFactory) FileUploadService() FileUploadService {
+	// 创建S3服务
+	s3Service, err := storage.NewS3Service(&f.config.S3, f.logger)
+	if err != nil {
+		f.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to create S3 service")
+		// 返回一个禁用的服务
+		s3Service, _ = storage.NewS3Service(&config.S3Config{Enabled: false}, f.logger)
+	}
+
+	return NewFileUploadService(s3Service, f.logger)
 }
 
 // isAsyncQuotaEnabled 检查是否启用异步配额处理

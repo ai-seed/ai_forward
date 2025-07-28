@@ -24,6 +24,230 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/files/delete": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据文件键删除S3中的文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文件管理"
+                ],
+                "summary": "删除S3文件",
+                "parameters": [
+                    {
+                        "description": "删除请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.FileDeleteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FileDeleteResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/files/upload": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "上传文件到S3存储，支持图片、PDF等多种文件类型",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文件管理"
+                ],
+                "summary": "上传文件到S3",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "要上传的文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "上传成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FileUploadResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "文件过大",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "415": {
+                        "description": "不支持的文件类型",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/files/{key}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "根据文件键获取文件信息和访问URL",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文件管理"
+                ],
+                "summary": "获取文件信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "文件键",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FileInfoResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文件不存在",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/change-password": {
             "post": {
                 "security": [
@@ -120,6 +344,239 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/oauth/{provider}/callback": {
+            "get": {
+                "description": "处理OAuth提供商的回调，从查询参数获取code和state",
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "从查询参数处理OAuth回调",
+                "parameters": [
+                    {
+                        "enum": [
+                            "google",
+                            "github"
+                        ],
+                        "type": "string",
+                        "description": "OAuth提供商",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "授权码",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态参数",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "$ref": "#/definitions/dto.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "处理OAuth提供商的回调，完成用户登录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "处理OAuth回调",
+                "parameters": [
+                    {
+                        "enum": [
+                            "google",
+                            "github"
+                        ],
+                        "type": "string",
+                        "description": "OAuth提供商",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "OAuth回调请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.OAuthLoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "$ref": "#/definitions/dto.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "认证失败",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/oauth/{provider}/redirect": {
+            "get": {
+                "description": "获取指定提供商的OAuth认证URL并重定向",
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "从查询参数获取OAuth认证URL",
+                "parameters": [
+                    {
+                        "enum": [
+                            "google",
+                            "github"
+                        ],
+                        "type": "string",
+                        "description": "OAuth提供商",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "重定向到OAuth提供商",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/oauth/{provider}/url": {
+            "get": {
+                "description": "获取指定提供商的OAuth认证URL",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "获取OAuth认证URL",
+                "parameters": [
+                    {
+                        "enum": [
+                            "google",
+                            "github"
+                        ],
+                        "type": "string",
+                        "description": "OAuth提供商",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/dto.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "auth_url": {
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
                         "schema": {
                             "$ref": "#/definitions/dto.Response"
                         }
@@ -318,6 +775,208 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "用户名或邮箱已存在",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register-with-code": {
+            "post": {
+                "description": "使用邮箱验证码进行用户注册",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "带验证码的用户注册",
+                "parameters": [
+                    {
+                        "description": "注册请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RegisterWithCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "注册成功",
+                        "schema": {
+                            "$ref": "#/definitions/dto.RegisterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "用户已存在",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/reset-password": {
+            "post": {
+                "description": "使用邮箱验证码重置密码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "重置密码",
+                "parameters": [
+                    {
+                        "description": "重置密码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ResetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "密码重置成功",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ResetPasswordResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/send-verification-code": {
+            "post": {
+                "description": "发送邮箱验证码（注册或密码重置）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "发送验证码",
+                "parameters": [
+                    {
+                        "description": "发送验证码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SendVerificationCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "验证码发送成功",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SendVerificationCodeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "发送过于频繁",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/dto.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/verify-code": {
+            "post": {
+                "description": "验证邮箱验证码",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "验证验证码",
+                "parameters": [
+                    {
+                        "description": "验证验证码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.VerifyCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "验证结果",
+                        "schema": {
+                            "$ref": "#/definitions/dto.VerifyCodeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
                         "schema": {
                             "$ref": "#/definitions/dto.Response"
                         }
@@ -1875,6 +2534,98 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.FileDeleteRequest": {
+            "type": "object",
+            "required": [
+                "key"
+            ],
+            "properties": {
+                "key": {
+                    "description": "S3对象键",
+                    "type": "string",
+                    "example": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                }
+            }
+        },
+        "dto.FileDeleteResponse": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "已删除的S3对象键",
+                    "type": "string",
+                    "example": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                },
+                "message": {
+                    "description": "删除结果消息",
+                    "type": "string",
+                    "example": "File deleted successfully"
+                }
+            }
+        },
+        "dto.FileInfoResponse": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "description": "原始文件名",
+                    "type": "string",
+                    "example": "avatar.jpg"
+                },
+                "key": {
+                    "description": "S3对象键",
+                    "type": "string",
+                    "example": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                },
+                "mime_type": {
+                    "description": "MIME类型",
+                    "type": "string",
+                    "example": "image/jpeg"
+                },
+                "size": {
+                    "description": "文件大小（字节）",
+                    "type": "integer",
+                    "example": 1024000
+                },
+                "url": {
+                    "description": "文件访问URL",
+                    "type": "string",
+                    "example": "https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                }
+            }
+        },
+        "dto.FileUploadResponse": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "description": "原始文件名",
+                    "type": "string",
+                    "example": "avatar.jpg"
+                },
+                "key": {
+                    "description": "S3对象键",
+                    "type": "string",
+                    "example": "uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                },
+                "mime_type": {
+                    "description": "MIME类型",
+                    "type": "string",
+                    "example": "image/jpeg"
+                },
+                "size": {
+                    "description": "文件大小（字节）",
+                    "type": "integer",
+                    "example": 1024000
+                },
+                "uploaded_at": {
+                    "description": "上传时间",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "文件访问URL",
+                    "type": "string",
+                    "example": "https://your-bucket.s3.us-east-1.amazonaws.com/uploads/2024/01/15/550e8400-e29b-41d4-a716-446655440000.jpg"
+                }
+            }
+        },
         "dto.GetUserProfileResponse": {
             "type": "object",
             "properties": {
@@ -1940,6 +2691,29 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.OAuthLoginRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "provider",
+                "state"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": [
+                        "google",
+                        "github"
+                    ]
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.RefreshTokenRequest": {
             "type": "object",
             "required": [
@@ -1972,16 +2746,11 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "email",
-                "password",
-                "username"
+                "password"
             ],
             "properties": {
                 "email": {
                     "type": "string"
-                },
-                "full_name": {
-                    "type": "string",
-                    "maxLength": 100
                 },
                 "password": {
                     "type": "string",
@@ -2018,6 +2787,61 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.RegisterWithCodeRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password",
+                "verification_code"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "username": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3
+                },
+                "verification_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ResetPasswordRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "new_password",
+                "verification_code"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 6
+                },
+                "verification_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ResetPasswordResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.Response": {
             "type": "object",
             "properties": {
@@ -2032,6 +2856,37 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SendVerificationCodeRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "type"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "register",
+                        "password_reset"
+                    ]
+                }
+            }
+        },
+        "dto.SendVerificationCodeResponse": {
+            "type": "object",
+            "properties": {
+                "expires_in": {
+                    "description": "过期时间（秒）",
+                    "type": "integer"
+                },
+                "message": {
                     "type": "string"
                 }
             }
@@ -2081,6 +2936,40 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.VerifyCodeRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "type"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "register",
+                        "password_reset"
+                    ]
+                }
+            }
+        },
+        "dto.VerifyCodeResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "valid": {
+                    "type": "boolean"
                 }
             }
         },
