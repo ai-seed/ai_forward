@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -533,15 +535,252 @@ func (h *StabilityHandler) SearchAndRecolor(c *gin.Context) {
 }
 
 func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
-	h.handleGenericRequest(c, "remove-background",
-		func() (interface{}, error) {
-			var req clients.StabilityRemoveBgRequest
-			err := c.ShouldBindJSON(&req)
-			return &req, err
-		},
-		func(ctx context.Context, userID, apiKeyID int64, req interface{}) (*clients.StabilityImageResponse, error) {
-			return h.stabilityService.RemoveBackground(ctx, userID, apiKeyID, req.(*clients.StabilityRemoveBgRequest))
+	userID := c.GetInt64("user_id")
+	apiKeyID := c.GetInt64("api_key_id")
+
+	// 解析multipart form
+	err := c.Request.ParseMultipartForm(32 << 20) // 32MB max
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to parse multipart form")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Failed to parse multipart form: " + err.Error(),
+			},
 		})
+		return
+	}
+
+	// 获取上传的文件
+	file, header, err := c.Request.FormFile("image")
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("No image file provided")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Image file is required",
+			},
+		})
+		return
+	}
+	defer file.Close()
+
+	// 读取文件内容
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to read file content")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "FILE_READ_ERROR",
+				"message": "Failed to read file content",
+			},
+		})
+		return
+	}
+
+	// 转换为base64
+	base64Image := base64.StdEncoding.EncodeToString(fileBytes)
+
+	// 获取输出格式参数
+	outputFormat := c.PostForm("output_format")
+	if outputFormat == "" {
+		outputFormat = "png" // 默认格式
+	}
+
+	// 构建请求
+	request := &clients.StabilityRemoveBgRequest{
+		Image:        base64Image,
+		OutputFormat: outputFormat,
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":       userID,
+		"api_key_id":    apiKeyID,
+		"filename":      header.Filename,
+		"file_size":     len(fileBytes),
+		"output_format": outputFormat,
+	}).Info("Processing remove background request")
+
+	// 调用服务
+	response, err := h.stabilityService.RemoveBackground(c.Request.Context(), userID, apiKeyID, request)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to remove background")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "PROCESSING_FAILED",
+				"message": "Failed to remove background: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 转换响应格式
+	stabilityResponse := StabilityResponse{
+		Artifacts: make([]StabilityArtifact, len(response.Artifacts)),
+	}
+
+	for i, artifact := range response.Artifacts {
+		stabilityResponse.Artifacts[i] = StabilityArtifact{
+			Base64:       artifact.Base64,
+			Seed:         artifact.Seed,
+			FinishReason: artifact.FinishReason,
+		}
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":         userID,
+		"api_key_id":      apiKeyID,
+		"artifacts_count": len(stabilityResponse.Artifacts),
+	}).Info("Successfully removed background")
+
+	c.JSON(http.StatusOK, stabilityResponse)
+}
+
+// handleFileUploadRequest 处理文件上传请求的通用方法
+func (h *StabilityHandler) handleFileUploadRequest(c *gin.Context, requestType string, buildRequest func(imageData string, formData map[string]string) interface{}, serviceFunc func(context.Context, int64, int64, interface{}) (*clients.StabilityImageResponse, error)) {
+	userID := c.GetInt64("user_id")
+	apiKeyID := c.GetInt64("api_key_id")
+
+	// 解析multipart form
+	err := c.Request.ParseMultipartForm(32 << 20) // 32MB max
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+			"request_type": requestType,
+		}).Error("Failed to parse multipart form")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Failed to parse multipart form: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 获取上传的文件
+	file, header, err := c.Request.FormFile("image")
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+			"request_type": requestType,
+		}).Error("No image file provided")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Image file is required",
+			},
+		})
+		return
+	}
+	defer file.Close()
+
+	// 读取文件内容
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+			"request_type": requestType,
+		}).Error("Failed to read file content")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "FILE_READ_ERROR",
+				"message": "Failed to read file content",
+			},
+		})
+		return
+	}
+
+	// 转换为base64
+	base64Image := base64.StdEncoding.EncodeToString(fileBytes)
+
+	// 获取表单数据
+	formData := make(map[string]string)
+	for key, values := range c.Request.PostForm {
+		if len(values) > 0 {
+			formData[key] = values[0]
+		}
+	}
+
+	// 构建请求
+	request := buildRequest(base64Image, formData)
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":      userID,
+		"api_key_id":   apiKeyID,
+		"request_type": requestType,
+		"filename":     header.Filename,
+		"file_size":    len(fileBytes),
+	}).Info("Processing file upload request")
+
+	// 调用服务
+	response, err := serviceFunc(c.Request.Context(), userID, apiKeyID, request)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+			"request_type": requestType,
+		}).Error("Failed to process request")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "PROCESSING_FAILED",
+				"message": "Failed to process request: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 转换响应格式
+	stabilityResponse := StabilityResponse{
+		Artifacts: make([]StabilityArtifact, len(response.Artifacts)),
+	}
+
+	for i, artifact := range response.Artifacts {
+		stabilityResponse.Artifacts[i] = StabilityArtifact{
+			Base64:       artifact.Base64,
+			Seed:         artifact.Seed,
+			FinishReason: artifact.FinishReason,
+		}
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":         userID,
+		"api_key_id":      apiKeyID,
+		"request_type":    requestType,
+		"artifacts_count": len(stabilityResponse.Artifacts),
+	}).Info("Successfully processed file upload request")
+
+	c.JSON(http.StatusOK, stabilityResponse)
 }
 
 // 风格和结构处理器方法
