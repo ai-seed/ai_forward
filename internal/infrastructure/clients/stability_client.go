@@ -517,7 +517,7 @@ func (c *stabilityClientImpl) sendUpscaleRequest(ctx context.Context, provider *
 // Erase 物体消除
 func (c *stabilityClientImpl) Erase(ctx context.Context, provider *entities.Provider, request *StabilityEraseRequest) (*StabilityImageResponse, error) {
 	url := fmt.Sprintf("%s/sd/v2beta/stable-image/edit/erase", provider.BaseURL)
-	return c.sendEditRequest(ctx, provider, url, request)
+	return c.sendMultipartRequest(ctx, provider, url, request)
 }
 
 // Inpaint 图片修改
@@ -599,21 +599,59 @@ func (c *stabilityClientImpl) sendEditRequest(ctx context.Context, provider *ent
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	fmt.Printf("[INFO] 收到API响应: status_code=%d, response_length=%d, response_body=%s\n",
-		resp.StatusCode, len(responseBody), string(responseBody))
+	fmt.Printf("[INFO] 收到API响应: status_code=%d, response_length=%d\n",
+		resp.StatusCode, len(responseBody))
+
+	// 输出完整的响应头信息
+	fmt.Printf("[INFO] 响应头信息:\n")
+	for key, values := range resp.Header {
+		for _, value := range values {
+			fmt.Printf("  %s: %s\n", key, value)
+		}
+	}
+
+	// 检查响应内容类型
+	contentType := resp.Header.Get("Content-Type")
+	fmt.Printf("[INFO] 响应Content-Type: %s, response_length=%d\n", contentType, len(responseBody))
+
+	// 打印响应的详细信息
+	if len(responseBody) > 0 {
+		// 打印前100字节
+		preview := responseBody
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+		fmt.Printf("[DEBUG] 响应前100字节: %v\n", preview)
+		fmt.Printf("[DEBUG] 响应前100字节(字符串): %q\n", string(preview))
+
+		// 如果响应看起来像JSON，打印完整内容
+		if len(responseBody) < 10000 && (responseBody[0] == '{' || responseBody[0] == '[') {
+			fmt.Printf("[DEBUG] 完整JSON响应: %s\n", string(responseBody))
+		}
+
+		// 如果是图片，打印图片信息
+		if responseBody[0] == 0x89 && len(responseBody) > 3 {
+			fmt.Printf("[DEBUG] PNG图片信息: 文件大小=%d字节\n", len(responseBody))
+		}
+	}
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("[ERROR] API请求失败: status_code=%d, response_body=%s, url=%s\n",
-			resp.StatusCode, string(responseBody), url)
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(responseBody))
+		fmt.Printf("[ERROR] API请求失败: status_code=%d, url=%s\n",
+			resp.StatusCode, url)
+		return nil, fmt.Errorf("API request failed with status %d", resp.StatusCode)
 	}
 
-	var response StabilityImageResponse
-	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
+	// 将图片转换为base64放在Image字段中传回给用户（与背景消除接口一致）
+	fmt.Printf("[INFO] 将图片转换为base64，原始长度: %d字节\n", len(responseBody))
 
-	return &response, nil
+	base64Image := base64.StdEncoding.EncodeToString(responseBody)
+	fmt.Printf("[INFO] base64转换完成，长度: %d字符\n", len(base64Image))
+
+	return &StabilityImageResponse{
+		FinishReason: "SUCCESS",
+		Image:        base64Image,
+		Seed:         0,
+	}, nil
 }
 
 // sendMultipartRequest 发送multipart/form-data请求的方法
@@ -645,6 +683,52 @@ func (c *stabilityClientImpl) sendMultipartRequest(ctx context.Context, provider
 			_, err = part.Write(imageData)
 			if err != nil {
 				return nil, fmt.Errorf("failed to write image data: %w", err)
+			}
+		}
+
+		// 添加其他字段
+		if req.OutputFormat != "" {
+			writer.WriteField("output_format", req.OutputFormat)
+		}
+
+	case *StabilityEraseRequest:
+		// 添加图片文件 - Image字段包含base64编码的图片数据
+		if req.Image != "" {
+			// 解码base64图片数据
+			imageData, err := base64.StdEncoding.DecodeString(req.Image)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode base64 image: %w", err)
+			}
+
+			part, err := writer.CreateFormFile("image", "image.png")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create form file: %w", err)
+			}
+
+			// 写入解码后的图片数据
+			_, err = part.Write(imageData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write image data: %w", err)
+			}
+		}
+
+		// 添加遮罩文件 - Mask字段包含base64编码的遮罩数据
+		if req.Mask != "" {
+			// 解码base64遮罩数据
+			maskData, err := base64.StdEncoding.DecodeString(req.Mask)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode base64 mask: %w", err)
+			}
+
+			part, err := writer.CreateFormFile("mask", "mask.png")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create form file for mask: %w", err)
+			}
+
+			// 写入解码后的遮罩数据
+			_, err = part.Write(maskData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write mask data: %w", err)
 			}
 		}
 
