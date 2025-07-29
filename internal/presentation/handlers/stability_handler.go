@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"io"
@@ -287,6 +288,22 @@ func (h *StabilityHandler) handleGenericRequest(c *gin.Context, requestType stri
 	userID := c.GetInt64("user_id")
 	apiKeyID := c.GetInt64("api_key_id")
 
+	// 添加原始请求体的调试日志
+	if requestType == "erase" {
+		// 读取原始请求体
+		bodyBytes, _ := c.GetRawData()
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+			"request_type": requestType,
+			"raw_body":     string(bodyBytes),
+			"body_length":  len(bodyBytes),
+		}).Info("Raw request body for erase")
+
+		// 重新设置请求体，因为GetRawData()会消耗它
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+
 	request, err := bindFunc()
 	if err != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -303,6 +320,20 @@ func (h *StabilityHandler) handleGenericRequest(c *gin.Context, requestType stri
 			},
 		})
 		return
+	}
+
+	// 添加解析成功后的请求内容日志
+	if requestType == "erase" {
+		if eraseReq, ok := request.(*clients.StabilityEraseRequest); ok {
+			h.logger.WithFields(map[string]interface{}{
+				"user_id":       userID,
+				"api_key_id":    apiKeyID,
+				"request_type":  requestType,
+				"image_length":  len(eraseReq.Image),
+				"mask_length":   len(eraseReq.Mask),
+				"output_format": eraseReq.OutputFormat,
+			}).Info("Parsed erase request successfully")
+		}
 	}
 
 	h.logger.WithFields(map[string]interface{}{
@@ -475,15 +506,180 @@ func (h *StabilityHandler) FetchCreativeUpscale(c *gin.Context) {
 
 // 图片编辑处理器方法
 func (h *StabilityHandler) Erase(c *gin.Context) {
-	h.handleGenericRequest(c, "erase",
-		func() (interface{}, error) {
-			var req clients.StabilityEraseRequest
-			err := c.ShouldBindJSON(&req)
-			return &req, err
-		},
-		func(ctx context.Context, userID, apiKeyID int64, req interface{}) (*clients.StabilityImageResponse, error) {
-			return h.stabilityService.Erase(ctx, userID, apiKeyID, req.(*clients.StabilityEraseRequest))
+	userID := c.GetInt64("user_id")
+	apiKeyID := c.GetInt64("api_key_id")
+
+	// 解析multipart form
+	err := c.Request.ParseMultipartForm(32 << 20) // 32MB max
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to parse multipart form")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Failed to parse multipart form: " + err.Error(),
+			},
 		})
+		return
+	}
+
+	// 获取图片文件
+	imageFile, _, err := c.Request.FormFile("image")
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to get image file")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Image file is required",
+			},
+		})
+		return
+	}
+	defer imageFile.Close()
+
+	// 读取图片数据
+	imageData, err := io.ReadAll(imageFile)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to read image data")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Failed to read image data: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 获取遮罩文件
+	maskFile, _, err := c.Request.FormFile("mask")
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to get mask file")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Mask file is required",
+			},
+		})
+		return
+	}
+	defer maskFile.Close()
+
+	// 读取遮罩数据
+	maskData, err := io.ReadAll(maskFile)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to read mask data")
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "INVALID_REQUEST",
+				"message": "Failed to read mask data: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 转换为base64
+	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+	maskBase64 := base64.StdEncoding.EncodeToString(maskData)
+
+	// 获取其他参数
+	outputFormat := c.Request.FormValue("output_format")
+
+	// 构造请求
+	request := &clients.StabilityEraseRequest{
+		Image:        imageBase64,
+		Mask:         maskBase64,
+		OutputFormat: outputFormat,
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":       userID,
+		"api_key_id":    apiKeyID,
+		"image_size":    len(imageData),
+		"mask_size":     len(maskData),
+		"output_format": outputFormat,
+	}).Info("Processing erase request")
+
+	// 调用服务
+	response, err := h.stabilityService.Erase(c.Request.Context(), userID, apiKeyID, request)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Error("Failed to erase object")
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"code":    "PROCESSING_FAILED",
+				"message": "Failed to erase object: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 检查是否是编辑接口的响应（有Image字段但没有Artifacts）
+	if response.Image != "" && len(response.Artifacts) == 0 {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":       userID,
+			"api_key_id":    apiKeyID,
+			"image_length":  len(response.Image),
+			"finish_reason": response.FinishReason,
+			"seed":          response.Seed,
+		}).Info("Returning erase response with base64 image")
+
+		// 返回编辑接口的JSON格式响应
+		c.JSON(http.StatusOK, gin.H{
+			"finish_reason": response.FinishReason,
+			"image":         response.Image,
+			"seed":          response.Seed,
+		})
+		return
+	}
+
+	// 如果是其他格式，按原来的方式处理
+	stabilityResponse := StabilityResponse{
+		Artifacts: make([]StabilityArtifact, len(response.Artifacts)),
+	}
+
+	for i, artifact := range response.Artifacts {
+		stabilityResponse.Artifacts[i] = StabilityArtifact{
+			Base64:       artifact.Base64,
+			Seed:         artifact.Seed,
+			FinishReason: artifact.FinishReason,
+		}
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":         userID,
+		"api_key_id":      apiKeyID,
+		"artifacts_count": len(stabilityResponse.Artifacts),
+	}).Info("Successfully erased object")
+
+	c.JSON(http.StatusOK, stabilityResponse)
 }
 
 func (h *StabilityHandler) Inpaint(c *gin.Context) {
