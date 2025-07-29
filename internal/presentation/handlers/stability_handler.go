@@ -634,7 +634,26 @@ func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
 		return
 	}
 
-	// 转换响应格式
+	// 检查是否是背景移除等编辑接口的响应（有Image字段但没有Artifacts）
+	if response.Image != "" && len(response.Artifacts) == 0 {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":       userID,
+			"api_key_id":    apiKeyID,
+			"image_length":  len(response.Image),
+			"finish_reason": response.FinishReason,
+			"seed":          response.Seed,
+		}).Info("Returning edit response with base64 image")
+
+		// 返回编辑接口的JSON格式响应
+		c.JSON(http.StatusOK, gin.H{
+			"finish_reason": response.FinishReason,
+			"image":         response.Image,
+			"seed":          response.Seed,
+		})
+		return
+	}
+
+	// 转换响应格式（用于其他类型的响应）
 	stabilityResponse := StabilityResponse{
 		Artifacts: make([]StabilityArtifact, len(response.Artifacts)),
 	}

@@ -337,7 +337,7 @@ func NewAIProviderClient(httpClient HTTPClient) AIProviderClient {
 // SendRequest 发送请求到AI提供商
 func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entities.Provider, request *AIRequest) (*AIResponse, error) {
 	// 构造请求URL
-	url := fmt.Sprintf("%s/chat/completions", provider.BaseURL)
+	url := fmt.Sprintf("%s/v1/chat/completions", provider.BaseURL)
 
 	// 构造请求头
 	headers := map[string]string{
@@ -525,7 +525,7 @@ func (c *aiProviderClientImpl) SendStreamRequest(ctx context.Context, provider *
 	request.Stream = true
 
 	// 构造请求URL
-	url := fmt.Sprintf("%s/chat/completions", provider.BaseURL)
+	url := fmt.Sprintf("%s/v1/chat/completions", provider.BaseURL)
 
 	// 构造请求头
 	headers := map[string]string{
