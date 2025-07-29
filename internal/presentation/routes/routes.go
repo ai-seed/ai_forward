@@ -138,6 +138,7 @@ func (r *Router) SetupRoutes() {
 		r.logger,
 	)
 	stabilityHandler := handlers.NewStabilityHandler(r.serviceFactory.StabilityService(), r.logger)
+	vectorizerHandler := handlers.NewVectorizerHandler(r.serviceFactory.VectorizerService(), r.logger)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
@@ -380,6 +381,19 @@ func (r *Router) SetupRoutes() {
 				edit.POST("/style-transfer", stabilityHandler.StyleTransfer)
 				edit.POST("/replace-background", stabilityHandler.ReplaceBackground)
 			}
+		}
+	}
+
+	// Vectorizer API路由
+	vectorizer := r.engine.Group("/vectorizer")
+	vectorizer.Use(authMiddleware.Authenticate())
+	vectorizer.Use(rateLimitMiddleware.RateLimit())
+	vectorizer.Use(quotaMiddleware.CheckQuota())
+	vectorizer.Use(quotaMiddleware.ConsumeQuota())
+	{
+		vectorizerV1 := vectorizer.Group("/api/v1")
+		{
+			vectorizerV1.POST("/vectorize", vectorizerHandler.Vectorize)
 		}
 	}
 

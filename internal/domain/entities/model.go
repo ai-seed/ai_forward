@@ -32,7 +32,7 @@ type Model struct {
 	DisplayName       *string     `json:"display_name,omitempty" gorm:"size:200"`
 	Description       *string     `json:"description,omitempty" gorm:"type:text"`
 	ModelType         ModelType   `json:"model_type" gorm:"not null;size:50;index"`
-	ProviderID        int64       `json:"provider_id" gorm:"not null;index"` // 厂商ID
+	ModelProviderID   int64       `json:"model_provider_id" gorm:"not null;index"` // 模型厂商ID（指向model_providers表）
 	ContextLength     *int        `json:"context_length,omitempty"`
 	MaxTokens         *int        `json:"max_tokens,omitempty"`
 	SupportsStreaming bool        `json:"supports_streaming" gorm:"not null;default:false"`
@@ -42,7 +42,7 @@ type Model struct {
 	UpdatedAt         time.Time   `json:"updated_at" gorm:"not null;autoUpdateTime"`
 
 	// 关联关系（不使用外键约束，通过代码逻辑控制）
-	Provider *ModelProvider `json:"provider,omitempty" gorm:"-"`
+	ModelProvider *ModelProvider `json:"model_provider,omitempty" gorm:"-"`
 }
 
 // TableName 指定表名

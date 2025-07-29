@@ -220,9 +220,9 @@ func (r *modelRepositoryGorm) loadProvidersForModels(ctx context.Context, models
 	providerIDs := make([]int64, 0)
 	providerIDSet := make(map[int64]bool)
 	for _, model := range models {
-		if !providerIDSet[model.ProviderID] {
-			providerIDs = append(providerIDs, model.ProviderID)
-			providerIDSet[model.ProviderID] = true
+		if !providerIDSet[model.ModelProviderID] {
+			providerIDs = append(providerIDs, model.ModelProviderID)
+			providerIDSet[model.ModelProviderID] = true
 		}
 	}
 
@@ -242,8 +242,8 @@ func (r *modelRepositoryGorm) loadProvidersForModels(ctx context.Context, models
 
 	// 为每个模型设置厂商信息
 	for _, model := range models {
-		if provider, exists := providerMap[model.ProviderID]; exists {
-			model.Provider = provider
+		if provider, exists := providerMap[model.ModelProviderID]; exists {
+			model.ModelProvider = provider
 		}
 	}
 

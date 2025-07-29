@@ -376,13 +376,13 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 
 		// 构建厂商信息（如果厂商信息存在）
 		var providerInfo map[string]interface{}
-		if model.Provider != nil {
+		if model.ModelProvider != nil {
 			providerInfo = map[string]interface{}{
-				"id":           model.Provider.ID,
-				"name":         model.Provider.Name,
-				"display_name": model.Provider.DisplayName,
-				"color":        model.Provider.Color,
-				"sort_order":   model.Provider.SortOrder,
+				"id":           model.ModelProvider.ID,
+				"name":         model.ModelProvider.Name,
+				"display_name": model.ModelProvider.DisplayName,
+				"color":        model.ModelProvider.Color,
+				"sort_order":   model.ModelProvider.SortOrder,
 			}
 		} else {
 			// 如果厂商信息不存在，提供默认值

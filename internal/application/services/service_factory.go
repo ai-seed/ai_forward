@@ -288,6 +288,29 @@ func (f *ServiceFactory) StabilityService() StabilityService {
 	)
 }
 
+// VectorizerService 获取Vectorizer服务
+func (f *ServiceFactory) VectorizerService() VectorizerService {
+	// 创建HTTP客户端
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second, // 矢量化可能需要更长时间
+	}
+
+	// 创建Vectorizer客户端
+	vectorizerClient := clients.NewVectorizerClient(httpClient)
+
+	return NewVectorizerService(
+		vectorizerClient,
+		f.repoFactory.ProviderRepository(),
+		f.repoFactory.ModelRepository(),
+		f.repoFactory.APIKeyRepository(),
+		f.repoFactory.UserRepository(),
+		f.repoFactory.ProviderModelSupportRepository(),
+		f.BillingService(),
+		f.UsageLogService(),
+		f.logger,
+	)
+}
+
 // isAsyncQuotaEnabled 检查是否启用异步配额处理
 func (f *ServiceFactory) isAsyncQuotaEnabled() bool {
 	// 暂时硬编码返回true来启用异步处理

@@ -154,7 +154,7 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 		"model_id":          model.ID,
 		"model_slug":        model.Slug,
 		"model_name":        model.Name,
-		"model_provider_id": model.ProviderID,
+		"model_provider_id": model.ModelProviderID,
 		"model_available":   model.IsAvailable(),
 	}).Info("获取到模型信息")
 
