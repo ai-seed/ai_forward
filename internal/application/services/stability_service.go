@@ -52,14 +52,15 @@ type StabilityService interface {
 
 // stabilityServiceImpl Stability.ai服务实现
 type stabilityServiceImpl struct {
-	stabilityClient clients.StabilityClient
-	providerRepo    repositories.ProviderRepository
-	modelRepo       repositories.ModelRepository
-	apiKeyRepo      repositories.APIKeyRepository
-	userRepo        repositories.UserRepository
-	billingService  BillingService
-	usageLogService UsageLogService
-	logger          logger.Logger
+	stabilityClient          clients.StabilityClient
+	providerRepo             repositories.ProviderRepository
+	modelRepo                repositories.ModelRepository
+	apiKeyRepo               repositories.APIKeyRepository
+	userRepo                 repositories.UserRepository
+	providerModelSupportRepo repositories.ProviderModelSupportRepository
+	billingService           BillingService
+	usageLogService          UsageLogService
+	logger                   logger.Logger
 }
 
 // NewStabilityService 创建Stability.ai服务
@@ -69,19 +70,21 @@ func NewStabilityService(
 	modelRepo repositories.ModelRepository,
 	apiKeyRepo repositories.APIKeyRepository,
 	userRepo repositories.UserRepository,
+	providerModelSupportRepo repositories.ProviderModelSupportRepository,
 	billingService BillingService,
 	usageLogService UsageLogService,
 	logger logger.Logger,
 ) StabilityService {
 	return &stabilityServiceImpl{
-		stabilityClient: stabilityClient,
-		providerRepo:    providerRepo,
-		modelRepo:       modelRepo,
-		apiKeyRepo:      apiKeyRepo,
-		userRepo:        userRepo,
-		billingService:  billingService,
-		usageLogService: usageLogService,
-		logger:          logger,
+		stabilityClient:          stabilityClient,
+		providerRepo:             providerRepo,
+		modelRepo:                modelRepo,
+		apiKeyRepo:               apiKeyRepo,
+		userRepo:                 userRepo,
+		providerModelSupportRepo: providerModelSupportRepo,
+		billingService:           billingService,
+		usageLogService:          usageLogService,
+		logger:                   logger,
 	}
 }
 
@@ -101,44 +104,81 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 		"endpoint":   endpoint,
 	}).Info("开始处理Stability.ai请求")
 
-	// 查找Stability.ai提供商
-	providers, err := s.providerRepo.GetActiveProviders(ctx)
+	// 通过ProviderModelSupport查询支持该模型的提供商
+	supportInfos, err := s.providerModelSupportRepo.GetSupportingProviders(ctx, modelSlug)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"error": err.Error(),
-		}).Error("获取提供商列表失败")
-		return nil, fmt.Errorf("failed to get providers: %w", err)
+			"error":      err.Error(),
+			"model_slug": modelSlug,
+		}).Error("获取支持该模型的提供商失败")
+		return nil, fmt.Errorf("failed to get supporting providers for model %s: %w", modelSlug, err)
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"provider_count": len(providers),
-	}).Info("获取到提供商列表")
+		"model_slug":      modelSlug,
+		"providers_count": len(supportInfos),
+	}).Info("获取到支持该模型的提供商列表")
 
-	var stabilityProvider *entities.Provider
-	for _, provider := range providers {
+	if len(supportInfos) == 0 {
 		s.logger.WithFields(map[string]interface{}{
-			"provider_id":   provider.ID,
-			"provider_name": provider.Name,
-			"provider_slug": provider.Slug,
-			"provider_url":  provider.BaseURL,
-		}).Debug("检查提供商")
+			"model_slug": modelSlug,
+		}).Error("没有提供商支持该模型")
+		return nil, fmt.Errorf("no providers support model: %s", modelSlug)
+	}
 
-		if provider.ID == 1 || provider.Name == "Stability.ai" {
-			stabilityProvider = provider
+	// 选择第一个可用的提供商（按优先级排序）
+	var selectedProvider *entities.Provider
+	var selectedModelInfo *entities.ModelSupportInfo
+	for i, info := range supportInfos {
+		s.logger.WithFields(map[string]interface{}{
+			"provider_id":      info.Provider.ID,
+			"provider_name":    info.Provider.Name,
+			"provider_slug":    info.Provider.Slug,
+			"provider_url":     info.Provider.BaseURL,
+			"provider_status":  info.Provider.Status,
+			"provider_health":  info.Provider.HealthStatus,
+			"support_enabled":  info.Enabled,
+			"support_priority": info.Priority,
+			"upstream_model":   info.UpstreamModelName,
+			"index":            i,
+		}).Debug("检查提供商可用性")
+
+		if info.Provider.IsAvailable() && info.Enabled {
+			selectedProvider = info.Provider
+			selectedModelInfo = info
+			s.logger.WithFields(map[string]interface{}{
+				"provider_id":      info.Provider.ID,
+				"provider_name":    info.Provider.Name,
+				"provider_slug":    info.Provider.Slug,
+				"provider_url":     info.Provider.BaseURL,
+				"upstream_model":   info.UpstreamModelName,
+				"support_priority": info.Priority,
+			}).Info("选择了可用的提供商")
 			break
+		} else {
+			s.logger.WithFields(map[string]interface{}{
+				"provider_id":     info.Provider.ID,
+				"provider_name":   info.Provider.Name,
+				"provider_status": info.Provider.Status,
+				"provider_health": info.Provider.HealthStatus,
+				"support_enabled": info.Enabled,
+			}).Warn("提供商不可用，跳过")
 		}
 	}
 
-	if stabilityProvider == nil {
-		s.logger.Error("未找到Stability.ai提供商")
-		return nil, fmt.Errorf("Stability.ai provider not found or not active")
+	if selectedProvider == nil {
+		s.logger.WithFields(map[string]interface{}{
+			"model_slug": modelSlug,
+		}).Error("没有可用的提供商支持该模型")
+		return nil, fmt.Errorf("no available providers for model: %s", modelSlug)
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"provider_id":   stabilityProvider.ID,
-		"provider_name": stabilityProvider.Name,
-		"provider_url":  stabilityProvider.BaseURL,
-	}).Info("找到Stability.ai提供商")
+		"provider_id":    selectedProvider.ID,
+		"provider_name":  selectedProvider.Name,
+		"provider_url":   selectedProvider.BaseURL,
+		"upstream_model": selectedModelInfo.UpstreamModelName,
+	}).Info("找到可用的提供商")
 
 	// 根据模型slug获取模型信息
 	model, err := s.modelRepo.GetBySlug(ctx, modelSlug)
@@ -168,22 +208,22 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":      userID,
 		"api_key_id":   apiKeyID,
-		"provider_id":  stabilityProvider.ID,
-		"provider_url": stabilityProvider.BaseURL,
+		"provider_id":  selectedProvider.ID,
+		"provider_url": selectedProvider.BaseURL,
 		"model_id":     model.ID,
 		"model_slug":   model.Slug,
 		"endpoint":     endpoint,
 	}).Info("准备发送请求到Stability.ai")
 
 	// 调用客户端方法
-	response, err := clientFunc(stabilityProvider)
+	response, err := clientFunc(selectedProvider)
 	if err != nil {
 		s.logger.WithFields(map[string]interface{}{
 			"error":        err.Error(),
 			"user_id":      userID,
 			"api_key_id":   apiKeyID,
-			"provider_id":  stabilityProvider.ID,
-			"provider_url": stabilityProvider.BaseURL,
+			"provider_id":  selectedProvider.ID,
+			"provider_url": selectedProvider.BaseURL,
 			"model_slug":   model.Slug,
 			"endpoint":     endpoint,
 		}).Error("调用Stability.ai API失败")
@@ -207,7 +247,7 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 		usageLog := &entities.UsageLog{
 			UserID:       userID,
 			APIKeyID:     apiKeyID,
-			ProviderID:   stabilityProvider.ID,
+			ProviderID:   selectedProvider.ID,
 			ModelID:      model.ID,
 			RequestID:    fmt.Sprintf("stability-%d", time.Now().UnixNano()),
 			RequestType:  entities.RequestTypeAPI,
@@ -242,7 +282,7 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":         userID,
 		"api_key_id":      apiKeyID,
-		"provider_id":     stabilityProvider.ID,
+		"provider_id":     selectedProvider.ID,
 		"artifacts_count": len(response.Artifacts),
 		"endpoint":        endpoint,
 	}).Info("Successfully processed Stability.ai request")
