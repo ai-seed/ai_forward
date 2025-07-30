@@ -322,6 +322,16 @@ func (f *ServiceFactory) AI302Service() AI302Service {
 	// 创建302.AI客户端
 	ai302Client := clients.NewAI302Client(httpClient)
 
+	// 创建S3服务
+	s3Service, err := storage.NewS3Service(&f.config.S3, f.logger)
+	if err != nil {
+		f.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to create S3 service for AI302Service")
+		// 返回一个禁用的服务
+		s3Service, _ = storage.NewS3Service(&config.S3Config{Enabled: false}, f.logger)
+	}
+
 	return NewAI302Service(
 		ai302Client,
 		f.repoFactory.ProviderRepository(),
@@ -329,6 +339,7 @@ func (f *ServiceFactory) AI302Service() AI302Service {
 		f.repoFactory.ModelPricingRepository(),
 		f.repoFactory.ProviderModelSupportRepository(),
 		f.repoFactory.UsageLogRepository(),
+		s3Service,
 		f.logger,
 	)
 }

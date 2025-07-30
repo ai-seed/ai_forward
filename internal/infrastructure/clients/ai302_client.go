@@ -42,7 +42,7 @@ type AI302UpscaleResponse struct {
 	CreatedAt   string `json:"created_at"`
 	StartedAt   string `json:"started_at"`
 	CompletedAt string `json:"completed_at"`
-	Output      string `json:"output"` // base64编码的处理后图片
+	Output      string `json:"output"` // url
 	Error       string `json:"error,omitempty"`
 }
 

@@ -3,12 +3,16 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/logger"
+	"ai-api-gateway/internal/infrastructure/storage"
 )
 
 // AI302Service 302.AI服务接口
@@ -25,6 +29,7 @@ type ai302ServiceImpl struct {
 	modelPricingRepo         repositories.ModelPricingRepository
 	providerModelSupportRepo repositories.ProviderModelSupportRepository
 	usageLogRepo             repositories.UsageLogRepository
+	s3Service                storage.S3Service
 	logger                   logger.Logger
 }
 
@@ -36,6 +41,7 @@ func NewAI302Service(
 	modelPricingRepo repositories.ModelPricingRepository,
 	providerModelSupportRepo repositories.ProviderModelSupportRepository,
 	usageLogRepo repositories.UsageLogRepository,
+	s3Service storage.S3Service,
 	logger logger.Logger,
 ) AI302Service {
 	return &ai302ServiceImpl{
@@ -45,6 +51,7 @@ func NewAI302Service(
 		modelPricingRepo:         modelPricingRepo,
 		providerModelSupportRepo: providerModelSupportRepo,
 		usageLogRepo:             usageLogRepo,
+		s3Service:                s3Service,
 		logger:                   logger,
 	}
 }
@@ -186,5 +193,77 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 		"status":     response.Status,
 	}).Info("Successfully processed 302.AI request")
 
+	// 如果响应成功且有Output URL，下载并上传到OSS
+	if response != nil && response.Output != "" && response.Status == "completed" {
+		if s.s3Service.IsEnabled() {
+			newURL, err := s.downloadAndUploadToOSS(ctx, response.Output)
+			if err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"error":        err.Error(),
+					"original_url": response.Output,
+				}).Warn("Failed to upload output to OSS, using original URL")
+			} else {
+				s.logger.WithFields(map[string]interface{}{
+					"original_url": response.Output,
+					"new_url":      newURL,
+				}).Info("Successfully uploaded output to OSS")
+				response.Output = newURL
+			}
+		}
+	}
+
 	return response, nil
+}
+
+// downloadAndUploadToOSS 下载URL内容并上传到OSS
+func (s *ai302ServiceImpl) downloadAndUploadToOSS(ctx context.Context, url string) (string, error) {
+	// 下载文件
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to download file from URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download file, status code: %d", resp.StatusCode)
+	}
+
+	// 获取文件扩展名
+	filename := s.extractFilenameFromURL(url)
+	if filename == "" {
+		filename = "ai302_output.png" // 默认文件名
+	}
+
+	// 获取Content-Type
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png" // 默认为PNG图片
+	}
+
+	// 上传到S3
+	result, err := s.s3Service.UploadFile(ctx, filename, contentType, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file to OSS: %w", err)
+	}
+
+	return result.URL, nil
+}
+
+// extractFilenameFromURL 从URL中提取文件名
+func (s *ai302ServiceImpl) extractFilenameFromURL(url string) string {
+	// 从URL中提取文件名
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		filename := parts[len(parts)-1]
+		// 如果文件名包含查询参数，去掉它们
+		if idx := strings.Index(filename, "?"); idx != -1 {
+			filename = filename[:idx]
+		}
+		// 如果没有扩展名，添加.png
+		if filepath.Ext(filename) == "" {
+			filename += ".png"
+		}
+		return filename
+	}
+	return ""
 }
