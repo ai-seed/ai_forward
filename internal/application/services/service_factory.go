@@ -312,6 +312,27 @@ func (f *ServiceFactory) VectorizerService() VectorizerService {
 	)
 }
 
+// AI302Service 获取302.AI服务
+func (f *ServiceFactory) AI302Service() AI302Service {
+	// 创建HTTP客户端
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second, // 302.AI图片处理需要8-10秒，设置较长超时
+	}
+
+	// 创建302.AI客户端
+	ai302Client := clients.NewAI302Client(httpClient)
+
+	return NewAI302Service(
+		ai302Client,
+		f.repoFactory.ProviderRepository(),
+		f.repoFactory.ModelRepository(),
+		f.repoFactory.ModelPricingRepository(),
+		f.repoFactory.ProviderModelSupportRepository(),
+		f.repoFactory.UsageLogRepository(),
+		f.logger,
+	)
+}
+
 // isAsyncQuotaEnabled 检查是否启用异步配额处理
 func (f *ServiceFactory) isAsyncQuotaEnabled() bool {
 	// 暂时硬编码返回true来启用异步处理

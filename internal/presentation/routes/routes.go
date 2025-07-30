@@ -139,6 +139,7 @@ func (r *Router) SetupRoutes() {
 	)
 	stabilityHandler := handlers.NewStabilityHandler(r.serviceFactory.StabilityService(), r.logger)
 	vectorizerHandler := handlers.NewVectorizerHandler(r.serviceFactory.VectorizerService(), r.logger)
+	ai302Handler := handlers.NewAI302Handler(r.serviceFactory.AI302Service(), r.logger)
 
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
@@ -381,6 +382,20 @@ func (r *Router) SetupRoutes() {
 				edit.POST("/style-transfer", stabilityHandler.StyleTransfer)
 				edit.POST("/replace-background", stabilityHandler.ReplaceBackground)
 			}
+		}
+	}
+
+	// 302.AI API路由
+	ai302 := r.engine.Group("/ai")
+	ai302.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
+	{
+		// 图片处理路由（需要认证和配额检查）
+		ai302.Use(authMiddleware.Authenticate())
+		ai302.Use(rateLimitMiddleware.RateLimit())
+		ai302.Use(quotaMiddleware.CheckQuota())
+		ai302.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		{
+			ai302.POST("/upscale", ai302Handler.Upscale)
 		}
 	}
 
