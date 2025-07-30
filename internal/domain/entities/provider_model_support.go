@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// ProviderModelSupport 提供商模型支持实体，只是作为工具分类使用，不是模型关联服务商的表
+// ProviderModelSupport 提供商模型支持实体，模型关联服务商的中间表
 type ProviderModelSupport struct {
 	ID                int64     `json:"id" gorm:"primaryKey;autoIncrement"`
 	ProviderID        int64     `json:"provider_id" gorm:"not null;index"`
