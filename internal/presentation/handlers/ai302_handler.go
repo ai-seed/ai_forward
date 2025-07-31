@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	_ "ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/logger"
