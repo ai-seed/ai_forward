@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"mime"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/logger"
+	"ai-api-gateway/internal/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -113,21 +113,18 @@ func (s *s3ServiceImpl) UploadFile(ctx context.Context, filename string, content
 		return nil, fmt.Errorf("S3 service is not enabled")
 	}
 
+	// 如果没有提供contentType，尝试从文件名推断
+	if contentType == "" {
+		contentType = utils.InferMimeType(filename)
+	}
+
 	// 验证文件类型
-	if !s.isAllowedType(contentType) {
+	if !utils.IsAllowedFileType(contentType, s.config.AllowedTypes) {
 		return nil, fmt.Errorf("file type %s is not allowed", contentType)
 	}
 
 	// 生成唯一的文件键
-	key := s.generateFileKey(filename)
-
-	// 如果没有提供contentType，尝试从文件名推断
-	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-	}
+	key := utils.GenerateFileKey(filename)
 
 	// 上传文件到S3
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
@@ -243,14 +240,14 @@ func (s *s3ServiceImpl) isAllowedType(contentType string) bool {
 func (s *s3ServiceImpl) generateFileKey(filename string) string {
 	// 生成UUID作为唯一标识
 	id := uuid.New().String()
-	
+
 	// 获取文件扩展名
 	ext := filepath.Ext(filename)
-	
+
 	// 生成日期路径
 	now := time.Now()
 	datePath := fmt.Sprintf("%d/%02d/%02d", now.Year(), now.Month(), now.Day())
-	
+
 	// 组合最终的键
 	return fmt.Sprintf("uploads/%s/%s%s", datePath, id, ext)
 }

@@ -1,8 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -194,8 +196,18 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 	}).Info("Successfully processed 302.AI request")
 
 	// 如果响应成功且有Output URL，下载并上传到OSS
-	if response != nil && response.Output != "" && response.Status == "completed" {
+	if response != nil && response.Output != "" && (response.Status == "completed" || response.Status == "succeeded") {
+		s.logger.WithFields(map[string]interface{}{
+			"response_status": response.Status,
+			"output_url":      response.Output,
+			"s3_enabled":      s.s3Service.IsEnabled(),
+		}).Info("Checking if should upload to OSS")
+
 		if s.s3Service.IsEnabled() {
+			s.logger.WithFields(map[string]interface{}{
+				"original_url": response.Output,
+			}).Info("Starting upload to OSS")
+
 			newURL, err := s.downloadAndUploadToOSS(ctx, response.Output)
 			if err != nil {
 				s.logger.WithFields(map[string]interface{}{
@@ -209,7 +221,19 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 				}).Info("Successfully uploaded output to OSS")
 				response.Output = newURL
 			}
+		} else {
+			s.logger.Info("S3 service is not enabled, skipping OSS upload")
 		}
+	} else {
+		var status string
+		if response != nil {
+			status = response.Status
+		}
+		s.logger.WithFields(map[string]interface{}{
+			"response_nil": response == nil,
+			"output_empty": response != nil && response.Output == "",
+			"status":       status,
+		}).Info("Skipping OSS upload - conditions not met")
 	}
 
 	return response, nil
@@ -217,14 +241,33 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 
 // downloadAndUploadToOSS 下载URL内容并上传到OSS
 func (s *ai302ServiceImpl) downloadAndUploadToOSS(ctx context.Context, url string) (string, error) {
+	s.logger.WithFields(map[string]interface{}{
+		"url": url,
+	}).Info("Starting download from URL")
+
 	// 下载文件
 	resp, err := http.Get(url)
 	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"url":   url,
+			"error": err.Error(),
+		}).Error("Failed to download file from URL")
 		return "", fmt.Errorf("failed to download file from URL: %w", err)
 	}
 	defer resp.Body.Close()
 
+	s.logger.WithFields(map[string]interface{}{
+		"url":            url,
+		"status_code":    resp.StatusCode,
+		"content_type":   resp.Header.Get("Content-Type"),
+		"content_length": resp.Header.Get("Content-Length"),
+	}).Info("Download response received")
+
 	if resp.StatusCode != http.StatusOK {
+		s.logger.WithFields(map[string]interface{}{
+			"url":         url,
+			"status_code": resp.StatusCode,
+		}).Error("Download failed with non-200 status code")
 		return "", fmt.Errorf("failed to download file, status code: %d", resp.StatusCode)
 	}
 
@@ -240,11 +283,44 @@ func (s *ai302ServiceImpl) downloadAndUploadToOSS(ctx context.Context, url strin
 		contentType = "image/png" // 默认为PNG图片
 	}
 
-	// 上传到S3
-	result, err := s.s3Service.UploadFile(ctx, filename, contentType, resp.Body)
+	s.logger.WithFields(map[string]interface{}{
+		"filename":     filename,
+		"content_type": contentType,
+	}).Info("Preparing to upload to OSS")
+
+	// 读取响应体到内存中，避免流被重复读取的问题
+	imageData, err := io.ReadAll(resp.Body)
 	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+		}).Error("Failed to read response body")
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"actual_size":    len(imageData),
+		"content_length": resp.Header.Get("Content-Length"),
+	}).Info("Read image data from response")
+
+	// 创建新的读取器用于上传
+	imageReader := bytes.NewReader(imageData)
+
+	// 上传到S3
+	result, err := s.s3Service.UploadFile(ctx, filename, contentType, imageReader)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"filename":     filename,
+			"content_type": contentType,
+			"error":        err.Error(),
+		}).Error("Failed to upload file to OSS")
 		return "", fmt.Errorf("failed to upload file to OSS: %w", err)
 	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"filename":  filename,
+		"oss_url":   result.URL,
+		"file_size": result.Size,
+	}).Info("Successfully uploaded file to OSS")
 
 	return result.URL, nil
 }
