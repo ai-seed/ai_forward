@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ai-forward-web:latest
     container_name: ai-forward-web
     ports:
       - "8081:80"

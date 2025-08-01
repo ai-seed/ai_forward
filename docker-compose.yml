@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ai-forward-api:latest
     container_name: ai-forward-api
     ports:
       - "8080:8080"
