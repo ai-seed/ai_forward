@@ -9,8 +9,6 @@ GIT_REMOTE="origin"
 # 打印变量
 echo "分支: $BRANCH"
 echo "Git远程仓库: $GIT_REMOTE"
-echo "镜像名称: $NAME"
-echo "版本: $VERSION"
 
 
 echo "===> 步骤1/3: 从Git拉取最新代码..."
@@ -26,11 +24,9 @@ fi
 
 echo "===> 步骤2/3: 构建Docker镜像并启动容器..."
 
-# docker build -t "${NAME}:${VERSION}" .
 docker-compose up -d --build
-# sed -i '' "s|image:.*|image: ${NAME}:${VERSION}|" docker-compose.yml
 
-echo "✅ 镜像构建完成: ${NAME}:${VERSION}"
+echo "✅ 镜像构建完成"
 
 # 检查构建是否成功
 if [ $? -ne 0 ]; then
