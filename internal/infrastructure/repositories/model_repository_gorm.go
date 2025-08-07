@@ -7,6 +7,7 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
@@ -57,7 +58,8 @@ func (r *modelRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.
 	// 缓存模型信息（模型配置基本不变，缓存30分钟）
 	if r.cache != nil {
 		cacheKey := GetModelCacheKey(id)
-		ttl := 30 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelTTL()
 		r.cache.Set(ctx, cacheKey, &model, ttl)
 
 		// 同时缓存slug索引
@@ -90,7 +92,8 @@ func (r *modelRepositoryGorm) GetBySlug(ctx context.Context, slug string) (*enti
 
 	// 缓存模型信息
 	if r.cache != nil {
-		ttl := 30 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelTTL()
 
 		// 缓存slug索引
 		slugCacheKey := GetModelBySlugCacheKey(slug)
@@ -203,7 +206,8 @@ func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.
 	// 缓存活跃模型列表（模型列表变化不频繁，缓存15分钟）
 	if r.cache != nil {
 		cacheKey := CacheKeyActiveModels
-		ttl := 15 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelListTTL()
 		r.cache.Set(ctx, cacheKey, models, ttl)
 	}
 
@@ -273,7 +277,8 @@ func (r *modelRepositoryGorm) GetModelsByType(ctx context.Context, modelType ent
 	// 缓存按类型分组的模型列表
 	if r.cache != nil {
 		cacheKey := GetModelsByTypeCacheKey(string(modelType))
-		ttl := 15 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelListTTL()
 		r.cache.Set(ctx, cacheKey, models, ttl)
 	}
 
@@ -303,7 +308,8 @@ func (r *modelRepositoryGorm) GetAvailableModels(ctx context.Context) ([]*entiti
 	// 缓存可用模型列表
 	if r.cache != nil {
 		cacheKey := CacheKeyAvailableModels
-		ttl := 15 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelListTTL()
 		r.cache.Set(ctx, cacheKey, models, ttl)
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
@@ -415,7 +416,8 @@ func (r *usageLogRepositoryGorm) GetAPIKeyTotalCost(ctx context.Context, apiKeyI
 	// 缓存结果（缓存5分钟）
 	if r.cache != nil {
 		cacheKey := fmt.Sprintf("api_key_total_cost:%d", apiKeyID)
-		ttl := 5 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUsageLogTTL()
 		r.cache.Set(ctx, cacheKey, totalCost, ttl)
 	}
 

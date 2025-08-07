@@ -87,7 +87,7 @@ func main() {
 	}
 
 	// 执行数据库自动迁移
-	if err := database.InitializeDatabase(gormDB); err != nil {
+	if err := database.InitializeDatabase(gormDB, log); err != nil {
 		log.WithField("error", err.Error()).Fatal("Database initialization failed")
 	}
 

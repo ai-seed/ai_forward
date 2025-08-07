@@ -7,6 +7,7 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
@@ -57,7 +58,8 @@ func (r *quotaRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.
 	// 缓存配额信息（配额配置基本不变，缓存20分钟）
 	if r.cache != nil {
 		cacheKey := GetQuotaCacheKey(id)
-		ttl := 20 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetQuotaTTL()
 		r.cache.Set(ctx, cacheKey, &quota, ttl)
 	}
 
@@ -87,7 +89,8 @@ func (r *quotaRepositoryGorm) GetByAPIKeyID(ctx context.Context, apiKeyID int64)
 	// 缓存配额列表
 	if r.cache != nil {
 		cacheKey := GetQuotasByAPIKeyCacheKey(apiKeyID)
-		ttl := 15 * time.Minute // 配额列表缓存15分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserQuotaListTTL() // 配额列表缓存15分钟
 		r.cache.Set(ctx, cacheKey, quotas, ttl)
 	}
 
@@ -133,7 +136,8 @@ func (r *quotaRepositoryGorm) GetByAPIKeyAndType(ctx context.Context, apiKeyID i
 	// 缓存配额信息
 	if r.cache != nil {
 		cacheKey := GetQuotaByAPIKeyAndTypeCacheKey(apiKeyID, string(quotaType), periodStr)
-		ttl := 20 * time.Minute // 特定配额查询缓存20分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetQuotaTTL() // 特定配额查询缓存20分钟
 		r.cache.Set(ctx, cacheKey, &quota, ttl)
 
 		// 同时缓存ID索引
@@ -312,7 +316,8 @@ func (r *quotaUsageRepositoryGorm) GetByID(ctx context.Context, id int64) (*enti
 	// 缓存配额使用记录（使用记录变化较快，缓存5分钟）
 	if r.cache != nil {
 		cacheKey := GetQuotaUsageCacheKey(id)
-		ttl := 5 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetQuotaUsageTTL()
 		r.cache.Set(ctx, cacheKey, &usage, ttl)
 	}
 

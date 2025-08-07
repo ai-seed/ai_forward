@@ -7,9 +7,9 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
-	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
 
@@ -58,10 +58,8 @@ func (r *userRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities.U
 	// 缓存用户信息
 	if r.cache != nil {
 		cacheKey := GetUserCacheKey(id)
-		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-		if ttl == 0 {
-			ttl = 5 * time.Minute // 默认5分钟
-		}
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserTTL()
 		r.cache.Set(ctx, cacheKey, &user, ttl)
 	}
 
@@ -97,10 +95,8 @@ func (r *userRepositoryGorm) GetByUsername(ctx context.Context, username string)
 
 	// 缓存用户信息
 	if r.cache != nil {
-		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-		if ttl == 0 {
-			ttl = 5 * time.Minute // 默认5分钟
-		}
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserTTL()
 
 		// 缓存用户名索引
 		usernameCacheKey := GetUserByUsernameCacheKey(username)
@@ -136,10 +132,8 @@ func (r *userRepositoryGorm) GetByEmail(ctx context.Context, email string) (*ent
 
 	// 缓存用户信息
 	if r.cache != nil {
-		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-		if ttl == 0 {
-			ttl = 5 * time.Minute // 默认5分钟
-		}
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserTTL()
 
 		// 缓存邮箱索引
 		emailCacheKey := GetUserByEmailCacheKey(email)
@@ -175,10 +169,8 @@ func (r *userRepositoryGorm) GetByGoogleID(ctx context.Context, googleID string)
 
 	// 缓存用户信息
 	if r.cache != nil {
-		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-		if ttl == 0 {
-			ttl = 5 * time.Minute // 默认5分钟
-		}
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserTTL()
 
 		// 缓存Google ID索引
 		googleIDCacheKey := GetUserByGoogleIDCacheKey(googleID)
@@ -214,10 +206,8 @@ func (r *userRepositoryGorm) GetByGitHubID(ctx context.Context, githubID string)
 
 	// 缓存用户信息
 	if r.cache != nil {
-		ttl := time.Duration(viper.GetInt("cache.user_ttl")) * time.Second
-		if ttl == 0 {
-			ttl = 5 * time.Minute // 默认5分钟
-		}
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetUserTTL()
 
 		// 缓存GitHub ID索引
 		githubIDCacheKey := GetUserByGitHubIDCacheKey(githubID)

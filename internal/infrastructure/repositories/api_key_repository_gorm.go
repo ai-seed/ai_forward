@@ -7,6 +7,7 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
@@ -58,7 +59,8 @@ func (r *apiKeyRepositoryGorm) GetByID(ctx context.Context, id int64) (*entities
 	if r.cache != nil {
 		// 缓存ID索引
 		idCacheKey := GetAPIKeyByIDCacheKey(id)
-		ttl := 10 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetAPIKeyTTL()
 		r.cache.Set(ctx, idCacheKey, &apiKey, ttl)
 
 		// 同时缓存Key索引
@@ -92,7 +94,8 @@ func (r *apiKeyRepositoryGorm) GetByKey(ctx context.Context, key string) (*entit
 	// 缓存API密钥信息
 	if r.cache != nil {
 		cacheKey := GetAPIKeyCacheKey(key)
-		ttl := 10 * time.Minute // API密钥缓存10分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetAPIKeyTTL() // API密钥缓存10分钟
 		r.cache.Set(ctx, cacheKey, &apiKey, ttl)
 	}
 
@@ -119,7 +122,8 @@ func (r *apiKeyRepositoryGorm) GetByUserID(ctx context.Context, userID int64) ([
 	// 缓存API密钥列表
 	if r.cache != nil {
 		cacheKey := GetAPIKeysByUserCacheKey(userID)
-		ttl := 1 * time.Second // API密钥列表缓存10分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetAPIKeyListTTL() // API密钥列表缓存
 		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
 	}
 
@@ -331,7 +335,8 @@ func (r *apiKeyRepositoryGorm) GetByKeyPrefix(ctx context.Context, keyPrefix str
 	// 缓存API密钥信息
 	if r.cache != nil {
 		cacheKey := GetAPIKeyByPrefixCacheKey(keyPrefix)
-		ttl := 10 * time.Minute // API密钥缓存10分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetAPIKeyTTL() // API密钥缓存10分钟
 		r.cache.Set(ctx, cacheKey, &apiKey, ttl)
 	}
 
@@ -360,7 +365,8 @@ func (r *apiKeyRepositoryGorm) GetActiveKeys(ctx context.Context, userID int64) 
 	// 缓存活跃API密钥列表
 	if r.cache != nil {
 		cacheKey := GetActiveAPIKeysCacheKey(userID)
-		ttl := 10 * time.Minute // 活跃API密钥列表缓存10分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetAPIKeyTTL() // 活跃API密钥列表缓存10分钟
 		r.cache.Set(ctx, cacheKey, apiKeys, ttl)
 	}
 

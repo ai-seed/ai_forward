@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/domain/entities"
+	appLogger "ai-api-gateway/internal/infrastructure/logger"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -123,15 +124,21 @@ func CreateIndexes(db *gorm.DB) error {
 }
 
 // InitializeDatabase 初始化数据库（迁移+索引）
-func InitializeDatabase(db *gorm.DB) error {
+func InitializeDatabase(db *gorm.DB, log appLogger.Logger) error {
 	// 执行自动迁移
 	if err := AutoMigrate(db); err != nil {
 		return fmt.Errorf("auto migration failed: %w", err)
 	}
 
-	// 创建额外索引
+	// 创建基础索引
 	if err := CreateIndexes(db); err != nil {
 		return fmt.Errorf("create indexes failed: %w", err)
+	}
+
+	// 创建性能优化索引
+	if err := CreatePerformanceIndexes(db, log); err != nil {
+		// 性能索引创建失败不应该阻止应用启动，只记录警告
+		log.WithField("error", err.Error()).Warn("Failed to create performance indexes, continuing with startup")
 	}
 
 	return nil

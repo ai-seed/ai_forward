@@ -7,6 +7,7 @@ import (
 
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
+	"ai-api-gateway/internal/infrastructure/cache"
 	"ai-api-gateway/internal/infrastructure/redis"
 
 	"gorm.io/gorm"
@@ -57,7 +58,8 @@ func (r *providerModelSupportRepositoryGorm) GetByID(ctx context.Context, id int
 	// 缓存提供商模型支持信息（配置数据基本不变，缓存30分钟）
 	if r.cache != nil {
 		cacheKey := GetProviderModelSupportCacheKey(id)
-		ttl := 30 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetProviderTTL()
 		r.cache.Set(ctx, cacheKey, &support, ttl)
 
 		// 同时缓存提供商-模型索引
@@ -92,7 +94,8 @@ func (r *providerModelSupportRepositoryGorm) GetByProviderAndModel(ctx context.C
 
 	// 缓存提供商模型支持信息
 	if r.cache != nil {
-		ttl := 30 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetProviderTTL()
 
 		// 缓存提供商-模型索引
 		providerModelCacheKey := GetProviderModelSupportByProviderModelCacheKey(providerID, modelSlug)
@@ -187,7 +190,8 @@ func (r *providerModelSupportRepositoryGorm) GetSupportingProviders(ctx context.
 	// 缓存支持提供商列表（配置数据变化不频繁，缓存20分钟）
 	if r.cache != nil {
 		cacheKey := GetSupportingProvidersCacheKey(modelSlug)
-		ttl := 20 * time.Minute
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetProviderListTTL()
 		r.cache.Set(ctx, cacheKey, results, ttl)
 	}
 
@@ -217,7 +221,8 @@ func (r *providerModelSupportRepositoryGorm) GetProviderSupportedModels(ctx cont
 	// 缓存提供商支持的模型列表
 	if r.cache != nil {
 		cacheKey := GetProviderSupportedModelsCacheKey(providerID)
-		ttl := 20 * time.Minute // 配置数据变化不频繁，缓存20分钟
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetProviderListTTL() // 配置数据变化不频繁，缓存20分钟
 		r.cache.Set(ctx, cacheKey, supports, ttl)
 	}
 

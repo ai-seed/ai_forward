@@ -66,7 +66,11 @@ func (c *genericCacheImpl[T]) Delete(ctx context.Context, key string) error {
 // Exists 检查缓存是否存在
 func (c *genericCacheImpl[T]) Exists(ctx context.Context, key string) (bool, error) {
 	fullKey := c.getFullKey(key)
-	return c.cache.Exists(ctx, fullKey)
+	count, err := c.cache.Exists(ctx, fullKey)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // SetWithKeyFunc 使用键函数设置缓存
