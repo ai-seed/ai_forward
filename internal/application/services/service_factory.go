@@ -368,6 +368,11 @@ func (f *ServiceFactory) createAsyncQuotaService() (services.QuotaService, error
 	)
 }
 
+// ThinkingService 获取思考服务
+func (f *ServiceFactory) ThinkingService() ThinkingService {
+	return NewThinkingService(f.logger)
+}
+
 // getAsyncQuotaConfig 获取异步配额配置
 func (f *ServiceFactory) getAsyncQuotaConfig() *async.QuotaConsumerConfig {
 	// 暂时使用默认配置

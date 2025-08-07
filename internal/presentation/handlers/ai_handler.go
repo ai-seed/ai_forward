@@ -36,6 +36,7 @@ type AIHandler struct {
 	providerModelSupportRepo repositories.ProviderModelSupportRepository
 	httpClient               clients.HTTPClient
 	aiClient                 clients.AIProviderClient
+	thinkingService          services.ThinkingService
 }
 
 // NewAIHandler 创建AI请求处理器
@@ -49,6 +50,7 @@ func NewAIHandler(
 	providerModelSupportRepo repositories.ProviderModelSupportRepository,
 	httpClient clients.HTTPClient,
 	aiClient clients.AIProviderClient,
+	thinkingService services.ThinkingService,
 ) *AIHandler {
 	return &AIHandler{
 		gatewayService:           gatewayService,
@@ -60,6 +62,7 @@ func NewAIHandler(
 		providerModelSupportRepo: providerModelSupportRepo,
 		httpClient:               httpClient,
 		aiClient:                 aiClient,
+		thinkingService:          thinkingService,
 	}
 }
 
@@ -74,6 +77,12 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 
 	// 获取响应写入器
 	w := c.Writer
+
+	// 检查是否启用了思考模式
+	if h.thinkingService.IsThinkingEnabled(gatewayRequest.Request) {
+		h.handleStreamingRequestWithThinking(c, gatewayRequest, requestID, userID, apiKeyID)
+		return
+	}
 
 	// 检查是否启用了Function Call
 	if h.config.FunctionCall.Enabled && len(gatewayRequest.Request.Tools) > 0 {
@@ -317,6 +326,34 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 		Tools:       chatRequest.Tools,
 		ToolChoice:  chatRequest.ToolChoice,
 		WebSearch:   chatRequest.WebSearch,
+		Thinking:    chatRequest.Thinking,
+	}
+
+	// 如果启用了思考模式，处理思考请求
+	if h.thinkingService.IsThinkingEnabled(aiRequest) {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"user_id":    userID,
+			"thinking":   true,
+		}).Info("Processing request with thinking mode")
+
+		processedRequest, err := h.thinkingService.ProcessThinkingRequest(c.Request.Context(), aiRequest)
+		if err != nil {
+			h.logger.WithFields(map[string]interface{}{
+				"request_id": requestID,
+				"error":      err.Error(),
+			}).Error("Failed to process thinking request")
+
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+				"THINKING_PROCESS_FAILED",
+				"Failed to process thinking request",
+				map[string]interface{}{
+					"request_id": requestID,
+				},
+			))
+			return
+		}
+		aiRequest = processedRequest
 	}
 
 	// 如果开启了联网搜索且没有提供工具，自动添加可用工具
@@ -1996,4 +2033,207 @@ func (h *AIHandler) convertStreamChunkToAnthropic(chunk *clients.StreamChunk) ma
 	}
 
 	return anthropicChunk
+}
+
+// handleStreamingRequestWithThinking 处理带思考的流式请求
+func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRequest *gateway.GatewayRequest, requestID string, userID, apiKeyID int64) {
+	w := c.Writer
+
+	h.logger.WithFields(map[string]interface{}{
+		"request_id": requestID,
+		"user_id":    userID,
+		"thinking":   true,
+	}).Info("Processing streaming request with thinking mode")
+
+	// 处理思考请求
+	processedRequest, err := h.thinkingService.ProcessThinkingRequest(c.Request.Context(), gatewayRequest.Request)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"error":      err.Error(),
+		}).Error("Failed to process thinking request in stream mode")
+
+		errorData := map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": "Failed to process thinking request",
+				"type":    "thinking_error",
+				"code":    "thinking_process_failed",
+			},
+		}
+		errorJSON, _ := json.Marshal(errorData)
+		w.Write([]byte(fmt.Sprintf("data: %s\n\n", errorJSON)))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		return
+	}
+
+	// 更新网关请求
+	thinkingGatewayRequest := &gateway.GatewayRequest{
+		UserID:    gatewayRequest.UserID,
+		APIKeyID:  gatewayRequest.APIKeyID,
+		ModelSlug: gatewayRequest.ModelSlug,
+		Request:   processedRequest,
+		RequestID: gatewayRequest.RequestID,
+	}
+
+	// 创建流式响应通道
+	streamChan := make(chan *gateway.StreamChunk, 100)
+	errorChan := make(chan error, 1)
+
+	// 启动流式处理
+	go func() {
+		defer func() {
+			select {
+			case <-streamChan:
+			default:
+				close(streamChan)
+			}
+
+			select {
+			case <-errorChan:
+			default:
+				close(errorChan)
+			}
+		}()
+
+		err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), thinkingGatewayRequest, streamChan)
+		if err != nil {
+			select {
+			case errorChan <- err:
+			case <-c.Request.Context().Done():
+			}
+		}
+	}()
+
+	// 创建思考流式处理器
+	showProcess := gatewayRequest.Request.Thinking != nil && gatewayRequest.Request.Thinking.ShowProcess
+	processor := services.NewStreamThinkingProcessor(h.logger, showProcess)
+
+	var totalTokens int
+	var totalCost float64
+
+	for {
+		select {
+		case chunk, ok := <-streamChan:
+			if !ok {
+				// 流结束，发送结束标记
+				_, err := w.Write([]byte("data: [DONE]\n\n"))
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"error":      err.Error(),
+					}).Error("Failed to write stream end marker")
+				}
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+
+				h.logger.WithFields(map[string]interface{}{
+					"request_id":   requestID,
+					"user_id":      userID,
+					"api_key_id":   apiKeyID,
+					"total_tokens": totalTokens,
+					"total_cost":   totalCost,
+					"stream_type":  "thinking_completed",
+				}).Info("AI thinking streaming response completed successfully")
+
+				c.Set("tokens_used", totalTokens)
+				c.Set("cost_used", totalCost)
+				return
+			}
+
+			// 累计使用量
+			if chunk.Usage != nil {
+				totalTokens += chunk.Usage.TotalTokens
+			}
+			if chunk.Cost != nil {
+				totalCost += chunk.Cost.TotalCost
+			}
+
+			// 使用思考处理器处理数据块
+			processedChunks, err := processor.ProcessChunk(chunk.Content)
+			if err != nil {
+				h.logger.WithFields(map[string]interface{}{
+					"request_id": requestID,
+					"error":      err.Error(),
+				}).Error("Failed to process thinking chunk")
+				continue
+			}
+
+			// 发送处理后的数据块
+			for _, processedChunk := range processedChunks {
+				data := map[string]interface{}{
+					"id":      chunk.ID,
+					"object":  "chat.completion.chunk",
+					"created": chunk.Created,
+					"model":   chunk.Model,
+					"choices": []map[string]interface{}{
+						{
+							"index": 0,
+							"delta": map[string]interface{}{
+								"content":      processedChunk.Content,
+								"content_type": processedChunk.ContentType,
+							},
+							"finish_reason": chunk.FinishReason,
+						},
+					},
+				}
+
+				jsonData, err := json.Marshal(data)
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"error":      err.Error(),
+					}).Error("Failed to marshal thinking stream chunk")
+					continue
+				}
+
+				sseMessage := fmt.Sprintf("data: %s\n\n", jsonData)
+				_, err = w.Write([]byte(sseMessage))
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"error":      err.Error(),
+					}).Error("Failed to write thinking stream chunk")
+					return
+				}
+
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+
+		case err := <-errorChan:
+			if err != nil {
+				h.logger.WithFields(map[string]interface{}{
+					"request_id": requestID,
+					"user_id":    userID,
+					"api_key_id": apiKeyID,
+					"error":      err.Error(),
+				}).Error("Thinking stream processing failed")
+
+				errorData := map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": "Thinking stream processing failed",
+						"type":    "server_error",
+						"code":    "stream_error",
+					},
+				}
+
+				jsonData, _ := json.Marshal(errorData)
+				w.Write([]byte(fmt.Sprintf("data: %s\n\n", jsonData)))
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+			}
+			return
+
+		case <-c.Request.Context().Done():
+			h.logger.WithFields(map[string]interface{}{
+				"request_id": requestID,
+			}).Info("Client disconnected from thinking stream")
+			return
+		}
+	}
 }

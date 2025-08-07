@@ -36,6 +36,7 @@ type StreamChunk struct {
 	Created      int64    `json:"created"`
 	Model        string   `json:"model"`
 	Content      string   `json:"content"`
+	ContentType  string   `json:"content_type,omitempty"` // "thinking" | "response"
 	FinishReason *string  `json:"finish_reason"`
 	Usage        *AIUsage `json:"usage,omitempty"`
 	Cost         *AICost  `json:"cost,omitempty"`
@@ -52,6 +53,7 @@ type AIRequest struct {
 	Tools       []Tool                 `json:"tools,omitempty"`       // Function call tools
 	ToolChoice  interface{}            `json:"tool_choice,omitempty"` // Tool choice strategy
 	WebSearch   bool                   `json:"web_search,omitempty"`  // 是否启用联网搜索
+	Thinking    *ThinkingConfig        `json:"thinking,omitempty"`    // 深度思考配置
 	Extra       map[string]interface{} `json:"-"`                     // 额外参数
 }
 
@@ -65,6 +67,7 @@ type ChatCompletionRequest struct {
 	Tools       []Tool      `json:"tools,omitempty"`                      // Function call tools
 	ToolChoice  interface{} `json:"tool_choice,omitempty"`                // Tool choice strategy
 	WebSearch   bool        `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
+	Thinking    *ThinkingConfig `json:"thinking,omitempty"`               // 深度思考配置
 }
 
 // CompletionRequest 文本补全请求
@@ -763,6 +766,15 @@ type AnthropicToolConfiguration struct {
 type AnthropicThinkingConfig struct {
 	Type         string `json:"type" binding:"required"` // "enabled"
 	BudgetTokens int    `json:"budget_tokens" binding:"required,min=1024"`
+}
+
+// ThinkingConfig 通用思考配置
+type ThinkingConfig struct {
+	Enabled         bool   `json:"enabled" example:"true"`                     // 是否启用深度思考
+	ShowProcess     bool   `json:"show_process" example:"true"`                // 是否显示思考过程
+	MaxTokens       int    `json:"max_tokens,omitempty" example:"2048"`        // 思考部分最大token数
+	ThinkingPrompt  string `json:"thinking_prompt,omitempty"`                  // 自定义思考提示词
+	Language        string `json:"language,omitempty" example:"zh"`            // 思考语言（zh/en）
 }
 
 // AnthropicMessageResponse Anthropic 消息响应

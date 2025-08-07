@@ -108,6 +108,7 @@ func (r *Router) SetupRoutes() {
 		r.serviceFactory.ProviderModelSupportRepository(),
 		httpClient,
 		aiClient,
+		r.serviceFactory.ThinkingService(),
 	)
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(

@@ -32,6 +32,7 @@ type Config struct {
 	JWT          JWTConfig          `mapstructure:"jwt"`
 	OAuth        OAuthConfig        `mapstructure:"oauth"`
 	FunctionCall FunctionCallConfig `mapstructure:"function_call"`
+	Thinking     ThinkingConfig     `mapstructure:"thinking"`
 	S3           S3Config           `mapstructure:"s3"`
 }
 
@@ -120,6 +121,27 @@ type SearchConfig struct {
 	SerpAPIKey     string `mapstructure:"serpapi_key"`      // SerpAPI密钥
 	SerperKey      string `mapstructure:"serper_key"`       // Serper密钥
 	SearXNGBaseURL string `mapstructure:"searxng_base_url"` // SearXNG服务地址
+}
+
+// ThinkingConfig 深度思考配置
+type ThinkingConfig struct {
+	Enabled     bool                     `mapstructure:"enabled"`     // 是否启用深度思考功能
+	Default     ThinkingDefaultConfig    `mapstructure:"default"`     // 默认配置
+	Performance ThinkingPerformanceConfig `mapstructure:"performance"` // 性能配置
+}
+
+// ThinkingDefaultConfig 思考默认配置
+type ThinkingDefaultConfig struct {
+	ShowProcess bool   `mapstructure:"show_process"` // 是否默认显示思考过程
+	MaxTokens   int    `mapstructure:"max_tokens"`   // 默认最大思考token数
+	Language    string `mapstructure:"language"`     // 默认思考语言
+}
+
+// ThinkingPerformanceConfig 思考性能配置
+type ThinkingPerformanceConfig struct {
+	Timeout     time.Duration `mapstructure:"timeout"`      // 思考处理超时时间
+	EnableCache bool          `mapstructure:"enable_cache"` // 是否启用思考过程缓存
+	CacheTTL    time.Duration `mapstructure:"cache_ttl"`    // 缓存TTL
 }
 
 // S3Config S3存储配置
