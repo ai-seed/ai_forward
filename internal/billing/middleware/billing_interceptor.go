@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -413,11 +416,33 @@ func (bi *BillingInterceptor) extractRequestInfo(c *gin.Context, billingBehavior
 
 	// 从请求体中提取模型信息（如果是POST请求）
 	if modelID == 0 && c.Request.Method == "POST" {
-		// 这里可以解析请求体获取模型信息，但要注意不能消费请求体
-		// 可以通过查询参数或者其他方式获取
+		// 首先尝试从查询参数获取
 		if modelQuery := c.Query("model"); modelQuery != "" {
 			if mid, parseErr := strconv.ParseInt(modelQuery, 10, 64); parseErr == nil {
 				modelID = mid
+			}
+		}
+		
+		// 如果还是没有模型ID，尝试从请求体解析模型名称
+		if modelID == 0 {
+			modelName := bi.extractModelFromRequestBody(c)
+			if modelName != "" && bi.modelRepo != nil {
+				ctx := context.Background()
+				model, err := bi.modelRepo.GetBySlug(ctx, modelName)
+				if err != nil {
+					bi.logger.WithFields(map[string]interface{}{
+						"event":      "model_lookup_in_precheck_failed",
+						"model_name": modelName,
+						"error":      err.Error(),
+					}).Debug("Failed to lookup model ID during pre-check")
+				} else if model != nil {
+					modelID = model.ID
+					bi.logger.WithFields(map[string]interface{}{
+						"event":      "model_lookup_in_precheck_success",
+						"model_name": modelName,
+						"model_id":   model.ID,
+					}).Debug("Successfully resolved model ID during pre-check")
+				}
 			}
 		}
 	}
@@ -579,4 +604,49 @@ func GetBillingContext(c *gin.Context) (*domain.BillingContext, bool) {
 		}
 	}
 	return nil, false
+}
+
+// extractModelFromRequestBody 从请求体中提取模型名称（不消费请求体）
+func (bi *BillingInterceptor) extractModelFromRequestBody(c *gin.Context) string {
+	// 只处理包含 JSON 的请求
+	if c.GetHeader("Content-Type") != "application/json" && 
+	   c.GetHeader("Content-Type") != "application/json; charset=utf-8" {
+		return ""
+	}
+
+	// 读取请求体
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		bi.logger.WithFields(map[string]interface{}{
+			"event": "request_body_read_failed",
+			"error": err.Error(),
+		}).Debug("Failed to read request body for model extraction")
+		return ""
+	}
+
+	// 重新设置请求体，这样后续的处理器还能读取
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	// 解析 JSON 获取模型信息
+	var requestData map[string]interface{}
+	if err := json.Unmarshal(body, &requestData); err != nil {
+		bi.logger.WithFields(map[string]interface{}{
+			"event": "request_body_parse_failed",
+			"error": err.Error(),
+		}).Debug("Failed to parse request body JSON for model extraction")
+		return ""
+	}
+
+	// 尝试获取模型名称
+	if model, exists := requestData["model"]; exists {
+		if modelStr, ok := model.(string); ok {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":      "model_extracted_from_body",
+				"model_name": modelStr,
+			}).Debug("Successfully extracted model name from request body")
+			return modelStr
+		}
+	}
+
+	return ""
 }

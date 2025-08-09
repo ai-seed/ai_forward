@@ -153,6 +153,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				// 设置使用量到上下文
 				c.Set("tokens_used", totalTokens)
 				c.Set("cost_used", totalCost)
+				c.Set("total_tokens", totalTokens)
 				return
 			}
 
@@ -416,9 +417,12 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 		"response_data": response.Response,
 	}).Info("AI provider response received successfully")
 
-	// 设置使用量到上下文（用于配额中间件）
+	// 设置使用量到上下文（用于配额中间件和计费系统）
 	c.Set("tokens_used", response.Usage.TotalTokens)
 	c.Set("cost_used", response.Cost.TotalCost)
+	c.Set("input_tokens", response.Usage.InputTokens)
+	c.Set("output_tokens", response.Usage.OutputTokens)
+	c.Set("total_tokens", response.Usage.TotalTokens)
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)
@@ -604,9 +608,12 @@ func (h *AIHandler) Completions(c *gin.Context) {
 		"response_data": response.Response,
 	}).Info("AI provider response received successfully")
 
-	// 设置使用量到上下文（用于配额中间件）
+	// 设置使用量到上下文（用于配额中间件和计费系统）
 	c.Set("tokens_used", response.Usage.TotalTokens)
 	c.Set("cost_used", response.Cost.TotalCost)
+	c.Set("input_tokens", response.Usage.InputTokens)
+	c.Set("output_tokens", response.Usage.OutputTokens)
+	c.Set("total_tokens", response.Usage.TotalTokens)
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)
@@ -904,6 +911,9 @@ func (h *AIHandler) handleStreamingRequestWithFunctionCall(c *gin.Context, gatew
 	// 设置使用量到上下文
 	if response.Usage != nil {
 		c.Set("tokens_used", response.Usage.TotalTokens)
+		c.Set("input_tokens", response.Usage.InputTokens)
+		c.Set("output_tokens", response.Usage.OutputTokens)
+		c.Set("total_tokens", response.Usage.TotalTokens)
 	}
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
@@ -2149,6 +2159,7 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 
 				c.Set("tokens_used", totalTokens)
 				c.Set("cost_used", totalCost)
+				c.Set("total_tokens", totalTokens)
 				return
 			}
 
