@@ -296,13 +296,56 @@ func (bm *BillingManager) ProcessAsyncCompletion(ctx context.Context, requestID 
 
 // estimateCost 估算成本
 func (bm *BillingManager) estimateCost(ctx context.Context, billingCtx *domain.BillingContext) (float64, error) {
+	bm.logger.WithFields(map[string]interface{}{
+		"event":        "cost_estimation_start",
+		"request_id":   billingCtx.RequestID,
+		"model_id":     billingCtx.ModelID,
+		"request_type": billingCtx.RequestType,
+		"input_tokens": billingCtx.CalculateInputTokens(),
+		"output_tokens": billingCtx.CalculateOutputTokens(),
+	}).Debug("Starting cost estimation")
+
+	var cost float64
+	var err error
+
 	if billingCtx.RequestType == entities.RequestTypeMidjourney {
 		// Midjourney按请求计费
-		return bm.billingService.CalculateRequestCost(ctx, billingCtx.ModelID)
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id": billingCtx.RequestID,
+			"model_id":   billingCtx.ModelID,
+		}).Debug("Using request-based cost estimation for Midjourney")
+
+		cost, err = bm.billingService.CalculateRequestCost(ctx, billingCtx.ModelID)
+	} else {
+		// 普通API按token计费
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id":    billingCtx.RequestID,
+			"model_id":      billingCtx.ModelID,
+			"input_tokens":  billingCtx.CalculateInputTokens(),
+			"output_tokens": billingCtx.CalculateOutputTokens(),
+		}).Debug("Using token-based cost estimation")
+
+		cost, err = bm.billingService.CalculateCost(ctx, billingCtx.ModelID, billingCtx.CalculateInputTokens(), billingCtx.CalculateOutputTokens())
 	}
-	
-	// 普通API按token计费
-	return bm.billingService.CalculateCost(ctx, billingCtx.ModelID, billingCtx.CalculateInputTokens(), billingCtx.CalculateOutputTokens())
+
+	if err != nil {
+		bm.logger.WithFields(map[string]interface{}{
+			"event":      "cost_estimation_failed",
+			"request_id": billingCtx.RequestID,
+			"model_id":   billingCtx.ModelID,
+			"error":      err.Error(),
+		}).Error("Cost estimation failed")
+		return 0, err
+	}
+
+	bm.logger.WithFields(map[string]interface{}{
+		"event":         "cost_estimation_completed",
+		"request_id":    billingCtx.RequestID,
+		"model_id":      billingCtx.ModelID,
+		"estimated_cost": cost,
+	}).Info("Cost estimation completed")
+
+	return cost, nil
 }
 
 // calculateActualCost 计算实际成本
@@ -313,24 +356,66 @@ func (bm *BillingManager) calculateActualCost(ctx context.Context, billingCtx *d
 
 // consumeQuotas 消费配额
 func (bm *BillingManager) consumeQuotas(ctx context.Context, billingCtx *domain.BillingContext) error {
+	bm.logger.WithFields(map[string]interface{}{
+		"event":        "quota_consumption_start",
+		"request_id":   billingCtx.RequestID,
+		"api_key_id":   billingCtx.APIKeyID,
+		"total_tokens": billingCtx.CalculateTotalTokens(),
+		"actual_cost":  billingCtx.ActualCost,
+	}).Debug("Starting quota consumption")
+
 	// 消费token配额
 	if billingCtx.CalculateTotalTokens() > 0 {
-		if err := bm.quotaService.ConsumeQuota(ctx, billingCtx.APIKeyID, entities.QuotaTypeTokens, float64(billingCtx.CalculateTotalTokens())); err != nil {
+		tokenValue := float64(billingCtx.CalculateTotalTokens())
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id": billingCtx.RequestID,
+			"api_key_id": billingCtx.APIKeyID,
+			"quota_type": "tokens",
+			"value":      tokenValue,
+		}).Debug("Consuming token quota")
+
+		if err := bm.quotaService.ConsumeQuota(ctx, billingCtx.APIKeyID, entities.QuotaTypeTokens, tokenValue); err != nil {
+			bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "tokens", tokenValue, false, err)
 			return fmt.Errorf("failed to consume token quota: %w", err)
 		}
+		bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "tokens", tokenValue, true, nil)
 	}
 	
 	// 消费请求配额
+	bm.logger.WithFields(map[string]interface{}{
+		"request_id": billingCtx.RequestID,
+		"api_key_id": billingCtx.APIKeyID,
+		"quota_type": "requests",
+		"value":      1,
+	}).Debug("Consuming request quota")
+
 	if err := bm.quotaService.ConsumeQuota(ctx, billingCtx.APIKeyID, entities.QuotaTypeRequests, 1); err != nil {
+		bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "requests", 1, false, err)
 		return fmt.Errorf("failed to consume request quota: %w", err)
 	}
+	bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "requests", 1, true, nil)
 	
 	// 消费成本配额
 	if billingCtx.ActualCost > 0 {
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id": billingCtx.RequestID,
+			"api_key_id": billingCtx.APIKeyID,
+			"quota_type": "cost",
+			"value":      billingCtx.ActualCost,
+		}).Debug("Consuming cost quota")
+
 		if err := bm.quotaService.ConsumeQuota(ctx, billingCtx.APIKeyID, entities.QuotaTypeCost, billingCtx.ActualCost); err != nil {
+			bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "cost", billingCtx.ActualCost, false, err)
 			return fmt.Errorf("failed to consume cost quota: %w", err)
 		}
+		bm.auditLogger.LogQuotaConsumption(billingCtx.RequestID, billingCtx.APIKeyID, "cost", billingCtx.ActualCost, true, nil)
 	}
+
+	bm.logger.WithFields(map[string]interface{}{
+		"event":      "quota_consumption_completed",
+		"request_id": billingCtx.RequestID,
+		"api_key_id": billingCtx.APIKeyID,
+	}).Info("All quotas consumed successfully")
 	
 	return nil
 }

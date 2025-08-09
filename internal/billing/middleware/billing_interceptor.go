@@ -54,11 +54,19 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 		}
 
 		// 获取请求信息 - 对于admin接口可能没有用户ID
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_info_extraction_start",
+			"path":            c.Request.URL.Path,
+			"method":          c.Request.Method,
+			"billing_behavior": billingBehavior,
+		}).Debug("Starting billing information extraction")
+
 		userID, apiKeyID, modelID, err := bi.extractRequestInfo(c, billingBehavior)
 		if err != nil {
 			// 对于只记录日志的请求，即使获取信息失败也继续
 			if billingBehavior == BillingBehaviorLogOnly {
 				bi.logger.WithFields(map[string]interface{}{
+					"event":    "billing_info_extraction_incomplete",
 					"path":     c.Request.URL.Path,
 					"behavior": "log_only",
 					"error":    err.Error(),
@@ -68,6 +76,7 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 			}
 			
 			bi.logger.WithFields(map[string]interface{}{
+				"event": "billing_info_extraction_failed",
 				"path":  c.Request.URL.Path,
 				"error": err.Error(),
 			}).Warn("Failed to extract request info for billing")
@@ -75,8 +84,31 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_info_extraction_completed",
+			"path":            c.Request.URL.Path,
+			"user_id":         userID,
+			"api_key_id":      apiKeyID,
+			"model_id":        modelID,
+			"billing_behavior": billingBehavior,
+		}).Debug("Billing information extracted successfully")
+
 		// 创建计费上下文
+		bi.logger.WithFields(map[string]interface{}{
+			"event":      "billing_context_creation",
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+			"model_id":   modelID,
+		}).Debug("Creating billing context")
+
 		billingCtx := bi.createBillingContext(c, userID, apiKeyID, modelID, billingBehavior)
+
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_context_created",
+			"request_id":      billingCtx.RequestID,
+			"billing_stage":   billingCtx.BillingStage,
+			"request_type":    billingCtx.RequestType,
+		}).Debug("Billing context created successfully")
 
 		// 存储到上下文中，供后续中间件和处理器使用
 		c.Set("billing_context", billingCtx)
@@ -84,10 +116,18 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 
 		// 只有正常计费的请求才需要预检查
 		if billingBehavior == BillingBehaviorNormal {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":      "billing_precheck_start",
+				"request_id": billingCtx.RequestID,
+				"user_id":    billingCtx.UserID,
+				"api_key_id": billingCtx.APIKeyID,
+			}).Debug("Starting billing pre-check")
+
 			// 进行预检查
 			preCheckResult, err := bi.billingManager.PreCheck(c.Request.Context(), billingCtx)
 			if err != nil {
 				bi.logger.WithFields(map[string]interface{}{
+					"event":      "billing_precheck_error",
 					"request_id": billingCtx.RequestID,
 					"error":      err.Error(),
 				}).Error("Billing pre-check failed")
@@ -103,8 +143,12 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 			// 检查是否可以继续
 			if !preCheckResult.CanProceed {
 				bi.logger.WithFields(map[string]interface{}{
-					"request_id": billingCtx.RequestID,
-					"reason":     preCheckResult.Reason,
+					"event":           "billing_precheck_blocked",
+					"request_id":      billingCtx.RequestID,
+					"reason":          preCheckResult.Reason,
+					"estimated_cost":  preCheckResult.EstimatedCost,
+					"balance_ok":      preCheckResult.BalanceOK,
+					"quota_ok":        preCheckResult.QuotaOK,
 				}).Warn("Request blocked by billing pre-check")
 
 				var statusCode int
@@ -145,6 +189,18 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 
 			// 存储预检查结果
 			c.Set("billing_precheck_result", preCheckResult)
+			
+			bi.logger.WithFields(map[string]interface{}{
+				"event":          "billing_precheck_passed",
+				"request_id":     billingCtx.RequestID,
+				"estimated_cost": preCheckResult.EstimatedCost,
+			}).Debug("Billing pre-check passed, proceeding with request")
+		} else {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":           "billing_precheck_skipped",
+				"request_id":      billingCtx.RequestID,
+				"billing_behavior": billingBehavior,
+			}).Debug("Billing pre-check skipped for non-normal billing behavior")
 		}
 
 		c.Next()
@@ -156,19 +212,41 @@ func (bi *BillingInterceptor) PostRequestMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 
+		bi.logger.WithFields(map[string]interface{}{
+			"event":  "billing_post_request_start",
+			"path":   c.Request.URL.Path,
+			"status": c.Writer.Status(),
+		}).Debug("Starting post-request billing processing")
+
 		// 获取计费行为
 		billingBehaviorInterface, exists := c.Get("billing_behavior")
 		if !exists {
+			bi.logger.WithFields(map[string]interface{}{
+				"event": "billing_post_request_skipped",
+				"path":  c.Request.URL.Path,
+				"reason": "no_billing_behavior",
+			}).Debug("Post-request billing skipped - no billing behavior found")
 			return // 如果没有计费行为，说明在PreRequest阶段就被跳过了
 		}
 		
 		billingBehavior, ok := billingBehaviorInterface.(BillingBehavior)
 		if !ok {
+			bi.logger.WithFields(map[string]interface{}{
+				"event": "billing_post_request_skipped",
+				"path":  c.Request.URL.Path,
+				"reason": "invalid_billing_behavior_type",
+			}).Debug("Post-request billing skipped - invalid billing behavior type")
 			return
 		}
 
 		// 完全跳过的请求不处理
 		if billingBehavior == BillingBehaviorSkip {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":           "billing_post_request_skipped",
+				"path":            c.Request.URL.Path,
+				"billing_behavior": billingBehavior,
+				"reason":          "skip_behavior",
+			}).Debug("Post-request billing skipped - skip behavior")
 			return
 		}
 
@@ -176,7 +254,9 @@ func (bi *BillingInterceptor) PostRequestMiddleware() gin.HandlerFunc {
 		billingCtxInterface, exists := c.Get("billing_context")
 		if !exists {
 			bi.logger.WithFields(map[string]interface{}{
-				"path": c.Request.URL.Path,
+				"event": "billing_post_request_error",
+				"path":  c.Request.URL.Path,
+				"reason": "billing_context_not_found",
 			}).Warn("Billing context not found in post-request middleware")
 			return
 		}
@@ -184,19 +264,43 @@ func (bi *BillingInterceptor) PostRequestMiddleware() gin.HandlerFunc {
 		billingCtx, ok := billingCtxInterface.(*domain.BillingContext)
 		if !ok {
 			bi.logger.WithFields(map[string]interface{}{
-				"path": c.Request.URL.Path,
+				"event": "billing_post_request_error",
+				"path":  c.Request.URL.Path,
+				"reason": "invalid_billing_context_type",
 			}).Error("Invalid billing context type")
 			return
 		}
 
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_context_update_start",
+			"request_id":      billingCtx.RequestID,
+			"response_status": c.Writer.Status(),
+		}).Debug("Updating billing context with response information")
+
 		// 更新响应信息
 		bi.updateBillingContextWithResponse(c, billingCtx)
+
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_context_updated",
+			"request_id":      billingCtx.RequestID,
+			"success":         billingCtx.Success,
+			"input_tokens":    billingCtx.InputTokens,
+			"output_tokens":   billingCtx.OutputTokens,
+			"total_tokens":    billingCtx.TotalTokens,
+			"duration_ms":     billingCtx.DurationMs,
+		}).Debug("Billing context updated with response information")
 
 		// 根据计费行为决定处理方式
 		switch billingBehavior {
 		case BillingBehaviorNormal:
 			// 正常计费 - 异步任务除外
 			if billingCtx.RequestType != entities.RequestTypeMidjourney {
+				bi.logger.WithFields(map[string]interface{}{
+					"event":        "billing_async_start",
+					"request_id":   billingCtx.RequestID,
+					"request_type": billingCtx.RequestType,
+				}).Debug("Starting asynchronous billing process")
+
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel()
@@ -204,15 +308,33 @@ func (bi *BillingInterceptor) PostRequestMiddleware() gin.HandlerFunc {
 					_, err := bi.billingManager.ProcessRequest(ctx, billingCtx)
 					if err != nil {
 						bi.logger.WithFields(map[string]interface{}{
-							"request_id":     billingCtx.RequestID,
+							"event":            "billing_async_failed",
+							"request_id":       billingCtx.RequestID,
 							"billing_behavior": "normal",
-							"error":          err.Error(),
+							"error":            err.Error(),
 						}).Error("Failed to process billing in post-request middleware")
+					} else {
+						bi.logger.WithFields(map[string]interface{}{
+							"event":      "billing_async_completed",
+							"request_id": billingCtx.RequestID,
+						}).Info("Asynchronous billing completed successfully")
 					}
 				}()
+			} else {
+				bi.logger.WithFields(map[string]interface{}{
+					"event":        "billing_async_skipped",
+					"request_id":   billingCtx.RequestID,
+					"request_type": billingCtx.RequestType,
+					"reason":       "async_task_will_be_billed_on_completion",
+				}).Debug("Billing skipped for async task - will be billed on completion")
 			}
 			
 		case BillingBehaviorLogOnly:
+			bi.logger.WithFields(map[string]interface{}{
+				"event":      "log_only_billing_start",
+				"request_id": billingCtx.RequestID,
+			}).Debug("Starting log-only billing process")
+
 			// 只记录使用日志，不计费
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -225,13 +347,25 @@ func (bi *BillingInterceptor) PostRequestMiddleware() gin.HandlerFunc {
 				
 				if err := bi.billingManager.CreateUsageLogOnly(ctx, usageLog); err != nil {
 					bi.logger.WithFields(map[string]interface{}{
-						"request_id":     billingCtx.RequestID,
+						"event":            "log_only_billing_failed",
+						"request_id":       billingCtx.RequestID,
 						"billing_behavior": "log_only",
-						"error":          err.Error(),
+						"error":            err.Error(),
 					}).Warn("Failed to create usage log for admin request")
+				} else {
+					bi.logger.WithFields(map[string]interface{}{
+						"event":      "log_only_billing_completed",
+						"request_id": billingCtx.RequestID,
+					}).Debug("Log-only billing completed successfully")
 				}
 			}()
 		}
+
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_post_request_completed",
+			"request_id":      billingCtx.RequestID,
+			"billing_behavior": billingBehavior,
+		}).Debug("Post-request billing processing completed")
 	}
 }
 
