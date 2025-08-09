@@ -18,7 +18,7 @@ type GatewayService interface {
 	ProcessRequest(ctx context.Context, request *GatewayRequest) (*GatewayResponse, error)
 
 	// ProcessStreamRequest 处理流式AI请求
-	ProcessStreamRequest(ctx context.Context, request *GatewayRequest, streamChan chan<- *StreamChunk) error
+	ProcessStreamRequest(ctx context.Context, request *GatewayRequest, streamChan chan<- *StreamChunk) (*RouteResponse, error)
 
 	// HealthCheck 健康检查
 	HealthCheck(ctx context.Context) (*HealthCheckResult, error)
@@ -50,13 +50,14 @@ type GatewayRequest struct {
 
 // GatewayResponse 网关响应
 type GatewayResponse struct {
-	Response  *clients.AIResponse `json:"response"`
-	Usage     *UsageInfo          `json:"usage"`
-	Cost      *CostInfo           `json:"cost"`
-	Provider  string              `json:"provider"`
-	Model     string              `json:"model"`
-	Duration  time.Duration       `json:"duration"`
-	RequestID string              `json:"request_id"`
+	Response   *clients.AIResponse `json:"response"`
+	Usage      *UsageInfo          `json:"usage"`
+	Cost       *CostInfo           `json:"cost"`
+	Provider   string              `json:"provider"`
+	ProviderID int64               `json:"provider_id"`
+	Model      string              `json:"model"`
+	Duration   time.Duration       `json:"duration"`
+	RequestID  string              `json:"request_id"`
 }
 
 // UsageInfo 使用信息
@@ -211,13 +212,14 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 	// 3. 计费处理已由billing中间件统一处理，这里不再重复处理
 
 	response := &GatewayResponse{
-		Response:  routeResponse.Response,
-		Usage:     usage,
-		Cost:      cost,
-		Provider:  routeResponse.Provider.Name,
-		Model:     routeResponse.Model.Name,
-		Duration:  routeResponse.Duration,
-		RequestID: request.RequestID,
+		Response:   routeResponse.Response,
+		Usage:      usage,
+		Cost:       cost,
+		Provider:   routeResponse.Provider.Name,
+		ProviderID: routeResponse.Provider.ID,
+		Model:      routeResponse.Model.Name,
+		Duration:   routeResponse.Duration,
+		RequestID:  request.RequestID,
 	}
 
 	g.logger.WithFields(map[string]interface{}{
@@ -284,7 +286,7 @@ func (g *gatewayServiceImpl) HealthCheck(ctx context.Context) (*HealthCheckResul
 }
 
 // ProcessStreamRequest 处理流式AI请求
-func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *GatewayRequest, streamChan chan<- *StreamChunk) error {
+func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *GatewayRequest, streamChan chan<- *StreamChunk) (*RouteResponse, error) {
 	// 生成请求ID
 	if request.RequestID == "" {
 		var err error
@@ -296,7 +298,7 @@ func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *
 	}
 
 	// 路由请求到提供商
-	_, err := g.router.RouteStreamRequest(ctx, request, streamChan)
+	routeResponse, err := g.router.RouteStreamRequest(ctx, request, streamChan)
 	if err != nil {
 		g.logger.WithFields(map[string]interface{}{
 			"request_id": request.RequestID,
@@ -304,12 +306,12 @@ func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *
 			"model":      request.ModelSlug,
 			"error":      err.Error(),
 		}).Error("Failed to route stream request")
-		return err
+		return nil, err
 	}
 
 	// 注意：流式请求的使用日志记录和计费已由billing中间件统一处理，这里不再重复记录
 
-	return nil
+	return routeResponse, nil
 }
 
 // recordStreamUsage 已废弃 - 流式请求的使用日志记录和计费已由billing中间件统一处理

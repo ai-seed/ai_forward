@@ -651,6 +651,16 @@ func (h *StabilityHandler) Erase(c *gin.Context) {
 			"seed":          response.Seed,
 		}).Info("Returning erase response with base64 image")
 
+		// 设置计费信息供billing中间件使用
+		if response.Cost > 0 {
+			c.Set("cost_used", response.Cost)
+		}
+		if response.ProviderID > 0 {
+			c.Set("provider_id", response.ProviderID)
+		}
+		// 设置模型信息 - Erase 使用的是 Stability AI 的图像编辑模型
+		c.Set("model_name", "stable-diffusion-erase")
+
 		// 返回编辑接口的JSON格式响应
 		c.JSON(http.StatusOK, gin.H{
 			"finish_reason": response.FinishReason,
@@ -678,6 +688,16 @@ func (h *StabilityHandler) Erase(c *gin.Context) {
 		"api_key_id":      apiKeyID,
 		"artifacts_count": len(stabilityResponse.Artifacts),
 	}).Info("Successfully erased object")
+
+	// 设置计费信息供billing中间件使用
+	if response.Cost > 0 {
+		c.Set("cost_used", response.Cost)
+	}
+	if response.ProviderID > 0 {
+		c.Set("provider_id", response.ProviderID)
+	}
+	// 设置模型信息 - Erase 使用的是 Stability AI 的图像编辑模型
+	c.Set("model_name", "stable-diffusion-erase")
 
 	c.JSON(http.StatusOK, stabilityResponse)
 }

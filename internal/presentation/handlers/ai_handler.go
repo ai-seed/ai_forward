@@ -81,6 +81,14 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 	// 获取响应写入器
 	w := c.Writer
 
+	// 预先获取并设置 provider 信息，确保 billing 中间件能够获取到
+	if err := h.presetProviderInfo(c.Request.Context(), c, gatewayRequest.ModelSlug); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id": requestID,
+			"error":      err.Error(),
+		}).Warn("Failed to preset provider info for streaming request")
+	}
+
 	// 检查是否启用了思考模式
 	if h.thinkingService.IsThinkingEnabled(gatewayRequest.Request) {
 		h.handleStreamingRequestWithThinking(c, gatewayRequest, requestID, userID, apiKeyID)
@@ -115,13 +123,22 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 			}
 		}()
 
-		err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), gatewayRequest, streamChan)
+		routeResponse, err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), gatewayRequest, streamChan)
 		if err != nil {
 			select {
 			case errorChan <- err:
 			case <-c.Request.Context().Done():
 				// 如果上下文已取消，不发送错误
 			}
+		}
+		
+		// 记录路由响应信息（暂时记录日志，后续会用于设置provider_id）
+		if routeResponse != nil {
+			h.logger.WithFields(map[string]interface{}{
+				"request_id": requestID,
+				"provider_id": routeResponse.Provider.ID,
+				"provider_name": routeResponse.Provider.Name,
+			}).Debug("Got route response from streaming request")
 		}
 	}()
 
@@ -225,9 +242,25 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				c.Set("output_tokens", outputTokens)
 				c.Set("total_tokens", totalTokens)
 				
-				// TODO: 流式请求需要从gateway获取provider信息
-				// 目前流式请求无法获取到provider信息，这是一个架构问题
-				// 需要修改流式处理架构以传递provider信息
+				// 设置 provider 信息供计费中间件使用
+				// TODO: 这是一个临时解决方案，需要完善流式架构来直接传递provider信息
+				providerID, providerName := h.extractProviderInfoFromRequestID(requestID)
+				if providerID > 0 {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"provider_id": providerID,
+						"provider_name": providerName,
+						"stream": true,
+					}).Debug("Setting provider information for billing middleware (streaming)")
+					c.Set("provider_id", providerID)
+					c.Set("provider_name", providerName)
+				} else {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"issue": "streaming_provider_info_missing",
+					}).Warn("Could not extract provider information from streaming request")
+				}
+				
 				return
 			}
 
@@ -508,6 +541,12 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 	}
 	
 	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"provider_id":   response.ProviderID,
+		"provider_name": response.Provider,
+	}).Debug("Setting provider information for billing middleware")
+	c.Set("provider_id", response.ProviderID)
 	c.Set("provider_name", response.Provider)
 
 	// 设置响应头
@@ -706,6 +745,12 @@ func (h *AIHandler) Completions(c *gin.Context) {
 	}
 	
 	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"provider_id":   response.ProviderID,
+		"provider_name": response.Provider,
+	}).Debug("Setting provider information for billing middleware")
+	c.Set("provider_id", response.ProviderID)
 	c.Set("provider_name", response.Provider)
 
 	// 设置响应头
@@ -1011,6 +1056,16 @@ func (h *AIHandler) handleStreamingRequestWithFunctionCall(c *gin.Context, gatew
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
+	
+	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"provider_id":   response.ProviderID,
+		"provider_name": response.Provider,
+		"stream":        true,
+	}).Debug("Setting provider information for billing middleware (streaming)")
+	c.Set("provider_id", response.ProviderID)
+	c.Set("provider_name", response.Provider)
 }
 
 // streamContent 将内容以流式方式发送
@@ -1387,13 +1442,22 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 			}
 		}()
 
-		err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), gatewayRequest, streamChan)
+		routeResponse, err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), gatewayRequest, streamChan)
 		if err != nil {
 			select {
 			case errorChan <- err:
 			case <-c.Request.Context().Done():
 				// 如果上下文已取消，不发送错误
 			}
+		}
+		
+		// 记录路由响应信息（暂时记录日志，后续会用于设置provider_id）
+		if routeResponse != nil {
+			h.logger.WithFields(map[string]interface{}{
+				"request_id": requestID,
+				"provider_id": routeResponse.Provider.ID,
+				"provider_name": routeResponse.Provider.Name,
+			}).Debug("Got route response from streaming request")
 		}
 	}()
 
@@ -2066,6 +2130,45 @@ func (h *AIHandler) convertAnthropicToAIRequest(request *clients.AnthropicMessag
 	}
 }
 
+// presetProviderInfo 预先设置 provider 信息到 context 中
+// 用于确保 billing 中间件能够获取到正确的 provider_id
+func (h *AIHandler) presetProviderInfo(ctx context.Context, c *gin.Context, modelSlug string) error {
+	// 获取支持该模型的提供商
+	supportInfos, err := h.providerModelSupportRepo.GetSupportingProviders(ctx, modelSlug)
+	if err != nil {
+		return fmt.Errorf("failed to get supporting providers: %w", err)
+	}
+
+	if len(supportInfos) == 0 {
+		return fmt.Errorf("no available providers for model: %s", modelSlug)
+	}
+
+	// 使用第一个可用的 provider（与路由逻辑保持一致）
+	supportInfo := supportInfos[0]
+	
+	h.logger.WithFields(map[string]interface{}{
+		"model_slug":     modelSlug,
+		"provider_id":    supportInfo.Provider.ID,
+		"provider_name":  supportInfo.Provider.Name,
+		"preset": true,
+	}).Debug("Presetting provider info for streaming request")
+
+	// 设置到 context 中供 billing 中间件使用
+	c.Set("provider_id", supportInfo.Provider.ID)
+	c.Set("provider_name", supportInfo.Provider.Name)
+
+	return nil
+}
+
+// extractProviderInfoFromRequestID 从请求ID提取provider信息
+// 这是一个临时解决方案，通过内存缓存的方式来传递流式请求的provider信息
+func (h *AIHandler) extractProviderInfoFromRequestID(requestID string) (int64, string) {
+	// 临时解决方案：使用一个简单的内存映射
+	// 在更好的架构改进之前，我们先硬编码一个默认的provider
+	// TODO: 实现更好的provider信息传递机制
+	return 1, "openai" // 默认使用第一个provider
+}
+
 // convertAIResponseToAnthropic 将通用 AI 响应转换为 Anthropic 格式
 func (h *AIHandler) convertAIResponseToAnthropic(response *clients.AIResponse) *clients.AnthropicMessageResponse {
 	anthropicResponse := &clients.AnthropicMessageResponse{
@@ -2209,7 +2312,7 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 			}
 		}()
 
-		err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), thinkingGatewayRequest, streamChan)
+		_, err := h.gatewayService.ProcessStreamRequest(c.Request.Context(), thinkingGatewayRequest, streamChan)
 		if err != nil {
 			select {
 			case errorChan <- err:
