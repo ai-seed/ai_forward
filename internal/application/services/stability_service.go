@@ -252,6 +252,9 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 		}
 	}
 	
+	// 设置provider_id供中间件使用
+	response.ProviderID = selectedProvider.ID
+	
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":         userID,
 		"api_key_id":      apiKeyID,

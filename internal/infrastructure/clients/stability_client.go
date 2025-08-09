@@ -80,6 +80,7 @@ type StabilityImageResponse struct {
 	Image        string              `json:"image,omitempty"`         // 用于背景移除等编辑接口（base64格式）
 	Seed         int64               `json:"seed,omitempty"`          // 用于背景移除等编辑接口
 	Cost         float64             `json:"cost,omitempty"`          // 成本信息
+	ProviderID   int64               `json:"provider_id,omitempty"`   // 提供商ID
 }
 
 // StabilityArtifact 图像工件

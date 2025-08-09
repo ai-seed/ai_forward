@@ -564,6 +564,32 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 		}
 	}
 
+	// 获取provider信息
+	if providerID, exists := c.Get("provider_id"); exists {
+		if pid, ok := providerID.(int64); ok {
+			billingCtx.ProviderID = pid
+			bi.logger.WithFields(map[string]interface{}{
+				"event":       "provider_information_retrieved",
+				"request_id":  billingCtx.RequestID,
+				"provider_id": pid,
+				"path":        c.Request.URL.Path,
+			}).Debug("Retrieved provider information from handler context")
+		} else {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":         "provider_information_type_mismatch",
+				"request_id":    billingCtx.RequestID,
+				"provider_type": fmt.Sprintf("%T", providerID),
+				"path":          c.Request.URL.Path,
+			}).Warn("Provider information exists but is not int64")
+		}
+	} else {
+		bi.logger.WithFields(map[string]interface{}{
+			"event":      "provider_information_not_found",
+			"request_id": billingCtx.RequestID,
+			"path":       c.Request.URL.Path,
+		}).Warn("No provider information found in handler context")
+	}
+
 	// 获取成本信息（注意：这是AI提供商返回的成本，计费系统会基于自己的定价重新计算）
 	if costUsed, exists := c.Get("cost_used"); exists {
 		if cost, ok := costUsed.(float64); ok {

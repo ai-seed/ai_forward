@@ -834,12 +834,14 @@ func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
 	if response.Cost > 0 {
 		c.Set("cost_used", response.Cost)
 		c.Set("model_name", "stable-diffusion-remove-background") // Stability背景移除模型
+		c.Set("provider_id", response.ProviderID) // 设置provider_id
 		
 		h.logger.WithFields(map[string]interface{}{
 			"cost_set":    response.Cost,
+			"provider_id": response.ProviderID,
 			"user_id":     userID,
 			"api_key_id":  apiKeyID,
-		}).Debug("Cost information set for billing middleware")
+		}).Debug("Cost and provider information set for billing middleware")
 	} else {
 		h.logger.WithFields(map[string]interface{}{
 			"user_id":    userID,
