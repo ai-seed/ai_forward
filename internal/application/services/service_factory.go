@@ -388,7 +388,7 @@ func (f *ServiceFactory) BillingInterceptor() *middleware.BillingInterceptor {
 	)
 
 	// 创建计费拦截器
-	return middleware.NewBillingInterceptor(billingManager, f.logger)
+	return middleware.NewBillingInterceptor(billingManager, f.logger, f.repoFactory.ModelRepository())
 }
 
 // getAsyncQuotaConfig 获取异步配额配置

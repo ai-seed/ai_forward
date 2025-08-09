@@ -10,6 +10,7 @@ import (
 	"ai-api-gateway/internal/billing/domain"
 	"ai-api-gateway/internal/billing/service"
 	"ai-api-gateway/internal/domain/entities"
+	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/logger"
 
 	"github.com/gin-gonic/gin"
@@ -21,23 +22,26 @@ type BillingInterceptor struct {
 	billingManager *service.BillingManager
 	logger         logger.Logger
 	policy         *BillingPolicy // 计费策略
+	modelRepo      repositories.ModelRepository // 添加模型仓储以查询模型ID
 }
 
 // NewBillingInterceptor 创建计费拦截器
-func NewBillingInterceptor(billingManager *service.BillingManager, logger logger.Logger) *BillingInterceptor {
+func NewBillingInterceptor(billingManager *service.BillingManager, logger logger.Logger, modelRepo repositories.ModelRepository) *BillingInterceptor {
 	return &BillingInterceptor{
 		billingManager: billingManager,
 		logger:         logger,
 		policy:         NewBillingPolicy(), // 使用默认计费策略
+		modelRepo:      modelRepo,
 	}
 }
 
 // NewBillingInterceptorWithPolicy 使用自定义策略创建计费拦截器
-func NewBillingInterceptorWithPolicy(billingManager *service.BillingManager, logger logger.Logger, policy *BillingPolicy) *BillingInterceptor {
+func NewBillingInterceptorWithPolicy(billingManager *service.BillingManager, logger logger.Logger, policy *BillingPolicy, modelRepo repositories.ModelRepository) *BillingInterceptor {
 	return &BillingInterceptor{
 		billingManager: billingManager,
 		logger:         logger,
 		policy:         policy,
+		modelRepo:      modelRepo,
 	}
 }
 
@@ -474,6 +478,48 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 	billingCtx.Status = c.Writer.Status()
 	billingCtx.Success = billingCtx.Status >= 200 && billingCtx.Status < 300
 
+	// 尝试从AI处理器设置的上下文中获取模型信息
+	if billingCtx.ModelID == 0 {
+		if modelName, exists := c.Get("model_name"); exists {
+			if modelStr, ok := modelName.(string); ok {
+				bi.logger.WithFields(map[string]interface{}{
+					"event":        "model_lookup_start",
+					"request_id":   billingCtx.RequestID,
+					"model_name":   modelStr,
+					"path":         c.Request.URL.Path,
+				}).Debug("Looking up model ID from model name")
+
+				// 通过模型名称查询模型ID
+				if bi.modelRepo != nil {
+					ctx := context.Background()
+					model, err := bi.modelRepo.GetBySlug(ctx, modelStr)
+					if err != nil {
+						bi.logger.WithFields(map[string]interface{}{
+							"event":        "model_lookup_failed",
+							"request_id":   billingCtx.RequestID,
+							"model_name":   modelStr,
+							"error":        err.Error(),
+						}).Warn("Failed to lookup model ID from model name")
+					} else if model != nil {
+						billingCtx.ModelID = model.ID
+						bi.logger.WithFields(map[string]interface{}{
+							"event":        "model_lookup_success",
+							"request_id":   billingCtx.RequestID,
+							"model_name":   modelStr,
+							"model_id":     model.ID,
+						}).Info("Successfully resolved model ID from model name")
+					} else {
+						bi.logger.WithFields(map[string]interface{}{
+							"event":        "model_lookup_not_found",
+							"request_id":   billingCtx.RequestID,
+							"model_name":   modelStr,
+						}).Warn("Model not found in database")
+					}
+				}
+			}
+		}
+	}
+
 	// 获取Token信息（如果有的话）
 	if inputTokens, exists := c.Get("input_tokens"); exists {
 		if tokens, ok := inputTokens.(int); ok {
@@ -513,6 +559,16 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 	} else {
 		billingCtx.BillingStage = domain.BillingStageError
 	}
+
+	bi.logger.WithFields(map[string]interface{}{
+		"event":           "billing_context_response_update",
+		"request_id":      billingCtx.RequestID,
+		"final_model_id":  billingCtx.ModelID,
+		"success":         billingCtx.Success,
+		"input_tokens":    billingCtx.InputTokens,
+		"output_tokens":   billingCtx.OutputTokens,
+		"total_tokens":    billingCtx.TotalTokens,
+	}).Debug("Billing context updated with response information")
 }
 
 // GetBillingContext 从Gin上下文中获取计费上下文

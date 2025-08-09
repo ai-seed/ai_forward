@@ -362,6 +362,9 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 		aiRequest.ToolChoice = "auto"
 	}
 
+	// 设置模型信息到上下文，供计费系统使用
+	c.Set("model_name", aiRequest.Model)
+
 	// 构造网关请求
 	gatewayRequest := &gateway.GatewayRequest{
 		UserID:    userID,
@@ -552,6 +555,9 @@ func (h *AIHandler) Completions(c *gin.Context) {
 		aiRequest.Tools = h.functionCallHandler.GetAvailableTools()
 		aiRequest.ToolChoice = "auto"
 	}
+
+	// 设置模型信息到上下文，供计费系统使用
+	c.Set("model_name", aiRequest.Model)
 
 	// 构造网关请求
 	gatewayRequest := &gateway.GatewayRequest{
@@ -1074,6 +1080,9 @@ func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 
 	// 获取请求ID
 	requestID := middleware.GetRequestIDFromContext(c)
+
+	// 设置模型信息到上下文，供计费系统使用
+	c.Set("model_name", anthropicRequest.Model)
 
 	// 处理流式请求
 	if anthropicRequest.Stream {
