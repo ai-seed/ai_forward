@@ -162,6 +162,9 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 		Currency:  "USD",
 	}
 	
+	// 设置provider_id供中间件使用
+	response.ProviderID = provider.ID
+	
 	duration := time.Since(startTime)
 	s.logger.WithFields(map[string]interface{}{
 		"duration_ms":   duration.Milliseconds(),

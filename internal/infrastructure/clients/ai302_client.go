@@ -51,6 +51,7 @@ type AI302UpscaleResponse struct {
 	Output      string      `json:"output"` // url
 	Error       string      `json:"error,omitempty"`
 	Cost        *AI302Cost  `json:"-"` // 内部使用，不序列化到JSON
+	ProviderID  int64       `json:"-"` // 内部使用，不序列化到JSON
 }
 
 // ai302ClientImpl 302.AI客户端实现

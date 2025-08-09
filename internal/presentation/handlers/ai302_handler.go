@@ -162,12 +162,14 @@ func (h *AI302Handler) handleGenericRequest(
 	if response != nil && response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 		c.Set("model_name", "upscale") // AI302 使用 upscale 模型
+		c.Set("provider_id", response.ProviderID) // 设置provider_id
 		
 		h.logger.WithFields(map[string]interface{}{
-			"cost_set": response.Cost.TotalCost,
-			"user_id":  userID,
-			"api_key_id": apiKeyID,
-		}).Debug("Cost information set for billing middleware")
+			"cost_set":    response.Cost.TotalCost,
+			"provider_id": response.ProviderID,
+			"user_id":     userID,
+			"api_key_id":  apiKeyID,
+		}).Debug("Cost and provider information set for billing middleware")
 	} else {
 		h.logger.WithFields(map[string]interface{}{
 			"response_nil": response == nil,
