@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"ai-api-gateway/internal/billing/middleware"
+	billingService "ai-api-gateway/internal/billing/service"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/domain/services"
 	"ai-api-gateway/internal/infrastructure/async"
@@ -371,6 +373,23 @@ func (f *ServiceFactory) createAsyncQuotaService() (services.QuotaService, error
 // ThinkingService 获取思考服务
 func (f *ServiceFactory) ThinkingService() ThinkingService {
 	return NewThinkingService(f.logger)
+}
+
+// BillingInterceptor 获取计费拦截器
+func (f *ServiceFactory) BillingInterceptor() *middleware.BillingInterceptor {
+	// 创建计费管理器
+	billingManager := billingService.NewBillingManager(
+		f.BillingService(),
+		f.QuotaService(),
+		f.repoFactory.UsageLogRepository(),
+		f.repoFactory.UserRepository(),
+		f.repoFactory.BillingRecordRepository(),
+		f.repoFactory.ModelPricingRepository(),
+		f.logger,
+	)
+
+	// 创建计费拦截器
+	return middleware.NewBillingInterceptor(billingManager, f.logger)
 }
 
 // getAsyncQuotaConfig 获取异步配额配置

@@ -65,6 +65,9 @@ func (r *Router) SetupRoutes() {
 	)
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(&r.config.RateLimit, r.logger)
 	quotaMiddleware := middleware.NewQuotaMiddleware(r.serviceFactory.QuotaService(), r.logger)
+	
+	// 创建计费中间件
+	billingInterceptor := r.serviceFactory.BillingInterceptor()
 
 	// 全局中间件
 	r.engine.Use(middleware.RecoveryMiddleware(r.logger))
@@ -190,12 +193,14 @@ func (r *Router) SetupRoutes() {
 	v1 := r.engine.Group("/v1")
 	v1.Use(rateLimitMiddleware.IPRateLimit(100)) // IP级别限流
 	{
-		// AI请求路由（需要认证和配额检查）
+		// AI请求路由（需要认证、计费预检查、配额检查）
 		aiRoutes := v1.Group("/")
 		aiRoutes.Use(authMiddleware.Authenticate())
 		aiRoutes.Use(rateLimitMiddleware.RateLimit())
+		aiRoutes.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		aiRoutes.Use(quotaMiddleware.CheckQuota())
 		aiRoutes.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		aiRoutes.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			aiRoutes.POST("/chat/completions", aiHandler.ChatCompletions)
 			aiRoutes.POST("/completions", aiHandler.Completions)
@@ -295,12 +300,14 @@ func (r *Router) SetupRoutes() {
 	mj := r.engine.Group("/mj")
 	mj.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
 	{
-		// Midjourney提交路由（需要认证和配额检查）
+		// Midjourney提交路由（需要认证、计费预检查、配额检查）
 		mjSubmit := mj.Group("/submit")
 		mjSubmit.Use(authMiddleware.Authenticate())
 		mjSubmit.Use(rateLimitMiddleware.RateLimit())
+		mjSubmit.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		mjSubmit.Use(quotaMiddleware.CheckQuota())
 		mjSubmit.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		mjSubmit.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			mjSubmit.POST("/imagine", midjourneyHandler.Imagine)
 			mjSubmit.POST("/action", midjourneyHandler.Action)
@@ -323,12 +330,14 @@ func (r *Router) SetupRoutes() {
 	sd := r.engine.Group("/sd")
 	sd.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
 	{
-		// Stability.ai图像生成路由（需要认证和配额检查）
+		// Stability.ai图像生成路由（需要认证、计费预检查、配额检查）
 		sdV1 := sd.Group("/v1/generation")
 		sdV1.Use(authMiddleware.Authenticate())
 		sdV1.Use(rateLimitMiddleware.RateLimit())
+		sdV1.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		sdV1.Use(quotaMiddleware.CheckQuota())
 		sdV1.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		sdV1.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			// V1 Text-to-Image (原有接口)
 			sdV1.POST("/stable-diffusion-xl-1024-v1-0/text-to-image", stabilityHandler.TextToImage)
@@ -338,8 +347,10 @@ func (r *Router) SetupRoutes() {
 		sdV2Beta := sd.Group("/v2beta/stable-image")
 		sdV2Beta.Use(authMiddleware.Authenticate())
 		sdV2Beta.Use(rateLimitMiddleware.RateLimit())
+		sdV2Beta.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		sdV2Beta.Use(quotaMiddleware.CheckQuota())
 		sdV2Beta.Use(quotaMiddleware.ConsumeQuota())
+		sdV2Beta.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			// 图片生成接口
 			generate := sdV2Beta.Group("/generate")
@@ -390,11 +401,13 @@ func (r *Router) SetupRoutes() {
 	ai302 := r.engine.Group("/ai")
 	ai302.Use(rateLimitMiddleware.IPRateLimit(50)) // IP级别限流
 	{
-		// 图片处理路由（需要认证和配额检查）
+		// 图片处理路由（需要认证、计费预检查、配额检查）
 		ai302.Use(authMiddleware.Authenticate())
 		ai302.Use(rateLimitMiddleware.RateLimit())
+		ai302.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		ai302.Use(quotaMiddleware.CheckQuota())
 		ai302.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		ai302.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			ai302.POST("/upscale", ai302Handler.Upscale)
 		}
@@ -404,8 +417,10 @@ func (r *Router) SetupRoutes() {
 	vectorizer := r.engine.Group("/vectorizer")
 	vectorizer.Use(authMiddleware.Authenticate())
 	vectorizer.Use(rateLimitMiddleware.RateLimit())
+	vectorizer.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 	vectorizer.Use(quotaMiddleware.CheckQuota())
 	vectorizer.Use(quotaMiddleware.ConsumeQuota())
+	vectorizer.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 	{
 		vectorizerV1 := vectorizer.Group("/api/v1")
 		{
