@@ -160,13 +160,31 @@ func (bm *BillingManager) ProcessRequest(ctx context.Context, billingCtx *domain
 		return result, nil
 	}
 	
-	// 计算实际成本
-	actualCost, err := bm.calculateCostInternal(ctx, billingCtx)
-	if err != nil {
-		bm.auditLogger.LogBillingError(billingCtx, "cost_calculation_failed", err)
-		return nil, fmt.Errorf("failed to calculate actual cost: %w", err)
+	// 计算实际成本 - 优先使用已设置的ActualCost
+	var actualCost float64
+	if billingCtx.ActualCost > 0 {
+		// 使用中间件已经设置的成本（来自Handler的准确计算）
+		actualCost = billingCtx.ActualCost
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id":   billingCtx.RequestID,
+			"actual_cost":  actualCost,
+			"source":       "handler",
+		}).Info("Using pre-calculated cost from handler")
+	} else {
+		// 如果没有预设成本，则重新计算
+		var err error
+		actualCost, err = bm.calculateCostInternal(ctx, billingCtx)
+		if err != nil {
+			bm.auditLogger.LogBillingError(billingCtx, "cost_calculation_failed", err)
+			return nil, fmt.Errorf("failed to calculate actual cost: %w", err)
+		}
+		billingCtx.ActualCost = actualCost
+		bm.logger.WithFields(map[string]interface{}{
+			"request_id":   billingCtx.RequestID,
+			"actual_cost":  actualCost,
+			"source":       "calculated",
+		}).Info("Calculated cost using billing system")
 	}
-	billingCtx.ActualCost = actualCost
 	usageLog.Cost = actualCost
 	
 	// 处理计费 - 扣减余额
