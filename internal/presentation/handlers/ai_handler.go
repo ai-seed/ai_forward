@@ -183,14 +183,16 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 					}
 					totalTokens = inputTokens + outputTokens
 					
-					// 记录日志，提醒这是估算值
+					// 记录详细的估算信息，方便调试和优化
+					debugInfo := h.tokenizer.DebugTokenCount(outputContent.String())
 					h.logger.WithFields(map[string]interface{}{
 						"request_id":     requestID,
 						"estimated":      true,
 						"input_tokens":   inputTokens,
 						"output_tokens":  outputTokens,
 						"content_length": outputContent.Len(),
-					}).Warn("Using estimated token count for streaming response - consider implementing accurate token counting")
+						"debug_info":     debugInfo,
+					}).Warn("Using estimated token count for streaming response - compare with actual provider tokens")
 				}
 
 				// 发送结束标记
@@ -2267,14 +2269,16 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 					}
 					totalTokens = inputTokens + outputTokens
 					
-					// 记录日志，提醒这是估算值
+					// 记录详细的估算信息，方便调试和优化
+					debugInfo := h.tokenizer.DebugTokenCount(outputContent.String())
 					h.logger.WithFields(map[string]interface{}{
 						"request_id":     requestID,
 						"estimated":      true,
 						"input_tokens":   inputTokens,
 						"output_tokens":  outputTokens,
 						"content_length": outputContent.Len(),
-					}).Warn("Using estimated token count for streaming response - consider implementing accurate token counting")
+						"debug_info":     debugInfo,
+					}).Warn("Using estimated token count for streaming response - compare with actual provider tokens")
 				}
 
 				// 发送结束标记
