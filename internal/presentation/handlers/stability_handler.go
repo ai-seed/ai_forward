@@ -833,7 +833,7 @@ func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
 	// 设置成本和模型信息到上下文，供计费中间件使用
 	if response.Cost > 0 {
 		c.Set("cost_used", response.Cost)
-		c.Set("model_name", "stable-image-edit-remove-background") // Stability背景移除模型
+		c.Set("model_name", "stable-diffusion-remove-background") // Stability背景移除模型
 		
 		h.logger.WithFields(map[string]interface{}{
 			"cost_set":    response.Cost,

@@ -579,8 +579,9 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 				// 对于仅记录日志的请求，可以使用AI提供商的成本
 				billingCtx.ActualCost = cost
 			} else {
-				// 对于正常计费，不使用AI提供商成本，让计费系统重新计算
-				// 但保存作为参考
+				// 对于正常计费，优先使用Handler提供的准确成本
+				// 因为Handler已经基于数据库定价计算了正确的成本
+				billingCtx.ActualCost = cost
 				if billingCtx.EstimatedCost == 0 {
 					billingCtx.EstimatedCost = cost
 				}
