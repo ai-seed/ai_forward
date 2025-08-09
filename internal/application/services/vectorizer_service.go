@@ -151,52 +151,19 @@ func (s *vectorizerServiceImpl) processVectorizerRequestWithModel(
 		return nil, fmt.Errorf("failed to calculate cost: %w", err)
 	}
 
-	// 记录使用日志
-	err = s.usageLogService.CreateUsageLog(ctx, &entities.UsageLog{
-		UserID:      userID,
-		APIKeyID:    apiKeyID,
-		ModelID:     model.ID,
-		ProviderID:  provider.ID,
-		RequestID:   fmt.Sprintf("vectorizer-%d", time.Now().UnixNano()),
-		RequestType: entities.RequestTypeAPI,
-		Method:      "POST",
-		Endpoint:    endpoint,
-		Cost:        cost,
-		CreatedAt:   time.Now(),
-	})
-
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"user_id":    userID,
-			"api_key_id": apiKeyID,
-		}).Error("Failed to log usage")
-		// 不返回错误，因为主要功能已完成
+	// 设置成本信息到响应，供billing中间件使用
+	response.Cost = &clients.VectorizerCost{
+		TotalCost: cost,
+		Currency:  "USD",
 	}
-
-	// 处理计费
-	usageLog := &entities.UsageLog{
-		UserID:      userID,
-		APIKeyID:    apiKeyID,
-		ModelID:     model.ID,
-		ProviderID:  provider.ID,
-		RequestID:   fmt.Sprintf("vectorizer-%d", time.Now().UnixNano()),
-		RequestType: entities.RequestTypeAPI,
-		Method:      "POST",
-		Endpoint:    endpoint,
-		Cost:        cost,
-		CreatedAt:   time.Now(),
-	}
-
-	err = s.billingService.ProcessBilling(ctx, usageLog)
-	if err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":   err.Error(),
-			"user_id": userID,
-			"cost":    cost,
-		}).Error("Failed to process billing")
-		return nil, fmt.Errorf("failed to process billing: %w", err)
-	}
+	response.ProviderID = provider.ID
+	
+	s.logger.WithFields(map[string]interface{}{
+		"cost":        cost,
+		"provider_id": provider.ID,
+		"user_id":     userID,
+		"api_key_id":  apiKeyID,
+	}).Info("Vectorizer request completed, billing will be handled by middleware")
 
 	// 更新API密钥最后使用时间
 	err = s.apiKeyRepo.UpdateLastUsed(ctx, apiKeyID)

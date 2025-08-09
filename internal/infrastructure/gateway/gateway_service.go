@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
-	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/domain/values"
 	"ai-api-gateway/internal/infrastructure/clients"
@@ -151,7 +149,6 @@ func NewGatewayService(
 
 // ProcessRequest 处理AI请求
 func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *GatewayRequest) (*GatewayResponse, error) {
-	start := time.Now()
 
 	// 生成请求ID（如果没有提供）
 	if request.RequestID == "" {
@@ -186,8 +183,7 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 	}).Info("Routing AI request")
 	routeResponse, err := g.router.RouteRequest(ctx, routeRequest)
 	if err != nil {
-		// 记录失败的使用日志
-		g.recordUsageLog(ctx, request, nil, nil, nil, nil, time.Since(start), err)
+		// 注意：失败的使用日志记录已由billing中间件统一处理
 		return nil, fmt.Errorf("failed to route request: %w", err)
 	}
 
@@ -209,15 +205,10 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 		cost = &CostInfo{Currency: "USD"} // 默认值
 	}
 
-	// 记录使用日志
-	usageLog := g.recordUsageLog(ctx, request, routeResponse.Provider, routeResponse.Model, usage, cost, routeResponse.Duration, nil)
-
-	// 注意：配额消费已在中间件中处理，这里不再重复消费
-
-	// 处理计费
-	if usageLog != nil {
-		g.processBilling(ctx, request.UserID, usageLog.ID, cost.TotalCost)
-	}
+	// 注意：
+	// 1. 使用日志记录已由billing中间件统一处理，这里不再重复记录
+	// 2. 配额消费已在中间件中处理，这里不再重复消费  
+	// 3. 计费处理已由billing中间件统一处理，这里不再重复处理
 
 	response := &GatewayResponse{
 		Response:  routeResponse.Response,
@@ -260,134 +251,18 @@ func (g *gatewayServiceImpl) calculateCost(ctx context.Context, modelID int64, i
 	}, nil
 }
 
-// recordUsageLog 记录使用日志
-func (g *gatewayServiceImpl) recordUsageLog(ctx context.Context, request *GatewayRequest, provider *entities.Provider, model *entities.Model, usage *UsageInfo, cost *CostInfo, duration time.Duration, requestError error) *entities.UsageLog {
-	usageLog := &entities.UsageLog{
-		UserID:     request.UserID,
-		APIKeyID:   request.APIKeyID,
-		RequestID:  request.RequestID,
-		Method:     "POST",
-		Endpoint:   "/v1/chat/completions",
-		DurationMs: int(duration.Milliseconds()),
-		CreatedAt:  time.Now(),
-	}
-
-	if provider != nil {
-		usageLog.ProviderID = provider.ID
-	}
-
-	if model != nil {
-		usageLog.ModelID = model.ID
-	}
-
-	if usage != nil {
-		usageLog.InputTokens = usage.InputTokens
-		usageLog.OutputTokens = usage.OutputTokens
-		usageLog.TotalTokens = usage.TotalTokens
-	}
-
-	if cost != nil {
-		usageLog.Cost = cost.TotalCost
-	}
-
-	if requestError != nil {
-		usageLog.StatusCode = 500
-		errorMsg := requestError.Error()
-		usageLog.ErrorMessage = &errorMsg
-	} else {
-		usageLog.StatusCode = 200
-	}
-
-	if err := g.usageLogService.CreateUsageLog(ctx, usageLog); err != nil {
-		g.logger.WithFields(map[string]interface{}{
-			"request_id": request.RequestID,
-			"error":      err.Error(),
-		}).Error("Failed to create usage log")
-		return nil
-	}
-
-	return usageLog
-}
+// recordUsageLog 已废弃 - 使用日志记录已由billing中间件统一处理
+// func (g *gatewayServiceImpl) recordUsageLog(ctx context.Context, request *GatewayRequest, provider *entities.Provider, model *entities.Model, usage *UsageInfo, cost *CostInfo, duration time.Duration, requestError error) *entities.UsageLog {
+//     // 此方法已被移除，所有使用日志记录由billing中间件统一管理
+//     return nil  
+// }
 
 // 注意：consumeQuotas 函数已删除，配额消费现在只在中间件中处理，避免重复消费
 
-// processBilling 处理计费
-func (g *gatewayServiceImpl) processBilling(ctx context.Context, userID int64, usageLogID int64, cost float64) {
-	if cost <= 0 {
-		return
-	}
-
-	// 获取用户信息
-	user, err := g.userService.GetUser(ctx, userID)
-	if err != nil {
-		g.logger.WithFields(map[string]interface{}{
-			"user_id": userID,
-			"cost":    cost,
-			"error":   err.Error(),
-		}).Error("Failed to get user for billing")
-		return
-	}
-
-	// 记录扣费信息（允许余额变负数）
-	g.logger.WithFields(map[string]interface{}{
-		"user_id": userID,
-		"balance": user.Balance,
-		"cost":    cost,
-	}).Info("Processing billing - balance may become negative")
-
-	// 扣减用户余额
-	updateReq := &dto.BalanceUpdateRequest{
-		Amount:      cost,
-		Operation:   "deduct",
-		Description: fmt.Sprintf("API usage cost: %.8f USD", cost),
-	}
-
-	_, err = g.userService.UpdateBalance(ctx, userID, updateReq)
-	if err != nil {
-		g.logger.WithFields(map[string]interface{}{
-			"user_id": userID,
-			"cost":    cost,
-			"error":   err.Error(),
-		}).Error("Failed to deduct user balance")
-		return
-	}
-
-	// 创建计费记录
-	description := fmt.Sprintf("API usage cost: %.8f USD", cost)
-	processedAt := time.Now()
-	billingRecord := &entities.BillingRecord{
-		UserID:      userID,
-		UsageLogID:  usageLogID,
-		Amount:      cost,
-		Currency:    "USD",
-		BillingType: entities.BillingTypeUsage,
-		Description: &description,
-		ProcessedAt: &processedAt,
-		Status:      entities.BillingStatusProcessed,
-	}
-
-	// 创建计费记录
-	if err := g.billingRepo.Create(ctx, billingRecord); err != nil {
-		g.logger.WithFields(map[string]interface{}{
-			"user_id": userID,
-			"cost":    cost,
-			"error":   err.Error(),
-		}).Error("Failed to create billing record")
-		// 不返回错误，因为余额已经扣减成功
-	} else {
-		g.logger.WithFields(map[string]interface{}{
-			"user_id":           userID,
-			"billing_record_id": billingRecord.ID,
-			"amount":            cost,
-		}).Info("Billing record created successfully")
-	}
-
-	g.logger.WithFields(map[string]interface{}{
-		"user_id":     userID,
-		"cost":        cost,
-		"new_balance": user.Balance - cost,
-	}).Info("Billing processed successfully")
-}
+// processBilling 已废弃 - 计费处理已由billing中间件统一处理
+// func (g *gatewayServiceImpl) processBilling(ctx context.Context, userID int64, usageLogID int64, cost float64) {
+//     // 此方法已被移除，所有计费处理由billing中间件统一管理
+// }
 
 // 注意：processQuotaConsumption 函数已删除，配额消费现在只在中间件中处理，避免重复消费
 
@@ -421,7 +296,7 @@ func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *
 	}
 
 	// 路由请求到提供商
-	routeResponse, err := g.router.RouteStreamRequest(ctx, request, streamChan)
+	_, err := g.router.RouteStreamRequest(ctx, request, streamChan)
 	if err != nil {
 		g.logger.WithFields(map[string]interface{}{
 			"request_id": request.RequestID,
@@ -432,50 +307,15 @@ func (g *gatewayServiceImpl) ProcessStreamRequest(ctx context.Context, request *
 		return err
 	}
 
-	// 记录使用日志（异步）
-	go g.recordStreamUsage(ctx, request, routeResponse)
+	// 注意：流式请求的使用日志记录和计费已由billing中间件统一处理，这里不再重复记录
 
 	return nil
 }
 
-// recordStreamUsage 记录流式请求的使用日志
-func (g *gatewayServiceImpl) recordStreamUsage(ctx context.Context, request *GatewayRequest, routeResponse *RouteResponse) {
-	// 检查响应是否为空
-	if routeResponse == nil || routeResponse.Response == nil {
-		g.logger.WithFields(map[string]interface{}{
-			"request_id": request.RequestID,
-		}).Debug("Skipping usage recording for stream request - no response data")
-		return
-	}
-
-	// 计算使用量和成本
-	usage := &UsageInfo{
-		InputTokens:  routeResponse.Response.Usage.PromptTokens,
-		OutputTokens: routeResponse.Response.Usage.CompletionTokens,
-		TotalTokens:  routeResponse.Response.Usage.TotalTokens,
-	}
-
-	// 计算成本
-	cost, err := g.calculateCost(ctx, routeResponse.Model.ID, usage.InputTokens, usage.OutputTokens)
-	if err != nil {
-		g.logger.WithFields(map[string]interface{}{
-			"request_id": request.RequestID,
-			"model_id":   routeResponse.Model.ID,
-			"error":      err.Error(),
-		}).Warn("Failed to calculate cost for stream request")
-		cost = &CostInfo{Currency: "USD"} // 默认值
-	}
-
-	// 记录使用日志
-	usageLog := g.recordUsageLog(ctx, request, routeResponse.Provider, routeResponse.Model, usage, cost, routeResponse.Duration, nil)
-
-	// 注意：配额消费已在中间件中处理，这里不再重复消费
-
-	// 处理计费
-	if usageLog != nil {
-		g.processBilling(ctx, request.UserID, usageLog.ID, cost.TotalCost)
-	}
-}
+// recordStreamUsage 已废弃 - 流式请求的使用日志记录和计费已由billing中间件统一处理
+// func (g *gatewayServiceImpl) recordStreamUsage(ctx context.Context, request *GatewayRequest, routeResponse *RouteResponse) {
+//     // 此方法已被移除，所有计费处理由billing中间件统一管理
+// }
 
 // GetStats 获取统计信息
 func (g *gatewayServiceImpl) GetStats(ctx context.Context) (*GatewayStats, error) {

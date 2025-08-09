@@ -444,7 +444,7 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 		}
 	}
 
-	// 获取provider信息
+	// 获取provider信息 - 优先使用provider_id，如果没有则通过provider_name查找
 	if providerID, exists := c.Get("provider_id"); exists {
 		if pid, ok := providerID.(int64); ok {
 			billingCtx.ProviderID = pid
@@ -453,7 +453,7 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 				"request_id":  billingCtx.RequestID,
 				"provider_id": pid,
 				"path":        c.Request.URL.Path,
-			}).Debug("Retrieved provider information from handler context")
+			}).Debug("Retrieved provider ID from handler context")
 		} else {
 			bi.logger.WithFields(map[string]interface{}{
 				"event":         "provider_information_type_mismatch",
@@ -461,6 +461,24 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 				"provider_type": fmt.Sprintf("%T", providerID),
 				"path":          c.Request.URL.Path,
 			}).Warn("Provider information exists but is not int64")
+		}
+	} else if providerName, exists := c.Get("provider_name"); exists {
+		if pName, ok := providerName.(string); ok && pName != "" {
+			bi.logger.WithFields(map[string]interface{}{
+				"event":         "provider_name_lookup_start",
+				"request_id":    billingCtx.RequestID,
+				"provider_name": pName,
+				"path":          c.Request.URL.Path,
+			}).Debug("Looking up provider ID from provider name")
+			
+			// 通过provider名称查找provider_id (这里需要添加provider repository)
+			// 暂时记录，但provider_id将保持为0
+			bi.logger.WithFields(map[string]interface{}{
+				"event":         "provider_name_lookup_todo",
+				"request_id":    billingCtx.RequestID,
+				"provider_name": pName,
+				"path":          c.Request.URL.Path,
+			}).Warn("Provider name found but lookup not implemented - provider_id will be 0")
 		}
 	} else {
 		bi.logger.WithFields(map[string]interface{}{

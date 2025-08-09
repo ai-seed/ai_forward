@@ -224,6 +224,10 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				c.Set("input_tokens", inputTokens)
 				c.Set("output_tokens", outputTokens)
 				c.Set("total_tokens", totalTokens)
+				
+				// TODO: 流式请求需要从gateway获取provider信息
+				// 目前流式请求无法获取到provider信息，这是一个架构问题
+				// 需要修改流式处理架构以传递provider信息
 				return
 			}
 
@@ -502,6 +506,9 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
+	
+	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
+	c.Set("provider_name", response.Provider)
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)
@@ -697,6 +704,9 @@ func (h *AIHandler) Completions(c *gin.Context) {
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
+	
+	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
+	c.Set("provider_name", response.Provider)
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)

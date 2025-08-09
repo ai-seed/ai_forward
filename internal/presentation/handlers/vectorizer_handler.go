@@ -164,6 +164,20 @@ func (h *VectorizerHandler) Vectorize(c *gin.Context) {
 		"finish_reason": response.FinishReason,
 	}).Info("Successfully vectorized image")
 
+	// 设置成本信息供计费中间件使用
+	if response.Cost != nil {
+		c.Set("cost_used", response.Cost.TotalCost)
+		c.Set("model_name", "vectorizer")
+		if response.ProviderID > 0 {
+			c.Set("provider_id", response.ProviderID)
+		}
+		
+		h.logger.WithFields(map[string]interface{}{
+			"cost":        response.Cost.TotalCost,
+			"provider_id": response.ProviderID,
+		}).Debug("Set billing context for vectorizer")
+	}
+
 	// 返回矢量化结果
 	vectorizerResponse := VectorizerResponse{
 		SVGData:      response.SVGData,

@@ -26,9 +26,17 @@ type VectorizerRequest struct {
 
 // VectorizerResponse 矢量化响应
 type VectorizerResponse struct {
-	SVGData      string `json:"svg_data,omitempty"`      // SVG矢量图数据
-	FinishReason string `json:"finish_reason,omitempty"` // 完成原因
-	Error        string `json:"error,omitempty"`         // 错误信息
+	SVGData      string            `json:"svg_data,omitempty"`      // SVG矢量图数据
+	FinishReason string            `json:"finish_reason,omitempty"` // 完成原因
+	Error        string            `json:"error,omitempty"`         // 错误信息
+	Cost         *VectorizerCost   `json:"cost,omitempty"`          // 成本信息
+	ProviderID   int64             `json:"provider_id,omitempty"`   // 提供商ID
+}
+
+// VectorizerCost 矢量化成本信息
+type VectorizerCost struct {
+	TotalCost float64 `json:"total_cost"` // 总成本
+	Currency  string  `json:"currency"`   // 货币
 }
 
 // vectorizerClientImpl Vectorizer客户端实现
