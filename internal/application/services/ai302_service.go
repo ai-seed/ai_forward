@@ -164,8 +164,9 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 	
 	// 注意：不在这里创建UsageLog，让计费中间件统一处理
 	// 设置响应级别的成本信息
-	response.Cost = &clients.CostInfo{
+	response.Cost = &clients.AI302Cost{
 		TotalCost: cost,
+		Currency:  "USD",
 	}
 	
 	s.logger.WithFields(map[string]interface{}{

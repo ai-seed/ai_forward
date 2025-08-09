@@ -34,17 +34,23 @@ type AI302UpscaleJSONRequest struct {
 	FaceEnhance bool   `json:"face_enhance,omitempty"`   // 人脸增强，默认true
 }
 
+// AI302Cost 302.AI成本信息
+type AI302Cost struct {
+	TotalCost float64 `json:"total_cost"`
+	Currency  string  `json:"currency"`
+}
+
 // AI302UpscaleResponse 302.AI图片放大响应
 type AI302UpscaleResponse struct {
-	ID          string    `json:"id"`
-	Model       string    `json:"model"`
-	Status      string    `json:"status"`
-	CreatedAt   string    `json:"created_at"`
-	StartedAt   string    `json:"started_at"`
-	CompletedAt string    `json:"completed_at"`
-	Output      string    `json:"output"` // url
-	Error       string    `json:"error,omitempty"`
-	Cost        *CostInfo `json:"-"` // 内部使用，不序列化到JSON
+	ID          string      `json:"id"`
+	Model       string      `json:"model"`
+	Status      string      `json:"status"`
+	CreatedAt   string      `json:"created_at"`
+	StartedAt   string      `json:"started_at"`
+	CompletedAt string      `json:"completed_at"`
+	Output      string      `json:"output"` // url
+	Error       string      `json:"error,omitempty"`
+	Cost        *AI302Cost  `json:"-"` // 内部使用，不序列化到JSON
 }
 
 // ai302ClientImpl 302.AI客户端实现
