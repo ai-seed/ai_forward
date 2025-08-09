@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"strconv"
 	"time"
 
 	"ai-api-gateway/internal/billing/domain"
