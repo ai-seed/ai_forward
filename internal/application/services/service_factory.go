@@ -340,7 +340,6 @@ func (f *ServiceFactory) AI302Service() AI302Service {
 		f.repoFactory.ModelRepository(),
 		f.repoFactory.ModelPricingRepository(),
 		f.repoFactory.ProviderModelSupportRepository(),
-		f.repoFactory.UsageLogRepository(),
 		s3Service,
 		f.logger,
 	)

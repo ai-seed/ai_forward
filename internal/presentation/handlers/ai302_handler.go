@@ -158,13 +158,24 @@ func (h *AI302Handler) handleGenericRequest(
 		"status":       response.Status,
 	}).Info("Successfully processed request")
 
-	// 设置计费相关信息到上下文（供计费中间件使用）
-	if response.Cost != nil {
+	// 设置成本信息到上下文，供计费中间件使用
+	if response != nil && response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
+		c.Set("model_name", "upscale") // AI302 使用 upscale 模型
+		
+		h.logger.WithFields(map[string]interface{}{
+			"cost_set": response.Cost.TotalCost,
+			"user_id":  userID,
+			"api_key_id": apiKeyID,
+		}).Debug("Cost information set for billing middleware")
+	} else {
+		h.logger.WithFields(map[string]interface{}{
+			"response_nil": response == nil,
+			"cost_nil":     response != nil && response.Cost == nil,
+			"user_id":      userID,
+			"api_key_id":   apiKeyID,
+		}).Warn("Cost information not available for billing middleware")
 	}
-	
-	// 设置模型名称供计费中间件查找ModelID
-	c.Set("model_name", requestType)
 
 	c.JSON(http.StatusOK, response)
 }

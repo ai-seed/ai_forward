@@ -30,7 +30,6 @@ type ai302ServiceImpl struct {
 	modelRepo                repositories.ModelRepository
 	modelPricingRepo         repositories.ModelPricingRepository
 	providerModelSupportRepo repositories.ProviderModelSupportRepository
-	usageLogRepo             repositories.UsageLogRepository
 	s3Service                storage.S3Service
 	logger                   logger.Logger
 }
@@ -42,7 +41,6 @@ func NewAI302Service(
 	modelRepo repositories.ModelRepository,
 	modelPricingRepo repositories.ModelPricingRepository,
 	providerModelSupportRepo repositories.ProviderModelSupportRepository,
-	usageLogRepo repositories.UsageLogRepository,
 	s3Service storage.S3Service,
 	logger logger.Logger,
 ) AI302Service {
@@ -52,7 +50,6 @@ func NewAI302Service(
 		modelRepo:                modelRepo,
 		modelPricingRepo:         modelPricingRepo,
 		providerModelSupportRepo: providerModelSupportRepo,
-		usageLogRepo:             usageLogRepo,
 		s3Service:                s3Service,
 		logger:                   logger,
 	}
@@ -156,25 +153,22 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 		return nil, fmt.Errorf("failed to process request: %w", err)
 	}
 
-	// 计算成本（按次计费，1次请求）
+	// 计算成本（按次计费，1次请求）- 供中间件使用
 	cost := pricing.CalculateCost(1) // 使用定价信息计算成本，1次请求
-
-	// 记录计费相关信息（供计费中间件使用）
-	duration := time.Since(startTime)
 	
-	// 注意：不在这里创建UsageLog，让计费中间件统一处理
-	// 设置响应级别的成本信息
+	// 设置响应级别的成本信息（供返回给客户端参考）
 	response.Cost = &clients.AI302Cost{
 		TotalCost: cost,
 		Currency:  "USD",
 	}
 	
+	duration := time.Since(startTime)
 	s.logger.WithFields(map[string]interface{}{
-		"duration_ms": duration.Milliseconds(),
-		"model_id":    model.ID,
-		"provider_id": provider.ID,
-		"cost":        cost,
-	}).Debug("Request processing completed, billing info prepared")
+		"duration_ms":   duration.Milliseconds(),
+		"model_id":      model.ID,
+		"provider_id":   provider.ID,
+		"cost":          cost,
+	}).Info("AI302 request completed, billing will be handled by middleware")
 
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":    userID,

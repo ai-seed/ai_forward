@@ -155,6 +155,7 @@ func (bp *BillingPolicy) GetBillingBehavior(c *gin.Context) BillingBehavior {
 		return BillingBehaviorLogOnly
 	}
 	
+
 	// 检查特殊规则
 	if rule, exists := bp.getSpecialRule(path); exists {
 		switch rule.Type {
