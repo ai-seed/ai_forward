@@ -20,6 +20,7 @@ import (
 	"ai-api-gateway/internal/infrastructure/functioncall"
 	"ai-api-gateway/internal/infrastructure/gateway"
 	"ai-api-gateway/internal/infrastructure/logger"
+	"ai-api-gateway/internal/infrastructure/tokenizer"
 	"ai-api-gateway/internal/presentation/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,7 @@ type AIHandler struct {
 	httpClient               clients.HTTPClient
 	aiClient                 clients.AIProviderClient
 	thinkingService          services.ThinkingService
+	tokenizer               *tokenizer.SimpleTokenizer
 }
 
 // NewAIHandler 创建AI请求处理器
@@ -63,6 +65,7 @@ func NewAIHandler(
 		httpClient:               httpClient,
 		aiClient:                 aiClient,
 		thinkingService:          thinkingService,
+		tokenizer:               tokenizer.NewSimpleTokenizer(),
 	}
 }
 
@@ -125,12 +128,36 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 	// 发送流式数据
 	var totalTokens int
 	var totalCost float64
+	var outputContent strings.Builder  // 收集输出内容用于token计算
+	var inputTokens int
+
+	// 计算输入token数量
+	if gatewayRequest.Request.Messages != nil {
+		var messages []map[string]interface{}
+		for _, msg := range gatewayRequest.Request.Messages {
+			messages = append(messages, map[string]interface{}{
+				"role":    msg.Role,
+				"content": msg.Content,
+			})
+		}
+		inputTokens = h.tokenizer.CountTokensFromMessages(messages)
+	} else if gatewayRequest.Request.Prompt != "" {
+		inputTokens = h.tokenizer.CountTokens(gatewayRequest.Request.Prompt)
+	}
 
 	for {
 		select {
 		case chunk, ok := <-streamChan:
 			if !ok {
-				// 流结束，发送结束标记
+				// 流结束，计算最终的token数量
+				outputTokens := h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+				
+				// 如果没有从chunk中获取到totalTokens，使用计算的值
+				if totalTokens == 0 {
+					totalTokens = inputTokens + outputTokens
+				}
+
+				// 发送结束标记
 				_, err := w.Write([]byte("data: [DONE]\n\n"))
 				if err != nil {
 					h.logger.WithFields(map[string]interface{}{
@@ -142,22 +169,32 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 
 				// 输出流式AI提供商响应结果
 				h.logger.WithFields(map[string]interface{}{
-					"request_id":   requestID,
-					"user_id":      userID,
-					"api_key_id":   apiKeyID,
-					"total_tokens": totalTokens,
-					"total_cost":   totalCost,
-					"stream_type":  "completed",
+					"request_id":     requestID,
+					"user_id":        userID,
+					"api_key_id":     apiKeyID,
+					"input_tokens":   inputTokens,
+					"output_tokens":  outputTokens,
+					"total_tokens":   totalTokens,
+					"total_cost":     totalCost,
+					"stream_type":    "completed",
+					"content_length": outputContent.Len(),
 				}).Info("AI provider streaming response completed successfully")
 
 				// 设置使用量到上下文
 				c.Set("tokens_used", totalTokens)
 				c.Set("cost_used", totalCost)
+				c.Set("input_tokens", inputTokens)
+				c.Set("output_tokens", outputTokens)
 				c.Set("total_tokens", totalTokens)
 				return
 			}
 
-			// 累计使用量
+			// 收集输出内容
+			if chunk.Content != "" {
+				outputContent.WriteString(chunk.Content)
+			}
+
+			// 累计使用量（如果chunk中包含usage信息）
 			if chunk.Usage != nil {
 				totalTokens += chunk.Usage.TotalTokens
 			}
@@ -2139,12 +2176,36 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 
 	var totalTokens int
 	var totalCost float64
+	var outputContent strings.Builder  // 收集输出内容用于token计算
+	var inputTokens int
+
+	// 计算输入token数量
+	if gatewayRequest.Request.Messages != nil {
+		var messages []map[string]interface{}
+		for _, msg := range gatewayRequest.Request.Messages {
+			messages = append(messages, map[string]interface{}{
+				"role":    msg.Role,
+				"content": msg.Content,
+			})
+		}
+		inputTokens = h.tokenizer.CountTokensFromMessages(messages)
+	} else if gatewayRequest.Request.Prompt != "" {
+		inputTokens = h.tokenizer.CountTokens(gatewayRequest.Request.Prompt)
+	}
 
 	for {
 		select {
 		case chunk, ok := <-streamChan:
 			if !ok {
-				// 流结束，发送结束标记
+				// 流结束，计算最终的token数量
+				outputTokens := h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+				
+				// 如果没有从chunk中获取到totalTokens，使用计算的值
+				if totalTokens == 0 {
+					totalTokens = inputTokens + outputTokens
+				}
+
+				// 发送结束标记
 				_, err := w.Write([]byte("data: [DONE]\n\n"))
 				if err != nil {
 					h.logger.WithFields(map[string]interface{}{
@@ -2157,21 +2218,31 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 				}
 
 				h.logger.WithFields(map[string]interface{}{
-					"request_id":   requestID,
-					"user_id":      userID,
-					"api_key_id":   apiKeyID,
-					"total_tokens": totalTokens,
-					"total_cost":   totalCost,
-					"stream_type":  "thinking_completed",
+					"request_id":     requestID,
+					"user_id":        userID,
+					"api_key_id":     apiKeyID,
+					"input_tokens":   inputTokens,
+					"output_tokens":  outputTokens,
+					"total_tokens":   totalTokens,
+					"total_cost":     totalCost,
+					"stream_type":    "thinking_completed",
+					"content_length": outputContent.Len(),
 				}).Info("AI thinking streaming response completed successfully")
 
 				c.Set("tokens_used", totalTokens)
 				c.Set("cost_used", totalCost)
+				c.Set("input_tokens", inputTokens)
+				c.Set("output_tokens", outputTokens)
 				c.Set("total_tokens", totalTokens)
 				return
 			}
 
-			// 累计使用量
+			// 收集输出内容
+			if chunk.Content != "" {
+				outputContent.WriteString(chunk.Content)
+			}
+
+			// 累计使用量（如果chunk中包含usage信息）
 			if chunk.Usage != nil {
 				totalTokens += chunk.Usage.TotalTokens
 			}
