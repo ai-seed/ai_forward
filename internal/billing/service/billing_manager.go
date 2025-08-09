@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"ai-api-gateway/internal/billing/domain"
 	"ai-api-gateway/internal/domain/entities"
@@ -14,13 +13,14 @@ import (
 
 // BillingManager 计费管理器 - 统一的计费入口
 type BillingManager struct {
-	// 依赖的服务
-	billingService    services.BillingService
-	quotaService     services.QuotaService
+	// 依赖的仓储
 	usageLogRepo     repositories.UsageLogRepository
 	userRepo         repositories.UserRepository
 	billingRecordRepo repositories.BillingRecordRepository
 	modelPricingRepo  repositories.ModelPricingRepository
+	
+	// 依赖的服务
+	quotaService     services.QuotaService
 	
 	// 配置和工具
 	logger           logger.Logger
@@ -29,7 +29,6 @@ type BillingManager struct {
 
 // NewBillingManager 创建计费管理器
 func NewBillingManager(
-	billingService services.BillingService,
 	quotaService services.QuotaService,
 	usageLogRepo repositories.UsageLogRepository,
 	userRepo repositories.UserRepository,
@@ -38,7 +37,6 @@ func NewBillingManager(
 	logger logger.Logger,
 ) *BillingManager {
 	return &BillingManager{
-		billingService:    billingService,
 		quotaService:     quotaService,
 		usageLogRepo:     usageLogRepo,
 		userRepo:         userRepo,
@@ -67,14 +65,17 @@ func (bm *BillingManager) PreCheck(ctx context.Context, billingCtx *domain.Billi
 		Details:       make(map[string]interface{}),
 	}
 	
-	// 检查余额
-	balanceOK, err := bm.quotaService.CheckBalance(ctx, billingCtx.UserID, estimatedCost)
+	// 检查余额 - 通过用户服务检查余额
+	user, err := bm.userRepo.GetByID(ctx, billingCtx.UserID)
 	if err != nil {
-		bm.auditLogger.LogPreCheckError(billingCtx, "balance_check_failed", err)
-		return nil, fmt.Errorf("failed to check balance: %w", err)
+		bm.auditLogger.LogPreCheckError(billingCtx, "user_fetch_failed", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+	
+	balanceOK := user.Balance >= estimatedCost
 	result.BalanceOK = balanceOK
 	result.Details["balance_check"] = balanceOK
+	result.Details["current_balance"] = user.Balance
 	
 	if !balanceOK {
 		result.CanProceed = false
@@ -160,7 +161,7 @@ func (bm *BillingManager) ProcessRequest(ctx context.Context, billingCtx *domain
 	}
 	
 	// 计算实际成本
-	actualCost, err := bm.calculateActualCost(ctx, billingCtx)
+	actualCost, err := bm.calculateCostInternal(ctx, billingCtx)
 	if err != nil {
 		bm.auditLogger.LogBillingError(billingCtx, "cost_calculation_failed", err)
 		return nil, fmt.Errorf("failed to calculate actual cost: %w", err)
@@ -168,8 +169,8 @@ func (bm *BillingManager) ProcessRequest(ctx context.Context, billingCtx *domain
 	billingCtx.ActualCost = actualCost
 	usageLog.Cost = actualCost
 	
-	// 处理计费 - 扣减余额和创建计费记录
-	if err := bm.billingService.ProcessBilling(ctx, usageLog); err != nil {
+	// 处理计费 - 扣减余额
+	if err := bm.processBillingInternal(ctx, usageLog); err != nil {
 		bm.auditLogger.LogBillingError(billingCtx, "billing_processing_failed", err)
 		return &domain.BillingResult{
 			Success:    false,
@@ -263,7 +264,7 @@ func (bm *BillingManager) ProcessAsyncCompletion(ctx context.Context, requestID 
 	// 只有成功的任务才计费
 	if success && billingCtx.ShouldBill() {
 		// 计算成本
-		actualCost, err := bm.calculateActualCost(ctx, billingCtx)
+		actualCost, err := bm.calculateCostInternal(ctx, billingCtx)
 		if err != nil {
 			bm.auditLogger.LogBillingError(billingCtx, "async_cost_calculation_failed", err)
 			return fmt.Errorf("failed to calculate cost for async completion: %w", err)
@@ -273,7 +274,7 @@ func (bm *BillingManager) ProcessAsyncCompletion(ctx context.Context, requestID 
 		billingCtx.ActualCost = actualCost
 		
 		// 处理计费
-		if err := bm.billingService.ProcessBilling(ctx, usageLog); err != nil {
+		if err := bm.processBillingInternal(ctx, usageLog); err != nil {
 			bm.auditLogger.LogBillingError(billingCtx, "async_billing_failed", err)
 			return fmt.Errorf("failed to process billing for async completion: %w", err)
 		}
@@ -308,25 +309,8 @@ func (bm *BillingManager) estimateCost(ctx context.Context, billingCtx *domain.B
 	var cost float64
 	var err error
 
-	if billingCtx.RequestType == entities.RequestTypeMidjourney {
-		// Midjourney按请求计费
-		bm.logger.WithFields(map[string]interface{}{
-			"request_id": billingCtx.RequestID,
-			"model_id":   billingCtx.ModelID,
-		}).Debug("Using request-based cost estimation for Midjourney")
-
-		cost, err = bm.billingService.CalculateRequestCost(ctx, billingCtx.ModelID)
-	} else {
-		// 普通API按token计费
-		bm.logger.WithFields(map[string]interface{}{
-			"request_id":    billingCtx.RequestID,
-			"model_id":      billingCtx.ModelID,
-			"input_tokens":  billingCtx.CalculateInputTokens(),
-			"output_tokens": billingCtx.CalculateOutputTokens(),
-		}).Debug("Using token-based cost estimation")
-
-		cost, err = bm.billingService.CalculateCost(ctx, billingCtx.ModelID, billingCtx.CalculateInputTokens(), billingCtx.CalculateOutputTokens())
-	}
+	// 直接使用模型定价仓储计算成本
+	cost, err = bm.calculateCostInternal(ctx, billingCtx)
 
 	if err != nil {
 		bm.logger.WithFields(map[string]interface{}{
@@ -417,6 +401,190 @@ func (bm *BillingManager) consumeQuotas(ctx context.Context, billingCtx *domain.
 		"api_key_id": billingCtx.APIKeyID,
 	}).Info("All quotas consumed successfully")
 	
+	return nil
+}
+
+// calculateCostInternal 内部成本计算方法
+func (bm *BillingManager) calculateCostInternal(ctx context.Context, billingCtx *domain.BillingContext) (float64, error) {
+	bm.logger.WithFields(map[string]interface{}{
+		"event":         "cost_calculation_start",
+		"model_id":      billingCtx.ModelID,
+		"input_tokens":  billingCtx.CalculateInputTokens(),
+		"output_tokens": billingCtx.CalculateOutputTokens(),
+		"request_type":  billingCtx.RequestType,
+	}).Debug("Starting cost calculation")
+
+	// 一次性获取模型的所有有效定价
+	pricings, err := bm.modelPricingRepo.GetCurrentPricing(ctx, billingCtx.ModelID)
+	if err != nil {
+		bm.logger.WithFields(map[string]interface{}{
+			"event":    "cost_calculation_failed",
+			"model_id": billingCtx.ModelID,
+			"error":    err.Error(),
+		}).Error("Failed to get model pricing")
+		return 0, fmt.Errorf("failed to get model pricing: %w", err)
+	}
+
+	if len(pricings) == 0 {
+		bm.logger.WithFields(map[string]interface{}{
+			"event":    "cost_calculation_using_defaults",
+			"model_id": billingCtx.ModelID,
+		}).Warn("No pricing found for model, using default values")
+		
+		// 使用默认定价计算
+		return bm.calculateWithDefaults(billingCtx.CalculateInputTokens(), billingCtx.CalculateOutputTokens()), nil
+	}
+
+	var totalCost float64
+	var foundRequestPricing bool
+
+	// 遍历所有定价记录，根据类型计算成本
+	for _, pricing := range pricings {
+		var cost float64
+
+		switch pricing.PricingType {
+		case entities.PricingTypeRequest:
+			// 基于请求的定价（如 Midjourney）
+			cost = pricing.PricePerUnit * pricing.Multiplier
+			foundRequestPricing = true
+			
+			bm.logger.WithFields(map[string]interface{}{
+				"pricing_type":   "request",
+				"price_per_unit": pricing.PricePerUnit,
+				"multiplier":     pricing.Multiplier,
+				"cost":           cost,
+			}).Debug("Calculated request-based cost")
+
+		case entities.PricingTypeInput:
+			// 输入token定价
+			inputTokens := billingCtx.CalculateInputTokens()
+			if inputTokens > 0 {
+				cost = float64(inputTokens) * pricing.PricePerUnit * pricing.Multiplier / 1000.0
+				
+				bm.logger.WithFields(map[string]interface{}{
+					"pricing_type":   "input",
+					"tokens":         inputTokens,
+					"price_per_unit": pricing.PricePerUnit,
+					"multiplier":     pricing.Multiplier,
+					"cost":           cost,
+				}).Debug("Calculated input token cost")
+			}
+
+		case entities.PricingTypeOutput:
+			// 输出token定价
+			outputTokens := billingCtx.CalculateOutputTokens()
+			if outputTokens > 0 {
+				cost = float64(outputTokens) * pricing.PricePerUnit * pricing.Multiplier / 1000.0
+				
+				bm.logger.WithFields(map[string]interface{}{
+					"pricing_type":   "output",
+					"tokens":         outputTokens,
+					"price_per_unit": pricing.PricePerUnit,
+					"multiplier":     pricing.Multiplier,
+					"cost":           cost,
+				}).Debug("Calculated output token cost")
+			}
+		}
+
+		totalCost += cost
+	}
+
+	// 如果找到基于请求的定价，则忽略token定价（请求定价优先级更高）
+	if foundRequestPricing {
+		// 重新计算，只考虑请求定价
+		totalCost = 0
+		for _, pricing := range pricings {
+			if pricing.PricingType == entities.PricingTypeRequest {
+				totalCost += pricing.PricePerUnit * pricing.Multiplier
+			}
+		}
+		bm.logger.WithFields(map[string]interface{}{
+			"model_id":   billingCtx.ModelID,
+			"total_cost": totalCost,
+		}).Info("Using request-based pricing (ignoring token pricing)")
+	}
+
+	bm.logger.WithFields(map[string]interface{}{
+		"event":        "cost_calculation_completed",
+		"model_id":     billingCtx.ModelID,
+		"total_cost":   totalCost,
+		"pricing_mode": func() string {
+			if foundRequestPricing {
+				return "request_based"
+			}
+			return "token_based"
+		}(),
+	}).Info("Cost calculation completed")
+
+	return totalCost, nil
+}
+
+// calculateWithDefaults 使用默认定价计算成本
+func (bm *BillingManager) calculateWithDefaults(inputTokens, outputTokens int) float64 {
+	// 默认定价
+	inputPricePerUnit := 0.001  // 每1000个token $0.001
+	outputPricePerUnit := 0.002 // 每1000个token $0.002
+	multiplier := 1.5           // 1.5倍率
+
+	inputCost := float64(inputTokens) * inputPricePerUnit * multiplier / 1000.0
+	outputCost := float64(outputTokens) * outputPricePerUnit * multiplier / 1000.0
+	totalCost := inputCost + outputCost
+
+	bm.logger.WithFields(map[string]interface{}{
+		"input_tokens":        inputTokens,
+		"output_tokens":       outputTokens,
+		"input_price_unit":    inputPricePerUnit,
+		"output_price_unit":   outputPricePerUnit,
+		"multiplier":          multiplier,
+		"input_cost":          inputCost,
+		"output_cost":         outputCost,
+		"total_cost":          totalCost,
+		"pricing_mode":        "default",
+	}).Info("Calculated cost using default pricing")
+
+	return totalCost
+}
+
+// processBillingInternal 内部计费处理方法
+func (bm *BillingManager) processBillingInternal(ctx context.Context, usageLog *entities.UsageLog) error {
+	if usageLog.Cost <= 0 {
+		return nil
+	}
+
+	// 获取用户信息
+	user, err := bm.userRepo.GetByID(ctx, usageLog.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// 扣减用户余额
+	if err := user.DeductBalance(usageLog.Cost); err != nil {
+		return fmt.Errorf("failed to deduct balance: %w", err)
+	}
+
+	// 更新用户余额
+	if err := bm.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("failed to update user balance: %w", err)
+	}
+
+	// 创建计费记录
+	billingRecord := &entities.BillingRecord{
+		UserID:      usageLog.UserID,
+		UsageLogID:  usageLog.ID,
+		Amount:      usageLog.Cost,
+		Currency:    "USD",
+		BillingType: entities.BillingTypeUsage,
+		Status:      entities.BillingStatusProcessed,
+	}
+
+	if err := bm.billingRecordRepo.Create(ctx, billingRecord); err != nil {
+		// 如果创建计费记录失败，需要回滚用户余额
+		if rollbackErr := user.AddBalance(usageLog.Cost); rollbackErr == nil {
+			bm.userRepo.Update(ctx, user)
+		}
+		return fmt.Errorf("failed to create billing record: %w", err)
+	}
+
 	return nil
 }
 

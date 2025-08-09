@@ -379,7 +379,6 @@ func (f *ServiceFactory) ThinkingService() ThinkingService {
 func (f *ServiceFactory) BillingInterceptor() *middleware.BillingInterceptor {
 	// 创建计费管理器
 	billingManager := billingService.NewBillingManager(
-		f.BillingService(),
 		f.QuotaService(),
 		f.repoFactory.UsageLogRepository(),
 		f.repoFactory.UserRepository(),
