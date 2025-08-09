@@ -564,6 +564,13 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 		}
 	}
 
+	// 获取成本信息
+	if costUsed, exists := c.Get("cost_used"); exists {
+		if cost, ok := costUsed.(float64); ok {
+			billingCtx.ActualCost = cost
+		}
+	}
+
 	// 计算响应时间
 	if startTime, exists := c.Get("start_time"); exists {
 		if st, ok := startTime.(time.Time); ok {

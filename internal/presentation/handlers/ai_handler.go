@@ -418,11 +418,15 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 	}).Info("AI provider response received successfully")
 
 	// 设置使用量到上下文（用于配额中间件和计费系统）
-	c.Set("tokens_used", response.Usage.TotalTokens)
-	c.Set("cost_used", response.Cost.TotalCost)
-	c.Set("input_tokens", response.Usage.InputTokens)
-	c.Set("output_tokens", response.Usage.OutputTokens)
-	c.Set("total_tokens", response.Usage.TotalTokens)
+	if response.Usage != nil {
+		c.Set("tokens_used", response.Usage.TotalTokens)
+		c.Set("input_tokens", response.Usage.InputTokens)
+		c.Set("output_tokens", response.Usage.OutputTokens)
+		c.Set("total_tokens", response.Usage.TotalTokens)
+	}
+	if response.Cost != nil {
+		c.Set("cost_used", response.Cost.TotalCost)
+	}
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)
@@ -609,11 +613,15 @@ func (h *AIHandler) Completions(c *gin.Context) {
 	}).Info("AI provider response received successfully")
 
 	// 设置使用量到上下文（用于配额中间件和计费系统）
-	c.Set("tokens_used", response.Usage.TotalTokens)
-	c.Set("cost_used", response.Cost.TotalCost)
-	c.Set("input_tokens", response.Usage.InputTokens)
-	c.Set("output_tokens", response.Usage.OutputTokens)
-	c.Set("total_tokens", response.Usage.TotalTokens)
+	if response.Usage != nil {
+		c.Set("tokens_used", response.Usage.TotalTokens)
+		c.Set("input_tokens", response.Usage.InputTokens)
+		c.Set("output_tokens", response.Usage.OutputTokens)
+		c.Set("total_tokens", response.Usage.TotalTokens)
+	}
+	if response.Cost != nil {
+		c.Set("cost_used", response.Cost.TotalCost)
+	}
 
 	// 设置响应头
 	c.Header("X-Request-ID", requestID)
