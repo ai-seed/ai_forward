@@ -121,94 +121,13 @@ func (bi *BillingInterceptor) PreRequestMiddleware() gin.HandlerFunc {
 		c.Set("billing_context", billingCtx)
 		c.Set("billing_behavior", billingBehavior)
 
-		// 只有正常计费的请求才需要预检查
-		if billingBehavior == BillingBehaviorNormal {
-			bi.logger.WithFields(map[string]interface{}{
-				"event":      "billing_precheck_start",
-				"request_id": billingCtx.RequestID,
-				"user_id":    billingCtx.UserID,
-				"api_key_id": billingCtx.APIKeyID,
-			}).Debug("Starting billing pre-check")
-
-			// 进行预检查
-			preCheckResult, err := bi.billingManager.PreCheck(c.Request.Context(), billingCtx)
-			if err != nil {
-				bi.logger.WithFields(map[string]interface{}{
-					"event":      "billing_precheck_error",
-					"request_id": billingCtx.RequestID,
-					"error":      err.Error(),
-				}).Error("Billing pre-check failed")
-
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "Internal server error",
-					"code":  "BILLING_PRECHECK_FAILED",
-				})
-				c.Abort()
-				return
-			}
-
-			// 检查是否可以继续
-			if !preCheckResult.CanProceed {
-				bi.logger.WithFields(map[string]interface{}{
-					"event":           "billing_precheck_blocked",
-					"request_id":      billingCtx.RequestID,
-					"reason":          preCheckResult.Reason,
-					"estimated_cost":  preCheckResult.EstimatedCost,
-					"balance_ok":      preCheckResult.BalanceOK,
-					"quota_ok":        preCheckResult.QuotaOK,
-				}).Warn("Request blocked by billing pre-check")
-
-				var statusCode int
-				var errorCode string
-				var message string
-
-				switch preCheckResult.Reason {
-				case "insufficient_balance":
-					statusCode = http.StatusPaymentRequired
-					errorCode = "INSUFFICIENT_BALANCE"
-					message = "Insufficient account balance"
-				case "tokens_quota_exceeded":
-					statusCode = http.StatusTooManyRequests
-					errorCode = "TOKEN_QUOTA_EXCEEDED"
-					message = "Token quota exceeded"
-				case "requests_quota_exceeded":
-					statusCode = http.StatusTooManyRequests
-					errorCode = "REQUEST_QUOTA_EXCEEDED"
-					message = "Request quota exceeded"
-				case "cost_quota_exceeded":
-					statusCode = http.StatusTooManyRequests
-					errorCode = "COST_QUOTA_EXCEEDED"
-					message = "Cost quota exceeded"
-				default:
-					statusCode = http.StatusForbidden
-					errorCode = "REQUEST_BLOCKED"
-					message = "Request blocked by billing system"
-				}
-
-				c.JSON(statusCode, gin.H{
-					"error":   message,
-					"code":    errorCode,
-					"details": preCheckResult.Details,
-				})
-				c.Abort()
-				return
-			}
-
-			// 存储预检查结果
-			c.Set("billing_precheck_result", preCheckResult)
-			
-			bi.logger.WithFields(map[string]interface{}{
-				"event":          "billing_precheck_passed",
-				"request_id":     billingCtx.RequestID,
-				"estimated_cost": preCheckResult.EstimatedCost,
-			}).Debug("Billing pre-check passed, proceeding with request")
-		} else {
-			bi.logger.WithFields(map[string]interface{}{
-				"event":           "billing_precheck_skipped",
-				"request_id":      billingCtx.RequestID,
-				"billing_behavior": billingBehavior,
-			}).Debug("Billing pre-check skipped for non-normal billing behavior")
-		}
+		// 预检查已由其他中间件处理，这里跳过
+		bi.logger.WithFields(map[string]interface{}{
+			"event":           "billing_precheck_skipped",
+			"request_id":      billingCtx.RequestID,
+			"billing_behavior": billingBehavior,
+			"reason":          "handled_by_other_middleware",
+		}).Debug("Billing pre-check skipped - handled by other middleware")
 
 		c.Next()
 	}
@@ -407,47 +326,8 @@ func (bi *BillingInterceptor) extractRequestInfo(c *gin.Context, billingBehavior
 		}
 	}
 
-	// 从请求中提取模型ID
-	if modelParam := c.Param("model"); modelParam != "" {
-		if mid, parseErr := strconv.ParseInt(modelParam, 10, 64); parseErr == nil {
-			modelID = mid
-		}
-	}
-
-	// 从请求体中提取模型信息（如果是POST请求）
-	if modelID == 0 && c.Request.Method == "POST" {
-		// 首先尝试从查询参数获取
-		if modelQuery := c.Query("model"); modelQuery != "" {
-			if mid, parseErr := strconv.ParseInt(modelQuery, 10, 64); parseErr == nil {
-				modelID = mid
-			}
-		}
-		
-		// 如果还是没有模型ID，尝试从请求体解析模型名称（仅适用于JSON请求）
-		if modelID == 0 {
-			modelName := bi.extractModelFromRequestBody(c)
-			if modelName != "" && bi.modelRepo != nil {
-				ctx := context.Background()
-				model, err := bi.modelRepo.GetBySlug(ctx, modelName)
-				if err != nil {
-					bi.logger.WithFields(map[string]interface{}{
-						"event":      "model_lookup_in_precheck_failed",
-						"model_name": modelName,
-						"path":       c.Request.URL.Path,
-						"error":      err.Error(),
-					}).Debug("Failed to lookup model ID during pre-check")
-				} else if model != nil {
-					modelID = model.ID
-					bi.logger.WithFields(map[string]interface{}{
-						"event":      "model_lookup_in_precheck_success",
-						"model_name": modelName,
-						"model_id":   model.ID,
-						"path":       c.Request.URL.Path,
-					}).Debug("Successfully resolved model ID during pre-check")
-				}
-			}
-		}
-	}
+	// 预检查阶段不需要modelID，将在post-request阶段通过handler设置的model_name获取
+	// modelID将保持为0，这是正常的
 
 	// 对于普通计费请求，userID和apiKeyID都是必须的
 	if billingBehavior == BillingBehaviorNormal && (userID == 0 || apiKeyID == 0) {
