@@ -564,10 +564,20 @@ func (bi *BillingInterceptor) updateBillingContextWithResponse(c *gin.Context, b
 		}
 	}
 
-	// 获取成本信息
+	// 获取成本信息（注意：这是AI提供商返回的成本，计费系统会基于自己的定价重新计算）
 	if costUsed, exists := c.Get("cost_used"); exists {
 		if cost, ok := costUsed.(float64); ok {
-			billingCtx.ActualCost = cost
+			// 将AI提供商的成本保存到Details中作为参考
+			if billingCtx.BillingStage == domain.BillingStageLogOnly {
+				// 对于仅记录日志的请求，可以使用AI提供商的成本
+				billingCtx.ActualCost = cost
+			} else {
+				// 对于正常计费，不使用AI提供商成本，让计费系统重新计算
+				// 但保存作为参考
+				if billingCtx.EstimatedCost == 0 {
+					billingCtx.EstimatedCost = cost
+				}
+			}
 		}
 	}
 

@@ -149,12 +149,48 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 		select {
 		case chunk, ok := <-streamChan:
 			if !ok {
-				// 流结束，计算最终的token数量
-				outputTokens := h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+				// 流结束，处理token统计
+				outputTokens := 0
 				
-				// 如果没有从chunk中获取到totalTokens，使用计算的值
-				if totalTokens == 0 {
+				// 如果从chunk中获取到了准确的token信息，使用它
+				if totalTokens > 0 {
+					// 使用AI提供商提供的准确token统计
+					if inputTokens == 0 {
+						// 如果没有单独的输入token统计，估算一下
+						inputTokens = h.tokenizer.CountTokensFromMessages([]map[string]interface{}{
+							{"role": "user", "content": gatewayRequest.Request.Messages[len(gatewayRequest.Request.Messages)-1].Content},
+						})
+						outputTokens = totalTokens - inputTokens
+						if outputTokens < 0 {
+							outputTokens = totalTokens / 3 // 粗略估算输出约占1/3
+							inputTokens = totalTokens - outputTokens
+						}
+					}
+				} else {
+					// 没有准确token信息，使用估算
+					outputTokens = h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+					if inputTokens == 0 {
+						if gatewayRequest.Request.Messages != nil {
+							var messages []map[string]interface{}
+							for _, msg := range gatewayRequest.Request.Messages {
+								messages = append(messages, map[string]interface{}{
+									"role":    msg.Role,
+									"content": msg.Content,
+								})
+							}
+							inputTokens = h.tokenizer.CountTokensFromMessages(messages)
+						}
+					}
 					totalTokens = inputTokens + outputTokens
+					
+					// 记录日志，提醒这是估算值
+					h.logger.WithFields(map[string]interface{}{
+						"request_id":     requestID,
+						"estimated":      true,
+						"input_tokens":   inputTokens,
+						"output_tokens":  outputTokens,
+						"content_length": outputContent.Len(),
+					}).Warn("Using estimated token count for streaming response - consider implementing accurate token counting")
 				}
 
 				// 发送结束标记
@@ -2197,12 +2233,48 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 		select {
 		case chunk, ok := <-streamChan:
 			if !ok {
-				// 流结束，计算最终的token数量
-				outputTokens := h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+				// 流结束，处理token统计
+				outputTokens := 0
 				
-				// 如果没有从chunk中获取到totalTokens，使用计算的值
-				if totalTokens == 0 {
+				// 如果从chunk中获取到了准确的token信息，使用它
+				if totalTokens > 0 {
+					// 使用AI提供商提供的准确token统计
+					if inputTokens == 0 {
+						// 如果没有单独的输入token统计，估算一下
+						inputTokens = h.tokenizer.CountTokensFromMessages([]map[string]interface{}{
+							{"role": "user", "content": gatewayRequest.Request.Messages[len(gatewayRequest.Request.Messages)-1].Content},
+						})
+						outputTokens = totalTokens - inputTokens
+						if outputTokens < 0 {
+							outputTokens = totalTokens / 3 // 粗略估算输出约占1/3
+							inputTokens = totalTokens - outputTokens
+						}
+					}
+				} else {
+					// 没有准确token信息，使用估算
+					outputTokens = h.tokenizer.EstimateOutputTokensFromContent(outputContent.String())
+					if inputTokens == 0 {
+						if gatewayRequest.Request.Messages != nil {
+							var messages []map[string]interface{}
+							for _, msg := range gatewayRequest.Request.Messages {
+								messages = append(messages, map[string]interface{}{
+									"role":    msg.Role,
+									"content": msg.Content,
+								})
+							}
+							inputTokens = h.tokenizer.CountTokensFromMessages(messages)
+						}
+					}
 					totalTokens = inputTokens + outputTokens
+					
+					// 记录日志，提醒这是估算值
+					h.logger.WithFields(map[string]interface{}{
+						"request_id":     requestID,
+						"estimated":      true,
+						"input_tokens":   inputTokens,
+						"output_tokens":  outputTokens,
+						"content_length": outputContent.Len(),
+					}).Warn("Using estimated token count for streaming response - consider implementing accurate token counting")
 				}
 
 				// 发送结束标记
