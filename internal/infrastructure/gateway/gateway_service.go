@@ -179,7 +179,7 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 	g.logger.WithFields(map[string]interface{}{
 		"request_id": routeRequest.RequestID,
 		"user_id":    routeRequest.UserID,
-		"api_key_id": routeRequest.Request,
+		"api_key_id": routeRequest.APIKeyID,
 		"model_slug": routeRequest.ModelSlug,
 	}).Info("Routing AI request")
 	routeResponse, err := g.router.RouteRequest(ctx, routeRequest)

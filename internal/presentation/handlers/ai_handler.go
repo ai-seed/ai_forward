@@ -1249,7 +1249,7 @@ func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 	}
 
 	// 处理非流式请求
-	response, err := h.processAnthropicRequest(c.Request.Context(), &anthropicRequest, userID, apiKeyID, requestID)
+	response, providerInfo, err := h.processAnthropicRequest(c.Request.Context(), &anthropicRequest, userID, apiKeyID, requestID)
 	if err != nil {
 		h.logger.WithFields(map[string]interface{}{
 			"user_id":    userID,
@@ -1267,6 +1267,31 @@ func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	// 设置使用量到上下文（用于计费中间件）
+	if response.Usage.InputTokens > 0 || response.Usage.OutputTokens > 0 {
+		totalTokens := response.Usage.InputTokens + response.Usage.OutputTokens
+		c.Set("tokens_used", totalTokens)
+		c.Set("input_tokens", response.Usage.InputTokens)
+		c.Set("output_tokens", response.Usage.OutputTokens)
+		c.Set("total_tokens", totalTokens)
+	}
+	
+	// 设置 provider 信息供计费中间件使用
+	if providerInfo != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"request_id":    requestID,
+			"provider_id":   providerInfo.ProviderID,
+			"provider_name": providerInfo.ProviderName,
+		}).Debug("Setting provider information for billing middleware (Anthropic Messages)")
+		c.Set("provider_id", providerInfo.ProviderID)
+		c.Set("provider_name", providerInfo.ProviderName)
+		
+		// 设置响应头
+		c.Header("X-Request-ID", requestID)
+		c.Header("X-Provider", providerInfo.ProviderName)
+		c.Header("X-Model", response.Model)
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -1614,7 +1639,13 @@ func (h *AIHandler) extractSystemContent(system interface{}) string {
 }
 
 // processAnthropicRequest 处理Anthropic非流式请求
-func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *clients.AnthropicMessageRequest, userID, apiKeyID int64, requestID string) (*clients.AnthropicMessageResponse, error) {
+// AnthropicProviderInfo provider信息结构
+type AnthropicProviderInfo struct {
+	ProviderID   int64
+	ProviderName string
+}
+
+func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *clients.AnthropicMessageRequest, userID, apiKeyID int64, requestID string) (*clients.AnthropicMessageResponse, *AnthropicProviderInfo, error) {
 	h.logger.WithFields(map[string]interface{}{
 		"request_id": requestID,
 		"user_id":    userID,
@@ -1632,7 +1663,7 @@ func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *client
 			"model":      request.Model,
 			"error":      err.Error(),
 		}).Error("获取支持该模型的提供商失败")
-		return nil, fmt.Errorf("failed to get supporting providers: %w", err)
+		return nil, nil, fmt.Errorf("failed to get supporting providers: %w", err)
 	}
 
 	h.logger.WithFields(map[string]interface{}{
@@ -1646,7 +1677,7 @@ func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *client
 			"request_id": requestID,
 			"model":      request.Model,
 		}).Error("没有提供商支持该模型")
-		return nil, fmt.Errorf("no providers support model: %s", request.Model)
+		return nil, nil, fmt.Errorf("no providers support model: %s", request.Model)
 	}
 
 	// 选择第一个可用的提供商（可以后续优化为负载均衡）
@@ -1690,7 +1721,7 @@ func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *client
 			"request_id": requestID,
 			"model":      request.Model,
 		}).Error("没有可用的提供商")
-		return nil, fmt.Errorf("no available providers for model: %s", request.Model)
+		return nil, nil, fmt.Errorf("no available providers for model: %s", request.Model)
 	}
 
 	// 直接发送Anthropic格式请求到提供商
@@ -1712,7 +1743,7 @@ func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *client
 			"base_url":      selectedProvider.BaseURL,
 			"error":         err.Error(),
 		}).Error("发送请求到提供商失败")
-		return nil, fmt.Errorf("failed to send request to provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to send request to provider: %w", err)
 	}
 
 	h.logger.WithFields(map[string]interface{}{
@@ -1724,7 +1755,13 @@ func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *client
 		"output_tokens": response.Usage.OutputTokens,
 	}).Info("成功收到提供商响应")
 
-	return response, nil
+	// 构造 provider 信息
+	providerInfo := &AnthropicProviderInfo{
+		ProviderID:   selectedProvider.ID,
+		ProviderName: selectedProvider.Name,
+	}
+
+	return response, providerInfo, nil
 }
 
 // sendAnthropicRequestToProvider 发送Anthropic请求到提供商
@@ -1881,12 +1918,78 @@ func (h *AIHandler) handleAnthropicStreamingRequest(c *gin.Context, request *cli
 		return
 	}
 
+	// 提前计算 input tokens（不依赖上游返回）
+	var inputTokens int
+	if len(request.Messages) > 0 {
+		// 转换 Anthropic messages 为 tokenizer 可识别的格式
+		var messages []map[string]interface{}
+		for _, msg := range request.Messages {
+			// 使用现有的 GetTextContent 方法提取文本内容
+			content := msg.GetTextContent()
+			if content != "" {
+				messages = append(messages, map[string]interface{}{
+					"role":    msg.Role,
+					"content": content,
+				})
+			}
+		}
+		inputTokens = h.tokenizer.CountTokensFromMessages(messages)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"input_tokens":  inputTokens,
+		"message_count": len(request.Messages),
+	}).Debug("Calculated input tokens for Anthropic streaming request")
+
 	// 直接发送流式请求到 /v1/messages 端点
-	err = h.sendAnthropicStreamRequestToProvider(c, selectedProvider, selectedModelInfo, request, w, flusher)
+	usageInfo, err := h.sendAnthropicStreamRequestToProvider(c, selectedProvider, selectedModelInfo, request, w, flusher)
 	if err != nil {
 		h.sendStreamError(w, flusher, "Failed to process stream request", err)
 		return
 	}
+
+	// 设置计费相关的上下文数据
+	var finalInputTokens = inputTokens  // 使用本地计算的值作为默认
+	var finalOutputTokens int
+	
+	if usageInfo != nil {
+		// 如果上游返回了 input_tokens，并且看起来合理，则使用上游的值
+		diff := usageInfo.InputTokens - inputTokens
+		if diff < 0 {
+			diff = -diff
+		}
+		if usageInfo.InputTokens > 0 && inputTokens > 0 && diff <= inputTokens/10 {
+			finalInputTokens = usageInfo.InputTokens
+		}
+		finalOutputTokens = usageInfo.OutputTokens
+	}
+
+	if finalInputTokens > 0 || finalOutputTokens > 0 {
+		totalTokens := finalInputTokens + finalOutputTokens
+		c.Set("tokens_used", totalTokens)
+		c.Set("input_tokens", finalInputTokens)
+		c.Set("output_tokens", finalOutputTokens) 
+		c.Set("total_tokens", totalTokens)
+
+		h.logger.WithFields(map[string]interface{}{
+			"request_id":       requestID,
+			"local_input":      inputTokens,
+			"upstream_input":   usageInfo.InputTokens,
+			"final_input":      finalInputTokens,
+			"output_tokens":    finalOutputTokens,
+			"total_tokens":     totalTokens,
+		}).Info("Set billing context for Anthropic streaming request")
+	}
+
+	// 设置 provider 信息供计费中间件使用
+	h.logger.WithFields(map[string]interface{}{
+		"request_id":    requestID,
+		"provider_id":   selectedProvider.ID,
+		"provider_name": selectedProvider.Name,
+	}).Debug("Setting provider information for billing middleware (Anthropic Streaming)")
+	c.Set("provider_id", selectedProvider.ID)
+	c.Set("provider_name", selectedProvider.Name)
 }
 
 // convertToAnthropicStreamChunk 将流式响应块转换为Anthropic格式
@@ -1953,8 +2056,14 @@ func (h *AIHandler) sendStreamError(w http.ResponseWriter, flusher http.Flusher,
 	flusher.Flush()
 }
 
+// AnthropicStreamUsageInfo 流式使用量信息
+type AnthropicStreamUsageInfo struct {
+	InputTokens  int
+	OutputTokens int
+}
+
 // sendAnthropicStreamRequestToProvider 发送Anthropic流式请求到提供商
-func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provider *entities.Provider, modelInfo *entities.ModelSupportInfo, request *clients.AnthropicMessageRequest, w http.ResponseWriter, flusher http.Flusher) error {
+func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provider *entities.Provider, modelInfo *entities.ModelSupportInfo, request *clients.AnthropicMessageRequest, w http.ResponseWriter, flusher http.Flusher) (*AnthropicStreamUsageInfo, error) {
 	// 构造请求URL - 强制使用 /messages 端点
 	baseURL := strings.TrimSuffix(provider.BaseURL, "/")
 	var url string
@@ -2006,13 +2115,13 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	// 序列化请求体
 	requestBody, err := json.Marshal(&requestCopy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// 创建HTTP请求
 	httpReq, err := http.NewRequestWithContext(c.Request.Context(), "POST", url, strings.NewReader(string(requestBody)))
 	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	// 设置请求头
@@ -2028,18 +2137,20 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	// 发送请求
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
+		return nil, fmt.Errorf("failed to send HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("HTTP request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 处理流式响应
+	// 处理流式响应并收集使用量信息
+	usageInfo := &AnthropicStreamUsageInfo{}
 	scanner := bufio.NewScanner(resp.Body)
+	
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -2055,6 +2166,26 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 				break
 			}
 
+			// 尝试解析数据以提取使用量信息
+			var streamData map[string]interface{}
+			if err := json.Unmarshal([]byte(data), &streamData); err == nil {
+				// 检查是否包含使用量信息
+				if usage, exists := streamData["usage"]; exists {
+					if usageMap, ok := usage.(map[string]interface{}); ok {
+						if inputTokens, exists := usageMap["input_tokens"]; exists {
+							if tokens, ok := inputTokens.(float64); ok {
+								usageInfo.InputTokens = int(tokens)
+							}
+						}
+						if outputTokens, exists := usageMap["output_tokens"]; exists {
+							if tokens, ok := outputTokens.(float64); ok {
+								usageInfo.OutputTokens = int(tokens)
+							}
+						}
+					}
+				}
+			}
+
 			// 直接转发Anthropic格式的数据
 			w.Write([]byte(fmt.Sprintf("data: %s\n", data)))
 			flusher.Flush()
@@ -2066,10 +2197,10 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading stream: %w", err)
+		return nil, fmt.Errorf("error reading stream: %w", err)
 	}
 
-	return nil
+	return usageInfo, nil
 }
 
 // convertAnthropicToAIRequest 将 Anthropic 请求转换为通用 AI 请求
