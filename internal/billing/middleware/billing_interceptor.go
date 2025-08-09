@@ -423,7 +423,7 @@ func (bi *BillingInterceptor) extractRequestInfo(c *gin.Context, billingBehavior
 			}
 		}
 		
-		// 如果还是没有模型ID，尝试从请求体解析模型名称
+		// 如果还是没有模型ID，尝试从请求体解析模型名称（仅适用于JSON请求）
 		if modelID == 0 {
 			modelName := bi.extractModelFromRequestBody(c)
 			if modelName != "" && bi.modelRepo != nil {
@@ -433,6 +433,7 @@ func (bi *BillingInterceptor) extractRequestInfo(c *gin.Context, billingBehavior
 					bi.logger.WithFields(map[string]interface{}{
 						"event":      "model_lookup_in_precheck_failed",
 						"model_name": modelName,
+						"path":       c.Request.URL.Path,
 						"error":      err.Error(),
 					}).Debug("Failed to lookup model ID during pre-check")
 				} else if model != nil {
@@ -441,6 +442,7 @@ func (bi *BillingInterceptor) extractRequestInfo(c *gin.Context, billingBehavior
 						"event":      "model_lookup_in_precheck_success",
 						"model_name": modelName,
 						"model_id":   model.ID,
+						"path":       c.Request.URL.Path,
 					}).Debug("Successfully resolved model ID during pre-check")
 				}
 			}
