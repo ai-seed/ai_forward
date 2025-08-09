@@ -1,7 +1,6 @@
 package tokenizer
 
 import (
-	"strings"
 	"unicode"
 )
 
@@ -19,9 +18,9 @@ func (t *SimpleTokenizer) CountTokens(text string) int {
 	if text == "" {
 		return 0
 	}
-	
+
 	var tokenCount int
-	
+
 	// 遍历每个字符
 	for _, r := range text {
 		if unicode.Is(unicode.Han, r) {
@@ -35,31 +34,31 @@ func (t *SimpleTokenizer) CountTokens(text string) int {
 			tokenCount += 1
 		}
 	}
-	
+
 	// 最少返回1个token，最后按4字符1token的比例调整
 	if tokenCount == 0 {
 		return 1
 	}
-	
+
 	// 简化计算：总字符数除以4，但至少为1
 	estimatedTokens := len(text) / 4
 	if estimatedTokens < 1 {
 		estimatedTokens = 1
 	}
-	
+
 	// 取两种方法的平均值
 	finalTokens := (tokenCount + estimatedTokens) / 2
 	if finalTokens < 1 {
 		finalTokens = 1
 	}
-	
+
 	return finalTokens
 }
 
 // CountTokensFromMessages 从消息数组计算token数量
 func (t *SimpleTokenizer) CountTokensFromMessages(messages []map[string]interface{}) int {
 	var totalTokens int
-	
+
 	for _, message := range messages {
 		if content, ok := message["content"]; ok {
 			if contentStr, ok := content.(string); ok {
@@ -69,7 +68,7 @@ func (t *SimpleTokenizer) CountTokensFromMessages(messages []map[string]interfac
 		// 添加消息结构的额外token开销（角色标识等）
 		totalTokens += 4
 	}
-	
+
 	return totalTokens
 }
 
