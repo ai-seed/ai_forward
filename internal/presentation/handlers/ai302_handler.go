@@ -158,6 +158,14 @@ func (h *AI302Handler) handleGenericRequest(
 		"status":       response.Status,
 	}).Info("Successfully processed request")
 
+	// 设置计费相关信息到上下文（供计费中间件使用）
+	if response.Cost != nil {
+		c.Set("cost_used", response.Cost.TotalCost)
+	}
+	
+	// 设置模型名称供计费中间件查找ModelID
+	c.Set("model_name", requestType)
+
 	c.JSON(http.StatusOK, response)
 }
 

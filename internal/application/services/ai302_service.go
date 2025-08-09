@@ -60,7 +60,7 @@ func NewAI302Service(
 
 // Upscale 图片放大
 func (s *ai302ServiceImpl) Upscale(ctx context.Context, userID, apiKeyID int64, request *clients.AI302UpscaleRequest) (*clients.AI302UpscaleResponse, error) {
-	return s.processAI302RequestWithModel(ctx, userID, apiKeyID, "upscale", "/302/submit/upscale", func(provider *entities.Provider) (*clients.AI302UpscaleResponse, error) {
+	return s.processAI302RequestWithModel(ctx, userID, apiKeyID, "upscale", "/ai/upscale", func(provider *entities.Provider) (*clients.AI302UpscaleResponse, error) {
 		return s.ai302Client.Upscale(ctx, provider, request)
 	})
 }
@@ -159,33 +159,21 @@ func (s *ai302ServiceImpl) processAI302RequestWithModel(
 	// 计算成本（按次计费，1次请求）
 	cost := pricing.CalculateCost(1) // 使用定价信息计算成本，1次请求
 
-	// 记录使用情况
+	// 记录计费相关信息（供计费中间件使用）
 	duration := time.Since(startTime)
-	usageLog := &entities.UsageLog{
-		UserID:       userID,
-		APIKeyID:     apiKeyID,
-		ModelID:      model.ID,
-		ProviderID:   provider.ID,
-		RequestID:    response.ID,
-		RequestType:  entities.RequestTypeAPI,
-		Method:       "POST",
-		Endpoint:     endpoint,
-		InputTokens:  0, // 图片处理不计算token
-		OutputTokens: 0,
-		TotalTokens:  0,
-		DurationMs:   int(duration.Milliseconds()),
-		StatusCode:   200, // 成功状态
-		Cost:         cost,
-		CreatedAt:    time.Now(),
+	
+	// 注意：不在这里创建UsageLog，让计费中间件统一处理
+	// 设置响应级别的成本信息
+	response.Cost = &clients.CostInfo{
+		TotalCost: cost,
 	}
-
-	if err := s.usageLogRepo.Create(ctx, usageLog); err != nil {
-		s.logger.WithFields(map[string]interface{}{
-			"error":   err.Error(),
-			"user_id": userID,
-		}).Warn("Failed to record usage")
-		// 不返回错误，因为主要功能已完成
-	}
+	
+	s.logger.WithFields(map[string]interface{}{
+		"duration_ms": duration.Milliseconds(),
+		"model_id":    model.ID,
+		"provider_id": provider.ID,
+		"cost":        cost,
+	}).Debug("Request processing completed, billing info prepared")
 
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":    userID,
