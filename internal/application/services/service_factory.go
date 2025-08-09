@@ -282,11 +282,10 @@ func (f *ServiceFactory) StabilityService() StabilityService {
 		stabilityClient,
 		f.repoFactory.ProviderRepository(),
 		f.repoFactory.ModelRepository(),
+		f.repoFactory.ModelPricingRepository(),
 		f.repoFactory.APIKeyRepository(),
 		f.repoFactory.UserRepository(),
 		f.repoFactory.ProviderModelSupportRepository(),
-		f.BillingService(),
-		f.UsageLogService(),
 		f.logger,
 	)
 }

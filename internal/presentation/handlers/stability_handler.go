@@ -830,6 +830,23 @@ func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
 		return
 	}
 
+	// 设置成本和模型信息到上下文，供计费中间件使用
+	if response.Cost > 0 {
+		c.Set("cost_used", response.Cost)
+		c.Set("model_name", "stable-image-edit-remove-background") // Stability背景移除模型
+		
+		h.logger.WithFields(map[string]interface{}{
+			"cost_set":    response.Cost,
+			"user_id":     userID,
+			"api_key_id":  apiKeyID,
+		}).Debug("Cost information set for billing middleware")
+	} else {
+		h.logger.WithFields(map[string]interface{}{
+			"user_id":    userID,
+			"api_key_id": apiKeyID,
+		}).Warn("No cost information available for billing middleware")
+	}
+
 	// 检查是否是背景移除等编辑接口的响应（有Image字段但没有Artifacts）
 	if response.Image != "" && len(response.Artifacts) == 0 {
 		h.logger.WithFields(map[string]interface{}{
@@ -838,6 +855,7 @@ func (h *StabilityHandler) RemoveBackground(c *gin.Context) {
 			"image_length":  len(response.Image),
 			"finish_reason": response.FinishReason,
 			"seed":          response.Seed,
+			"cost":          response.Cost,
 		}).Info("Returning edit response with base64 image")
 
 		// 返回编辑接口的JSON格式响应

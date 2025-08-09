@@ -55,11 +55,10 @@ type stabilityServiceImpl struct {
 	stabilityClient          clients.StabilityClient
 	providerRepo             repositories.ProviderRepository
 	modelRepo                repositories.ModelRepository
+	modelPricingRepo         repositories.ModelPricingRepository
 	apiKeyRepo               repositories.APIKeyRepository
 	userRepo                 repositories.UserRepository
 	providerModelSupportRepo repositories.ProviderModelSupportRepository
-	billingService           BillingService
-	usageLogService          UsageLogService
 	logger                   logger.Logger
 }
 
@@ -68,22 +67,20 @@ func NewStabilityService(
 	stabilityClient clients.StabilityClient,
 	providerRepo repositories.ProviderRepository,
 	modelRepo repositories.ModelRepository,
+	modelPricingRepo repositories.ModelPricingRepository,
 	apiKeyRepo repositories.APIKeyRepository,
 	userRepo repositories.UserRepository,
 	providerModelSupportRepo repositories.ProviderModelSupportRepository,
-	billingService BillingService,
-	usageLogService UsageLogService,
 	logger logger.Logger,
 ) StabilityService {
 	return &stabilityServiceImpl{
 		stabilityClient:          stabilityClient,
 		providerRepo:             providerRepo,
 		modelRepo:                modelRepo,
+		modelPricingRepo:         modelPricingRepo,
 		apiKeyRepo:               apiKeyRepo,
 		userRepo:                 userRepo,
 		providerModelSupportRepo: providerModelSupportRepo,
-		billingService:           billingService,
-		usageLogService:          usageLogService,
 		logger:                   logger,
 	}
 }
@@ -230,54 +227,39 @@ func (s *stabilityServiceImpl) processStabilityRequestWithModel(ctx context.Cont
 		return nil, fmt.Errorf("failed to process request: %w", err)
 	}
 
-	// 记录使用日志和计费
-	go func() {
-		logCtx := context.Background()
-
-		// 计算实际成本
-		cost, err := s.billingService.CalculateCost(logCtx, model.ID, 0, 0)
-		if err != nil {
-			s.logger.WithFields(map[string]interface{}{
-				"error":    err.Error(),
-				"model_id": model.ID,
-			}).Error("Failed to calculate cost")
-			cost = 0.01 // 默认成本
+	// 计算成本供中间件使用
+	pricingList, err := s.modelPricingRepo.GetByModelID(context.Background(), model.ID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":    err.Error(),
+			"model_id": model.ID,
+		}).Warn("Failed to get model pricing, using default cost")
+		response.Cost = 0.15 // 默认成本，与SQL中看到的一致
+	} else {
+		// 查找按次计费的定价
+		var pricing *entities.ModelPricing
+		for _, p := range pricingList {
+			if p.PricingType == entities.PricingTypeRequest && p.IsEffective(time.Now()) {
+				pricing = p
+				break
+			}
 		}
-
-		usageLog := &entities.UsageLog{
-			UserID:       userID,
-			APIKeyID:     apiKeyID,
-			ProviderID:   selectedProvider.ID,
-			ModelID:      model.ID,
-			RequestID:    fmt.Sprintf("stability-%d", time.Now().UnixNano()),
-			RequestType:  entities.RequestTypeAPI,
-			Method:       "POST",
-			Endpoint:     endpoint,
-			InputTokens:  0,
-			OutputTokens: 0,
-			TotalTokens:  0,
-			DurationMs:   100,
-			StatusCode:   200,
-			Cost:         cost,
+		
+		if pricing != nil {
+			response.Cost = pricing.CalculateCost(1) // 按次计费，1次请求
+		} else {
+			response.Cost = 0.15 // 默认成本
 		}
-
-		if err := s.usageLogService.CreateUsageLog(logCtx, usageLog); err != nil {
-			s.logger.WithFields(map[string]interface{}{
-				"error":      err.Error(),
-				"user_id":    userID,
-				"api_key_id": apiKeyID,
-			}).Error("Failed to create usage log")
-			return
-		}
-
-		if err := s.billingService.ProcessBilling(logCtx, usageLog); err != nil {
-			s.logger.WithFields(map[string]interface{}{
-				"error":   err.Error(),
-				"user_id": userID,
-				"cost":    cost,
-			}).Error("Failed to process billing")
-		}
-	}()
+	}
+	
+	s.logger.WithFields(map[string]interface{}{
+		"user_id":         userID,
+		"api_key_id":      apiKeyID,
+		"provider_id":     selectedProvider.ID,
+		"model_id":        model.ID,
+		"endpoint":        endpoint,
+		"cost":            response.Cost,
+	}).Info("Stability request completed, billing will be handled by middleware")
 
 	s.logger.WithFields(map[string]interface{}{
 		"user_id":         userID,
