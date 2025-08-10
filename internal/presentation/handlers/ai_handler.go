@@ -30,7 +30,6 @@ import (
 type AIHandler struct {
 	gatewayService           gateway.GatewayService
 	modelService             services.ModelService
-	modelI18nService         services.ModelI18nService // 多语言模型服务
 	usageLogService          services.UsageLogService
 	logger                   logger.Logger
 	config                   *config.Config
@@ -39,7 +38,7 @@ type AIHandler struct {
 	httpClient               clients.HTTPClient
 	aiClient                 clients.AIProviderClient
 	thinkingService          services.ThinkingService
-	tokenizer               *tokenizer.SimpleTokenizer
+	tokenizer                *tokenizer.SimpleTokenizer
 }
 
 // NewAIHandler 创建AI请求处理器
@@ -54,12 +53,10 @@ func NewAIHandler(
 	httpClient clients.HTTPClient,
 	aiClient clients.AIProviderClient,
 	thinkingService services.ThinkingService,
-	modelI18nService services.ModelI18nService, // 添加多语言服务参数
 ) *AIHandler {
 	return &AIHandler{
 		gatewayService:           gatewayService,
 		modelService:             modelService,
-		modelI18nService:         modelI18nService, // 注入多语言服务
 		usageLogService:          usageLogService,
 		logger:                   logger,
 		config:                   config,
@@ -68,7 +65,7 @@ func NewAIHandler(
 		httpClient:               httpClient,
 		aiClient:                 aiClient,
 		thinkingService:          thinkingService,
-		tokenizer:               tokenizer.NewSimpleTokenizer(),
+		tokenizer:                tokenizer.NewSimpleTokenizer(),
 	}
 }
 
@@ -134,12 +131,12 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				// 如果上下文已取消，不发送错误
 			}
 		}
-		
+
 		// 记录路由响应信息（暂时记录日志，后续会用于设置provider_id）
 		if routeResponse != nil {
 			h.logger.WithFields(map[string]interface{}{
-				"request_id": requestID,
-				"provider_id": routeResponse.Provider.ID,
+				"request_id":    requestID,
+				"provider_id":   routeResponse.Provider.ID,
 				"provider_name": routeResponse.Provider.Name,
 			}).Debug("Got route response from streaming request")
 		}
@@ -148,7 +145,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 	// 发送流式数据
 	var totalTokens int
 	var totalCost float64
-	var outputContent strings.Builder  // 收集输出内容用于token计算
+	var outputContent strings.Builder // 收集输出内容用于token计算
 	var inputTokens int
 
 	// 计算输入token数量
@@ -171,7 +168,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 			if !ok {
 				// 流结束，处理token统计
 				outputTokens := 0
-				
+
 				// 如果从chunk中获取到了准确的token信息，使用它
 				if totalTokens > 0 {
 					// 使用AI提供商提供的准确token统计
@@ -202,7 +199,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 						}
 					}
 					totalTokens = inputTokens + outputTokens
-					
+
 					// 记录详细的估算信息，方便调试和优化
 					debugInfo := h.tokenizer.DebugTokenCount(outputContent.String())
 					h.logger.WithFields(map[string]interface{}{
@@ -244,26 +241,26 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				c.Set("input_tokens", inputTokens)
 				c.Set("output_tokens", outputTokens)
 				c.Set("total_tokens", totalTokens)
-				
+
 				// 设置 provider 信息供计费中间件使用
 				// TODO: 这是一个临时解决方案，需要完善流式架构来直接传递provider信息
 				providerID, providerName := h.extractProviderInfoFromRequestID(requestID)
 				if providerID > 0 {
 					h.logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"provider_id": providerID,
+						"request_id":    requestID,
+						"provider_id":   providerID,
 						"provider_name": providerName,
-						"stream": true,
+						"stream":        true,
 					}).Debug("Setting provider information for billing middleware (streaming)")
 					c.Set("provider_id", providerID)
 					c.Set("provider_name", providerName)
 				} else {
 					h.logger.WithFields(map[string]interface{}{
 						"request_id": requestID,
-						"issue": "streaming_provider_info_missing",
+						"issue":      "streaming_provider_info_missing",
 					}).Warn("Could not extract provider information from streaming request")
 				}
-				
+
 				return
 			}
 
@@ -542,7 +539,7 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
-	
+
 	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
 	h.logger.WithFields(map[string]interface{}{
 		"request_id":    requestID,
@@ -746,7 +743,7 @@ func (h *AIHandler) Completions(c *gin.Context) {
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
-	
+
 	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
 	h.logger.WithFields(map[string]interface{}{
 		"request_id":    requestID,
@@ -833,7 +830,7 @@ func (h *AIHandler) Models(c *gin.Context) {
 		// 添加扩展信息
 		modelData["model_type"] = string(model.ModelType)
 		modelData["status"] = string(model.Status)
-		
+
 		// 添加多语言模型类型 - 从数据库字段获取
 		if model.ModelTypeEN != nil && *model.ModelTypeEN != "" {
 			modelData["model_type_en"] = *model.ModelTypeEN
@@ -872,8 +869,6 @@ func (h *AIHandler) Models(c *gin.Context) {
 	})
 }
 
-
-
 // extractPreferredLanguage 从Accept-Language头提取首选语言
 func (h *AIHandler) extractPreferredLanguage(acceptLanguage string) string {
 	if acceptLanguage == "" {
@@ -890,11 +885,11 @@ func (h *AIHandler) extractPreferredLanguage(acceptLanguage string) string {
 	// 简单解析Accept-Language头
 	// 支持格式: "zh-CN,zh;q=0.9,en;q=0.8"
 	languages := strings.Split(acceptLanguage, ",")
-	
+
 	for _, lang := range languages {
 		// 移除权重标识和空白
 		lang = strings.TrimSpace(strings.Split(lang, ";")[0])
-		
+
 		// 标准化语言代码
 		if strings.HasPrefix(lang, "zh") {
 			lang = "zh"
@@ -903,7 +898,7 @@ func (h *AIHandler) extractPreferredLanguage(acceptLanguage string) string {
 		} else if strings.HasPrefix(lang, "ja") {
 			lang = "ja"
 		}
-		
+
 		// 检查是否支持
 		if supportedLangs[lang] {
 			return lang
@@ -1132,7 +1127,7 @@ func (h *AIHandler) handleStreamingRequestWithFunctionCall(c *gin.Context, gatew
 	if response.Cost != nil {
 		c.Set("cost_used", response.Cost.TotalCost)
 	}
-	
+
 	// 设置 provider 信息供计费中间件使用（从网关响应中获取）
 	h.logger.WithFields(map[string]interface{}{
 		"request_id":    requestID,
@@ -1353,7 +1348,7 @@ func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 		c.Set("output_tokens", response.Usage.OutputTokens)
 		c.Set("total_tokens", totalTokens)
 	}
-	
+
 	// 设置 provider 信息供计费中间件使用
 	if providerInfo != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -1363,7 +1358,7 @@ func (h *AIHandler) AnthropicMessages(c *gin.Context) {
 		}).Debug("Setting provider information for billing middleware (Anthropic Messages)")
 		c.Set("provider_id", providerInfo.ProviderID)
 		c.Set("provider_name", providerInfo.ProviderName)
-		
+
 		// 设置响应头
 		c.Header("X-Request-ID", requestID)
 		c.Header("X-Provider", providerInfo.ProviderName)
@@ -1551,12 +1546,12 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 				// 如果上下文已取消，不发送错误
 			}
 		}
-		
+
 		// 记录路由响应信息（暂时记录日志，后续会用于设置provider_id）
 		if routeResponse != nil {
 			h.logger.WithFields(map[string]interface{}{
-				"request_id": requestID,
-				"provider_id": routeResponse.Provider.ID,
+				"request_id":    requestID,
+				"provider_id":   routeResponse.Provider.ID,
 				"provider_name": routeResponse.Provider.Name,
 			}).Debug("Got route response from streaming request")
 		}
@@ -2026,9 +2021,9 @@ func (h *AIHandler) handleAnthropicStreamingRequest(c *gin.Context, request *cli
 	}
 
 	// 设置计费相关的上下文数据
-	var finalInputTokens = inputTokens  // 使用本地计算的值作为默认
+	var finalInputTokens = inputTokens // 使用本地计算的值作为默认
 	var finalOutputTokens int
-	
+
 	if usageInfo != nil {
 		// 如果上游返回了 input_tokens，并且看起来合理，则使用上游的值
 		diff := usageInfo.InputTokens - inputTokens
@@ -2045,16 +2040,16 @@ func (h *AIHandler) handleAnthropicStreamingRequest(c *gin.Context, request *cli
 		totalTokens := finalInputTokens + finalOutputTokens
 		c.Set("tokens_used", totalTokens)
 		c.Set("input_tokens", finalInputTokens)
-		c.Set("output_tokens", finalOutputTokens) 
+		c.Set("output_tokens", finalOutputTokens)
 		c.Set("total_tokens", totalTokens)
 
 		h.logger.WithFields(map[string]interface{}{
-			"request_id":       requestID,
-			"local_input":      inputTokens,
-			"upstream_input":   usageInfo.InputTokens,
-			"final_input":      finalInputTokens,
-			"output_tokens":    finalOutputTokens,
-			"total_tokens":     totalTokens,
+			"request_id":     requestID,
+			"local_input":    inputTokens,
+			"upstream_input": usageInfo.InputTokens,
+			"final_input":    finalInputTokens,
+			"output_tokens":  finalOutputTokens,
+			"total_tokens":   totalTokens,
 		}).Info("Set billing context for Anthropic streaming request")
 	}
 
@@ -2226,7 +2221,7 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	// 处理流式响应并收集使用量信息
 	usageInfo := &AnthropicStreamUsageInfo{}
 	scanner := bufio.NewScanner(resp.Body)
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -2352,12 +2347,12 @@ func (h *AIHandler) presetProviderInfo(ctx context.Context, c *gin.Context, mode
 
 	// 使用第一个可用的 provider（与路由逻辑保持一致）
 	supportInfo := supportInfos[0]
-	
+
 	h.logger.WithFields(map[string]interface{}{
-		"model_slug":     modelSlug,
-		"provider_id":    supportInfo.Provider.ID,
-		"provider_name":  supportInfo.Provider.Name,
-		"preset": true,
+		"model_slug":    modelSlug,
+		"provider_id":   supportInfo.Provider.ID,
+		"provider_name": supportInfo.Provider.Name,
+		"preset":        true,
 	}).Debug("Presetting provider info for streaming request")
 
 	// 设置到 context 中供 billing 中间件使用
@@ -2534,7 +2529,7 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 
 	var totalTokens int
 	var totalCost float64
-	var outputContent strings.Builder  // 收集输出内容用于token计算
+	var outputContent strings.Builder // 收集输出内容用于token计算
 	var inputTokens int
 
 	// 计算输入token数量
@@ -2557,7 +2552,7 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 			if !ok {
 				// 流结束，处理token统计
 				outputTokens := 0
-				
+
 				// 如果从chunk中获取到了准确的token信息，使用它
 				if totalTokens > 0 {
 					// 使用AI提供商提供的准确token统计
@@ -2588,7 +2583,7 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 						}
 					}
 					totalTokens = inputTokens + outputTokens
-					
+
 					// 记录详细的估算信息，方便调试和优化
 					debugInfo := h.tokenizer.DebugTokenCount(outputContent.String())
 					h.logger.WithFields(map[string]interface{}{
