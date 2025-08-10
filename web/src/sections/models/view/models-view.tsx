@@ -17,145 +17,13 @@ import Paper from '@mui/material/Paper';
 
 import { Iconify } from 'src/components/iconify';
 import { api } from 'src/services/api';
+import { convertDatabaseModelToDisplayModel, getLocalizedTextFromSuffix } from 'src/types/models';
+import type { DatabaseModel } from 'src/types/models';
 
 // ----------------------------------------------------------------------
 
-// 厂商信息类型
-interface ProviderInfo {
-  id: number;
-  name: string;
-  display_name: string;
-  color: string;
-  sort_order: number;
-}
-
-// 数据库模型数据类型
-interface DatabaseModel {
-  id: number;
-  name: string;
-  slug: string;
-  display_name?: string;
-  description?: string;
-  model_type: 'chat' | 'completion' | 'embedding' | 'image' | 'audio';
-  provider: ProviderInfo;
-  context_length?: number;
-  max_tokens?: number;
-  supports_streaming: boolean;
-  supports_functions: boolean;
-  status: 'active' | 'deprecated' | 'disabled';
-  pricing?: {
-    input: number;
-    output: number;
-    unit: string;
-  };
-  rate_multiplier?: number;
-  created_at: string;
-  updated_at: string;
-}
-
 // 前端展示用的模型数据类型
-interface Model {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-  category: string;
-  type: 'text' | 'image' | 'audio' | 'video' | 'multimodal';
-  pricing: {
-    input: number;  // per 1K tokens
-    output: number; // per 1K tokens
-    unit: string;
-  };
-  capabilities: string[];
-  maxTokens: number;
-  rateMultiplier?: number; // 倍率 (浮点数)
-  status: 'available' | 'beta' | 'deprecated';
-  icon: string;
-  color: string;
-}
-
-// 将数据库模型转换为前端展示格式
-const convertDatabaseModelToDisplayModel = (dbModel: DatabaseModel): Model => {
-  // 这些函数不再需要，因为我们直接使用数据库中的厂商信息
-
-  // 根据模型类型转换为前端类型
-  const getDisplayType = (modelType: string): 'text' | 'image' | 'audio' | 'video' | 'multimodal' => {
-    switch (modelType) {
-      case 'chat':
-      case 'completion':
-        return 'text';
-      case 'image':
-        return 'image';
-      case 'audio':
-        return 'audio';
-      case 'embedding':
-        return 'text';
-      default:
-        return 'text';
-    }
-  };
-
-  // 根据模型类型获取图标
-  const getIcon = (modelType: string): string => {
-    switch (modelType) {
-      case 'image':
-        return 'solar:gallery-bold-duotone';
-      case 'audio':
-        return 'solar:microphone-bold-duotone';
-      default:
-        return 'solar:cpu-bolt-bold-duotone';
-    }
-  };
-
-  // getColor函数不再需要，直接使用厂商的品牌颜色
-
-  // 根据模型类型获取能力
-  const getCapabilities = (modelType: string, supportsFunctions: boolean): string[] => {
-    const capabilities = [];
-    if (modelType === 'chat' || modelType === 'completion') {
-      capabilities.push('Text Generation');
-      if (supportsFunctions) capabilities.push('Function Calling');
-      capabilities.push('Reasoning');
-    }
-    if (modelType === 'image') {
-      capabilities.push('Image Generation');
-      capabilities.push('Text to Image');
-    }
-    if (modelType === 'audio') {
-      capabilities.push('Speech Processing');
-    }
-    return capabilities;
-  };
-
-  const providerDisplayName = dbModel.provider.display_name;
-  const displayType = getDisplayType(dbModel.model_type);
-
-
-
-  const result = {
-    id: dbModel.slug,
-    name: dbModel.display_name || dbModel.name,
-    provider: providerDisplayName,
-    description: dbModel.description || `${providerDisplayName} ${dbModel.name} model`,
-    category: providerDisplayName, // 按厂商分类
-    type: displayType,
-    pricing: dbModel.pricing || {
-      input: 0.003, // 默认价格
-      output: 0.015,
-      unit: displayType === 'image' ? 'image' : '1K tokens'
-    },
-    capabilities: getCapabilities(dbModel.model_type, dbModel.supports_functions),
-    maxTokens: dbModel.max_tokens || dbModel.context_length || 0,
-    rateMultiplier: dbModel.rate_multiplier ?? 1.0, // 从数据库获取倍率，使用nullish coalescing
-    status: (dbModel.status === 'active' ? 'available' : dbModel.status === 'disabled' ? 'deprecated' : 'deprecated') as 'available' | 'beta' | 'deprecated',
-    icon: getIcon(dbModel.model_type),
-    color: dbModel.provider.color // 使用厂商的品牌颜色
-  };
-
-
-
-  return result;
-};
+import type { Model } from 'src/types/models';
 
 // 模型类型常量（保持不变）
 const TYPES = ['All', 'text', 'image', 'audio', 'video', 'multimodal'];
@@ -163,12 +31,16 @@ const TYPES = ['All', 'text', 'image', 'audio', 'video', 'multimodal'];
 // ----------------------------------------------------------------------
 
 export function ModelsView() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
   const [models, setModels] = useState<Model[]>([]);
+  const [rawModels, setRawModels] = useState<DatabaseModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 获取当前语言
+  const currentLanguage = i18n.language || 'zh';
 
   // 获取模型数据
   const fetchModels = useCallback(async () => {
@@ -176,37 +48,55 @@ export function ModelsView() {
       setLoading(true);
       setError(null);
 
-      // 从tools/models获取数据（公开接口）
-      const response = await api.noAuth.get('/tools/models');
+      // 从tools/models获取数据（公开接口），获取所有语言的数据
+      const response = await api.noAuth.get('/tools/models', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (response.success && response.data) {
         // tools/models返回的是直接的数组格式
         const dbModels: DatabaseModel[] = response.data.map((item: any) => ({
-            id: item.id || 0,
-            name: item.name || '',
-            slug: item.slug || '',
-            display_name: item.display_name || item.name,
-            description: item.description || '',
-            model_type: item.model_type || 'chat',
-            provider: item.provider || {
-              id: 0,
-              name: 'unknown',
-              display_name: 'Unknown',
-              color: '#6B7280',
-              sort_order: 999
-            },
-            context_length: item.context_length,
-            max_tokens: item.max_tokens,
-            supports_streaming: item.supports_streaming || false,
-            supports_functions: item.supports_functions || false,
-            status: item.status || 'active',
-            pricing: item.pricing,
-            rate_multiplier: item.rate_multiplier,
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: item.updated_at || new Date().toISOString()
-          }));
+          id: item.id || 0,
+          name: item.name || '',
+          slug: item.slug || '',
+          display_name: item.display_name || item.name,
+          description: item.description || '',
+          // 处理新的后缀格式多语言字段
+          description_en: item.description_en,
+          description_jp: item.description_jp,
+          description_zh: item.description_zh,
+          model_type_en: item.model_type_en,
+          model_type_jp: item.model_type_jp,
+          model_type_zh: item.model_type_zh,
+          // 保留旧的多语言字段（向后兼容）
+          display_names: item.display_names,
+          descriptions: item.descriptions,
+          display_name_localized: item.display_name_localized,
+          description_localized: item.description_localized,
+          supports_i18n: Boolean(item.description_en || item.description_jp || item.description_zh || item.display_names || item.descriptions),
+          model_type: item.model_type || 'chat',
+          provider: item.provider || {
+            id: 0,
+            name: 'unknown',
+            display_name: 'Unknown',
+            color: '#6B7280',
+            sort_order: 999
+          },
+          context_length: item.context_length,
+          max_tokens: item.max_tokens,
+          supports_streaming: item.supports_streaming || false,
+          supports_functions: item.supports_functions || false,
+          status: item.status || 'active',
+          pricing: item.pricing,
+          rate_multiplier: item.rate_multiplier,
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString()
+        }));
 
-        const convertedModels = dbModels.map(convertDatabaseModelToDisplayModel);
+        const convertedModels = dbModels.map(model => convertDatabaseModelToDisplayModel(model, currentLanguage));
+        setRawModels(dbModels);
         setModels(convertedModels);
       } else {
         throw new Error('Failed to fetch models');
@@ -221,9 +111,18 @@ export function ModelsView() {
     }
   }, []);
 
+  // 首次加载数据
   useEffect(() => {
     fetchModels();
   }, [fetchModels]);
+
+  // 语言切换时重新转换数据，无需重新请求
+  useEffect(() => {
+    if (rawModels.length > 0) {
+      const convertedModels = rawModels.map(model => convertDatabaseModelToDisplayModel(model, currentLanguage));
+      setModels(convertedModels);
+    }
+  }, [currentLanguage, rawModels]);
 
   const handleCategoryChange = useCallback((category: string) => {
     setSelectedCategory(category);
@@ -397,7 +296,13 @@ export function ModelsView() {
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2">
-                    {model.type}
+                    {(() => {
+                      const rawModel = rawModels.find(m => m.slug === model.id);
+                      if (rawModel) {
+                        return getLocalizedTextFromSuffix(rawModel, 'model_type', currentLanguage, model.type);
+                      }
+                      return model.type;
+                    })()}
                   </Typography>
                 </TableCell>
                 <TableCell>
