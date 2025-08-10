@@ -18,6 +18,7 @@
     "copy": "コピー",
     "copied": "コピーしました！",
     "refresh": "更新",
+    "retry": "再試行",
     "close": "閉じる",
     "view": "表示",
     "details": "詳細",
@@ -181,7 +182,14 @@
     "max_tokens": "最大トークン数",
     "view_details": "詳細を表示",
     "no_models_found": "モデルが見つかりません",
-    "try_different_filter": "異なるフィルター条件を試してください"
+    "try_different_filter": "異なるフィルター条件を試してください",
+    "language_info": "{{language}} コンテンツを表示中",
+    "switch_language": "言語切替",
+    "loading_models": "モデルを読み込み中...",
+    "refresh_models": "モデルリストを更新",
+    "model_count": "合計 {{count}} 個のモデル",
+    "filter_by_provider": "プロバイダーでフィルター",
+    "filter_by_type": "タイプでフィルター"
   },
   "auth": {
     "login": "ログイン",

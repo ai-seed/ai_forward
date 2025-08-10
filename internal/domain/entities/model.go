@@ -41,6 +41,14 @@ type Model struct {
 	CreatedAt         time.Time   `json:"created_at" gorm:"not null;autoCreateTime"`
 	UpdatedAt         time.Time   `json:"updated_at" gorm:"not null;autoUpdateTime"`
 
+	// 多语言字段 - 与数据库表结构一致，使用 _jp 后缀
+	DescriptionEN *string `json:"description_en,omitempty" gorm:"type:text"`
+	DescriptionZH *string `json:"description_zh,omitempty" gorm:"type:text"`
+	DescriptionJP *string `json:"description_jp,omitempty" gorm:"type:text"`
+	ModelTypeEN   *string `json:"model_type_en,omitempty" gorm:"size:50"`
+	ModelTypeZH   *string `json:"model_type_zh,omitempty" gorm:"size:50"`
+	ModelTypeJP   *string `json:"model_type_jp,omitempty" gorm:"size:50"`
+
 	// 关联关系（不使用外键约束，通过代码逻辑控制）
 	ModelProvider *ModelProvider `json:"model_provider,omitempty" gorm:"-"`
 }
@@ -66,6 +74,123 @@ func (m *Model) GetDisplayName() string {
 		return *m.DisplayName
 	}
 	return m.Name
+}
+
+// GetDisplayNameI18n 根据语言获取本地化的显示名称
+func (m *Model) GetDisplayNameI18n(lang string) string {
+	// 由于数据库表中没有display_name的多语言字段，直接返回默认显示名称
+	return m.GetDisplayName()
+}
+
+// GetDescriptionI18n 根据语言获取本地化的描述
+func (m *Model) GetDescriptionI18n(lang string) string {
+	switch lang {
+	case "en":
+		if m.DescriptionEN != nil && *m.DescriptionEN != "" {
+			return *m.DescriptionEN
+		}
+	case "zh":
+		if m.DescriptionZH != nil && *m.DescriptionZH != "" {
+			return *m.DescriptionZH
+		}
+	case "ja":
+		if m.DescriptionJP != nil && *m.DescriptionJP != "" {
+			return *m.DescriptionJP
+		}
+	}
+	// 回退到默认描述
+	if m.Description != nil && *m.Description != "" {
+		return *m.Description
+	}
+	return ""
+}
+
+// GetAllDisplayNames 获取所有语言的显示名称
+func (m *Model) GetAllDisplayNames() map[string]string {
+	result := make(map[string]string)
+	displayName := m.GetDisplayName()
+	
+	// 由于数据库表中没有display_name的多语言字段，所有语言都返回相同值
+	result["en"] = displayName
+	result["zh"] = displayName
+	result["ja"] = displayName
+	
+	return result
+}
+
+// GetAllDescriptions 获取所有语言的描述
+func (m *Model) GetAllDescriptions() map[string]string {
+	result := make(map[string]string)
+	defaultDesc := ""
+	if m.Description != nil && *m.Description != "" {
+		defaultDesc = *m.Description
+	}
+	
+	if m.DescriptionEN != nil && *m.DescriptionEN != "" {
+		result["en"] = *m.DescriptionEN
+	} else {
+		result["en"] = defaultDesc
+	}
+	
+	if m.DescriptionZH != nil && *m.DescriptionZH != "" {
+		result["zh"] = *m.DescriptionZH
+	} else {
+		result["zh"] = defaultDesc
+	}
+	
+	if m.DescriptionJP != nil && *m.DescriptionJP != "" {
+		result["ja"] = *m.DescriptionJP
+	} else {
+		result["ja"] = defaultDesc
+	}
+	
+	return result
+}
+
+// GetModelTypeI18n 根据语言获取本地化的模型类型
+func (m *Model) GetModelTypeI18n(lang string) string {
+	switch lang {
+	case "en":
+		if m.ModelTypeEN != nil && *m.ModelTypeEN != "" {
+			return *m.ModelTypeEN
+		}
+	case "zh":
+		if m.ModelTypeZH != nil && *m.ModelTypeZH != "" {
+			return *m.ModelTypeZH
+		}
+	case "ja":
+		if m.ModelTypeJP != nil && *m.ModelTypeJP != "" {
+			return *m.ModelTypeJP
+		}
+	}
+	// 回退到原始模型类型
+	return string(m.ModelType)
+}
+
+// GetAllModelTypes 获取所有语言的模型类型
+func (m *Model) GetAllModelTypes() map[string]string {
+	result := make(map[string]string)
+	defaultType := string(m.ModelType)
+	
+	if m.ModelTypeEN != nil && *m.ModelTypeEN != "" {
+		result["en"] = *m.ModelTypeEN
+	} else {
+		result["en"] = defaultType
+	}
+	
+	if m.ModelTypeZH != nil && *m.ModelTypeZH != "" {
+		result["zh"] = *m.ModelTypeZH
+	} else {
+		result["zh"] = defaultType
+	}
+	
+	if m.ModelTypeJP != nil && *m.ModelTypeJP != "" {
+		result["ja"] = *m.ModelTypeJP
+	} else {
+		result["ja"] = defaultType
+	}
+	
+	return result
 }
 
 // GetContextLength 获取上下文长度

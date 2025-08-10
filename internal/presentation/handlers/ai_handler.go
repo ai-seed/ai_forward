@@ -30,6 +30,7 @@ import (
 type AIHandler struct {
 	gatewayService           gateway.GatewayService
 	modelService             services.ModelService
+	modelI18nService         services.ModelI18nService // 多语言模型服务
 	usageLogService          services.UsageLogService
 	logger                   logger.Logger
 	config                   *config.Config
@@ -53,10 +54,12 @@ func NewAIHandler(
 	httpClient clients.HTTPClient,
 	aiClient clients.AIProviderClient,
 	thinkingService services.ThinkingService,
+	modelI18nService services.ModelI18nService, // 添加多语言服务参数
 ) *AIHandler {
 	return &AIHandler{
 		gatewayService:           gatewayService,
 		modelService:             modelService,
+		modelI18nService:         modelI18nService, // 注入多语言服务
 		usageLogService:          usageLogService,
 		logger:                   logger,
 		config:                   config,
@@ -765,7 +768,7 @@ func (h *AIHandler) Completions(c *gin.Context) {
 
 // Models 获取可用模型列表
 // @Summary 列出模型
-// @Description 获取可用的AI模型列表
+// @Description 获取可用的AI模型列表，包含多语言显示名称和描述
 // @Tags AI接口
 // @Produce json
 // @Security BearerAuth
@@ -791,14 +794,9 @@ func (h *AIHandler) Models(c *gin.Context) {
 		return
 	}
 
-	// 转换为 OpenAI API 格式
+	// 转换为 OpenAI API 格式，包含多语言字段
 	var modelList []map[string]interface{}
 	for _, model := range models {
-		displayName := model.Name
-		if model.DisplayName != nil {
-			displayName = *model.DisplayName
-		}
-
 		modelData := map[string]interface{}{
 			"id":       model.Slug,
 			"object":   "model",
@@ -806,15 +804,52 @@ func (h *AIHandler) Models(c *gin.Context) {
 			"owned_by": "system",
 		}
 
-		// 添加可选字段
-		if model.Description != nil {
+		// 添加默认显示名称（向后兼容）
+		if model.DisplayName != nil && *model.DisplayName != "" {
+			modelData["display_name"] = *model.DisplayName
+		} else {
+			modelData["display_name"] = model.Name
+		}
+
+		// 由于数据库表中没有display_name的多语言字段，暂时跳过
+		// 后续可以考虑添加这些字段到数据库表中
+
+		// 添加默认描述（向后兼容）
+		if model.Description != nil && *model.Description != "" {
 			modelData["description"] = *model.Description
 		}
 
+		// 添加多语言描述字段
+		if model.DescriptionEN != nil && *model.DescriptionEN != "" {
+			modelData["description_en"] = *model.DescriptionEN
+		}
+		if model.DescriptionZH != nil && *model.DescriptionZH != "" {
+			modelData["description_zh"] = *model.DescriptionZH
+		}
+		if model.DescriptionJP != nil && *model.DescriptionJP != "" {
+			modelData["description_ja"] = *model.DescriptionJP
+		}
+
 		// 添加扩展信息
-		modelData["display_name"] = displayName
 		modelData["model_type"] = string(model.ModelType)
 		modelData["status"] = string(model.Status)
+		
+		// 添加多语言模型类型 - 从数据库字段获取
+		if model.ModelTypeEN != nil && *model.ModelTypeEN != "" {
+			modelData["model_type_en"] = *model.ModelTypeEN
+		} else {
+			modelData["model_type_en"] = string(model.ModelType)
+		}
+		if model.ModelTypeZH != nil && *model.ModelTypeZH != "" {
+			modelData["model_type_zh"] = *model.ModelTypeZH
+		} else {
+			modelData["model_type_zh"] = string(model.ModelType)
+		}
+		if model.ModelTypeJP != nil && *model.ModelTypeJP != "" {
+			modelData["model_type_ja"] = *model.ModelTypeJP
+		} else {
+			modelData["model_type_ja"] = string(model.ModelType)
+		}
 
 		if model.ContextLength != nil {
 			modelData["context_length"] = *model.ContextLength
@@ -830,11 +865,52 @@ func (h *AIHandler) Models(c *gin.Context) {
 		modelList = append(modelList, modelData)
 	}
 
-	// 返回 OpenAI API 兼容格式
+	// 返回标准 OpenAI API 兼容格式
 	c.JSON(http.StatusOK, gin.H{
 		"object": "list",
 		"data":   modelList,
 	})
+}
+
+
+
+// extractPreferredLanguage 从Accept-Language头提取首选语言
+func (h *AIHandler) extractPreferredLanguage(acceptLanguage string) string {
+	if acceptLanguage == "" {
+		return "en" // 默认英文
+	}
+
+	// 支持的语言列表
+	supportedLangs := map[string]bool{
+		"en": true,
+		"zh": true,
+		"ja": true,
+	}
+
+	// 简单解析Accept-Language头
+	// 支持格式: "zh-CN,zh;q=0.9,en;q=0.8"
+	languages := strings.Split(acceptLanguage, ",")
+	
+	for _, lang := range languages {
+		// 移除权重标识和空白
+		lang = strings.TrimSpace(strings.Split(lang, ";")[0])
+		
+		// 标准化语言代码
+		if strings.HasPrefix(lang, "zh") {
+			lang = "zh"
+		} else if strings.HasPrefix(lang, "en") {
+			lang = "en"
+		} else if strings.HasPrefix(lang, "ja") {
+			lang = "ja"
+		}
+		
+		// 检查是否支持
+		if supportedLangs[lang] {
+			return lang
+		}
+	}
+
+	return "en" // 默认回退到英文
 }
 
 // Usage 获取使用情况
