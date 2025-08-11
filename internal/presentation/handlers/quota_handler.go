@@ -42,6 +42,16 @@ type UpdateQuotaRequest struct {
 }
 
 // GetAPIKeyQuotas 获取API Key的配额列表
+// @Summary 获取API密钥配额
+// @Description 获取指定API密钥的所有配额信息
+// @Tags quotas
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Success 200 {object} dto.Response{data=[]entities.Quota} "获取成功"
+// @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/quotas [get]
 func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
@@ -104,6 +114,17 @@ func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 }
 
 // CreateAPIKeyQuota 为API Key创建配额
+// @Summary 创建API密钥配额
+// @Description 为指定API密钥创建新的配额限制
+// @Tags quotas
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Param request body CreateQuotaRequest true "创建配额请求"
+// @Success 201 {object} dto.Response{data=entities.Quota} "创建成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/quotas [post]
 func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
@@ -157,6 +178,18 @@ func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 }
 
 // UpdateQuota 更新配额
+// @Summary 更新配额
+// @Description 根据配额ID更新配额信息
+// @Tags quotas
+// @Accept json
+// @Produce json
+// @Param id path int true "配额ID"
+// @Param request body UpdateQuotaRequest true "更新配额请求"
+// @Success 200 {object} dto.Response{data=entities.Quota} "更新成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 404 {object} dto.Response "配额不存在"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/quotas/{id} [put]
 func (h *QuotaHandler) UpdateQuota(c *gin.Context) {
 	quotaIDStr := c.Param("quota_id")
 	quotaID, err := strconv.ParseInt(quotaIDStr, 10, 64)
@@ -235,6 +268,17 @@ func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 }
 
 // GetQuotaStatus 获取API Key的配额状态
+// @Summary 获取配额状态
+// @Description 获取指定API密钥的配额状态和使用情况
+// @Tags quotas
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Success 200 {object} dto.Response{data=map[string]interface{}} "获取成功"
+// @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 404 {object} dto.Response "配额不存在"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/quota-status [get]
 func (h *QuotaHandler) GetQuotaStatus(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)

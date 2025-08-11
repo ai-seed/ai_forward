@@ -33,6 +33,16 @@ func NewAPIKeyHandler(apiKeyService services.APIKeyService, usageLogRepo reposit
 }
 
 // CreateAPIKey 创建API密钥
+// @Summary 创建API密钥
+// @Description 为指定用户创建一个新的API密钥
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateAPIKeyRequest true "创建API密钥请求"
+// @Success 201 {object} dto.Response{data=dto.APIKeyResponse} "创建成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys [post]
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req dto.CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,6 +79,16 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 }
 
 // GetAPIKey 获取API密钥
+// @Summary 获取API密钥信息
+// @Description 根据API密钥ID获取详细信息
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "获取成功"
+// @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 404 {object} dto.Response "API密钥不存在"
+// @Router /api/api-keys/{id} [get]
 func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -100,6 +120,17 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 }
 
 // UpdateAPIKey 更新API密钥
+// @Summary 更新API密钥
+// @Description 根据API密钥ID更新API密钥信息
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Param request body dto.UpdateAPIKeyRequest true "更新API密钥请求"
+// @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "更新成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -146,6 +177,16 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 }
 
 // DeleteAPIKey 删除API密钥
+// @Summary 删除API密钥
+// @Description 根据API密钥ID删除API密钥
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Success 200 {object} dto.Response "删除成功"
+// @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -179,6 +220,16 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 }
 
 // RevokeAPIKey 撤销API密钥
+// @Summary 撤销API密钥
+// @Description 撤销指定的API密钥，使其失效
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Success 200 {object} dto.Response "撤销成功"
+// @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/revoke [patch]
 func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -212,6 +263,17 @@ func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 }
 
 // ListAPIKeys 获取API密钥列表
+// @Summary 获取API密钥列表
+// @Description 分页获取所有API密钥列表
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Success 200 {object} dto.Response{data=dto.APIKeyListResponse} "获取成功"
+// @Failure 400 {object} dto.Response "分页参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	// 解析分页参数
 	var pagination dto.PaginationRequest
@@ -246,6 +308,16 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 }
 
 // GetUserAPIKeys 获取用户的API密钥列表
+// @Summary 获取用户API密钥
+// @Description 获取指定用户的所有API密钥
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param user_id path int true "用户ID"
+// @Success 200 {object} dto.Response{data=[]dto.APIKeyResponse} "获取成功"
+// @Failure 400 {object} dto.Response "用户ID格式错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/users/{user_id}/api-keys [get]
 func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -279,6 +351,21 @@ func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 }
 
 // GetAPIKeyUsageLogs 获取API密钥使用日志
+// @Summary 获取API密钥使用日志
+// @Description 分页获取指定API密钥的使用日志
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param start_date query string false "开始日期" format(date)
+// @Param end_date query string false "结束日期" format(date)
+// @Param model query string false "模型名称"
+// @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/usage-logs [get]
 func (h *APIKeyHandler) GetAPIKeyUsageLogs(c *gin.Context) {
 	idStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(idStr, 10, 64)
@@ -406,6 +493,20 @@ func getStringValue(s *string) string {
 }
 
 // GetAPIKeyBillingRecords 获取API密钥扣费记录
+// @Summary 获取API密钥扣费记录
+// @Description 分页获取指定API密钥的扣费记录
+// @Tags api-keys
+// @Accept json
+// @Produce json
+// @Param id path int true "API密钥ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param start_date query string false "开始日期" format(date)
+// @Param end_date query string false "结束日期" format(date)
+// @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
+// @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /api/api-keys/{id}/billing-records [get]
 func (h *APIKeyHandler) GetAPIKeyBillingRecords(c *gin.Context) {
 	idStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(idStr, 10, 64)
