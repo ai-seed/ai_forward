@@ -131,7 +131,7 @@ func (r *midjourneyJobRepositoryGorm) UpdateStatus(ctx context.Context, jobID st
 func (r *midjourneyJobRepositoryGorm) UpdateProgress(ctx context.Context, jobID string, progress int) error {
 	// 使用乐观锁机制，只有当进度确实需要更新时才执行
 	result := r.db.WithContext(ctx).Model(&entities.MidjourneyJob{}).
-		Where("job_id = ? AND (progress < ? OR progress IS NULL)", jobID, progress).
+		Where("job_id = ? AND (progress != ? OR progress IS NULL)", jobID, progress).
 		Updates(map[string]interface{}{
 			"progress":   progress,
 			"updated_at": time.Now(),
@@ -154,13 +154,19 @@ func (r *midjourneyJobRepositoryGorm) UpdateProgress(ctx context.Context, jobID 
 
 // UpdateUpstreamTaskID 更新上游任务ID
 func (r *midjourneyJobRepositoryGorm) UpdateUpstreamTaskID(ctx context.Context, jobID string, upstreamTaskID string) error {
-	if err := r.db.WithContext(ctx).Model(&entities.MidjourneyJob{}).
+	result := r.db.WithContext(ctx).Model(&entities.MidjourneyJob{}).
 		Where("job_id = ?", jobID).
 		Updates(map[string]interface{}{
 			"upstream_task_id": upstreamTaskID,
 			"updated_at":       time.Now(),
-		}).Error; err != nil {
-		return fmt.Errorf("failed to update midjourney job upstream task ID: %w", err)
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update midjourney job upstream task ID: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("no rows affected when updating upstream task ID for job %s - job might not exist", jobID)
 	}
 
 	// 清除缓存

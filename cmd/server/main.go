@@ -163,11 +163,15 @@ func main() {
 	// 启动 Midjourney 队列服务
 	midjourneyQueueService := serviceFactory.MidjourneyQueueService()
 	ctx := context.Background()
-	workerCount := 3 // 可以从配置文件读取
+	workerCount := cfg.Midjourney.WorkerCount // 从配置文件读取
+	
 	if err := midjourneyQueueService.StartWorkers(ctx, workerCount); err != nil {
 		log.WithField("error", err.Error()).Fatal("Failed to start Midjourney queue workers")
 	}
-	log.WithField("worker_count", workerCount).Info("Midjourney queue workers started")
+	log.WithFields(map[string]interface{}{
+		"worker_count": workerCount,
+		"channel_size": cfg.Midjourney.ChannelSize,
+	}).Info("Midjourney queue workers started")
 
 	// 创建路由器
 	router := routes.NewRouter(cfg, log, serviceFactory, gatewayService)

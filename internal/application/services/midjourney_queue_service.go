@@ -12,6 +12,7 @@ import (
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/infrastructure/clients"
+	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/infrastructure/redis"
 )
@@ -69,7 +70,7 @@ type worker struct {
 	logger  logger.Logger
 }
 
-// NewMidjourneyQueueService 创建队列服务
+// NewMidjourneyQueueService 创建队列服务（兼容旧接口）
 func NewMidjourneyQueueService(
 	jobRepo repositories.MidjourneyJobRepository,
 	cache *redis.CacheService,
@@ -80,12 +81,37 @@ func NewMidjourneyQueueService(
 	billingService BillingService,
 	logger logger.Logger,
 ) MidjourneyQueueService {
+	defaultConfig := &config.MidjourneyConfig{
+		ChannelSize:  1000,
+		WorkerCount:  3,
+		MaxRetries:   60,
+		PollInterval: 5,
+	}
+	return NewMidjourneyQueueServiceWithConfig(
+		jobRepo, cache, webhookService, imageGenService,
+		providerModelSupportRepo, providerRepo, billingService,
+		defaultConfig, logger,
+	)
+}
+
+// NewMidjourneyQueueServiceWithConfig 创建队列服务（带配置）
+func NewMidjourneyQueueServiceWithConfig(
+	jobRepo repositories.MidjourneyJobRepository,
+	cache *redis.CacheService,
+	webhookService WebhookService,
+	imageGenService ImageGenerationService,
+	providerModelSupportRepo repositories.ProviderModelSupportRepository,
+	providerRepo repositories.ProviderRepository,
+	billingService BillingService,
+	mjConfig *config.MidjourneyConfig,
+	logger logger.Logger,
+) MidjourneyQueueService {
 	return &midjourneyQueueServiceImpl{
 		jobRepo:                  jobRepo,
 		cache:                    cache,
 		logger:                   logger,
 		stopCh:                   make(chan struct{}),
-		jobCh:                    make(chan *entities.MidjourneyJob, 1000), // 缓冲队列，可容纳1000个任务
+		jobCh:                    make(chan *entities.MidjourneyJob, mjConfig.ChannelSize),
 		webhookService:           webhookService,
 		imageGenService:          imageGenService,
 		providerModelSupportRepo: providerModelSupportRepo,
@@ -127,8 +153,6 @@ func (s *midjourneyQueueServiceImpl) StartWorkers(ctx context.Context, workerCou
 	}
 
 	s.isRunning = true
-	s.logger.WithField("worker_count", workerCount).Info("Midjourney queue workers started")
-
 	return nil
 }
 
@@ -170,15 +194,15 @@ func (s *midjourneyQueueServiceImpl) EnqueueJob(ctx context.Context, job *entiti
 		s.logger.WithFields(map[string]interface{}{
 			"job_id": job.JobID,
 			"action": job.Action,
-			"mode":   job.Mode,
-		}).Info("Job enqueued successfully")
+		}).Info("Job enqueued")
 	default:
-		// channel 满了，记录警告但不阻塞
+		// channel 满了，记录错误
 		s.logger.WithFields(map[string]interface{}{
-			"job_id": job.JobID,
-			"action": job.Action,
-			"mode":   job.Mode,
-		}).Warn("Job channel is full, job will be processed by dispatcher")
+			"job_id":       job.JobID,
+			"channel_len":  len(s.jobCh),
+			"channel_cap":  cap(s.jobCh),
+		}).Error("Job channel is full")
+		return fmt.Errorf("job channel is full")
 	}
 
 	return nil
@@ -256,10 +280,33 @@ func (s *midjourneyQueueServiceImpl) ProcessExpiredJobs(ctx context.Context) err
 func (w *worker) run(ctx context.Context) {
 	defer w.service.workerWg.Done()
 
-	w.logger.Info("Worker started")
-	defer w.logger.Info("Worker stopped")
-
 	for {
+		// 首先检查是否有job可以处理（非阻塞检查）
+		select {
+		case job, ok := <-w.service.jobCh:
+			if !ok {
+				// channel 已关闭，退出
+				return
+			}
+
+			if job == nil {
+				continue
+			}
+
+			w.logger.WithFields(map[string]interface{}{
+				"worker_id": w.id,
+				"job_id":    job.JobID,
+				"action":    job.Action,
+			}).Info("Processing job")
+
+			// 异步处理任务，避免阻塞 worker
+			go w.processJobAsync(ctx, job)
+			continue
+		default:
+			// 没有job可以处理，检查是否需要退出
+		}
+		
+		// 如果没有job，再检查退出信号
 		select {
 		case <-w.service.stopCh:
 			return
@@ -271,6 +318,16 @@ func (w *worker) run(ctx context.Context) {
 				return
 			}
 
+			if job == nil {
+				continue
+			}
+
+			w.logger.WithFields(map[string]interface{}{
+				"worker_id": w.id,
+				"job_id":    job.JobID,
+				"action":    job.Action,
+			}).Info("Processing job")
+
 			// 异步处理任务，避免阻塞 worker
 			go w.processJobAsync(ctx, job)
 		}
@@ -279,19 +336,12 @@ func (w *worker) run(ctx context.Context) {
 
 // processJobAsync 异步处理任务
 func (w *worker) processJobAsync(ctx context.Context, job *entities.MidjourneyJob) {
-	w.logger.WithFields(map[string]interface{}{
-		"job_id": job.JobID,
-		"action": job.Action,
-		"status": job.Status,
-		"mode":   job.Mode,
-	}).Info("=== WORKER: Processing job ===")
-
-	// 更新状态为处理中
+	// 更新状态为处理中 - 这里是防重复处理的关键点
 	if err := w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusOnQueue); err != nil {
 		w.logger.WithFields(map[string]interface{}{
 			"error":  err.Error(),
 			"job_id": job.JobID,
-		}).Error("Failed to update job status")
+		}).Error("Failed to update job status to OnQueue")
 		return
 	}
 
@@ -776,9 +826,21 @@ func (w *worker) handleUpstreamResponse(ctx context.Context, job *entities.Midjo
 					"error":            err.Error(),
 					"job_id":           job.JobID,
 					"upstream_task_id": upstreamTaskID,
-				}).Error("Failed to save upstream task ID")
-				// 继续处理，不因为保存失败而中断
+				}).Error("=== CRITICAL: Failed to save upstream task ID ===")
+				
+				// upstream_task_id保存失败是严重错误，应该标记任务失败
+				w.service.jobRepo.UpdateStatus(ctx, job.JobID, entities.MidjourneyJobStatusFailed)
+				result := &repositories.MidjourneyJobResult{
+					ErrorMessage: stringPtr(fmt.Sprintf("Failed to save upstream task ID: %s", err.Error())),
+				}
+				w.service.jobRepo.UpdateResult(ctx, job.JobID, result)
+				return fmt.Errorf("critical error: failed to save upstream task ID: %w", err)
 			}
+
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":           job.JobID,
+				"upstream_task_id": upstreamTaskID,
+			}).Info("=== UPSTREAM TASK ID SAVED SUCCESSFULLY ===")
 
 			return w.pollUpstreamTask(ctx, job, upstreamTaskID, proxyClient)
 		} else {
@@ -872,9 +934,25 @@ func (w *worker) pollUpstreamTask(ctx context.Context, job *entities.MidjourneyJ
 		status, _ := taskResult["status"].(string)
 		progress, _ := taskResult["progress"].(string)
 
+		w.logger.WithFields(map[string]interface{}{
+			"job_id":           job.JobID,
+			"upstream_task_id": upstreamTaskID,
+			"status":           status,
+			"progress_raw":     progress,
+		}).Info("=== POLLING UPSTREAM TASK STATUS ===")
+
 		// 更新本地任务进度
-		if progressInt := parseProgress(progress); progressInt > 0 {
-			w.service.jobRepo.UpdateProgress(ctx, job.JobID, progressInt)
+		if progressInt := parseProgress(progress); progressInt >= 0 {
+			w.logger.WithFields(map[string]interface{}{
+				"job_id":       job.JobID,
+				"progress_int": progressInt,
+			}).Info("=== UPDATING PROGRESS ===")
+			if err := w.service.jobRepo.UpdateProgress(ctx, job.JobID, progressInt); err != nil {
+				w.logger.WithFields(map[string]interface{}{
+					"job_id": job.JobID,
+					"error":  err.Error(),
+				}).Error("=== FAILED TO UPDATE PROGRESS ===")
+			}
 		}
 
 		switch status {
@@ -1153,3 +1231,4 @@ func (w *worker) getMidjourneyProvider(ctx context.Context, modelSlug string) (*
 	errorMsg := fmt.Sprintf("no available providers for model %s. Reasons: %s", modelSlug, strings.Join(unavailableReasons, "; "))
 	return nil, fmt.Errorf(errorMsg)
 }
+

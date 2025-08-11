@@ -34,6 +34,7 @@ type Config struct {
 	FunctionCall FunctionCallConfig `mapstructure:"function_call"`
 	Thinking     ThinkingConfig     `mapstructure:"thinking"`
 	S3           S3Config           `mapstructure:"s3"`
+	Midjourney   MidjourneyConfig   `mapstructure:"midjourney"`
 }
 
 // ServerConfig 服务器配置
@@ -157,6 +158,14 @@ type S3Config struct {
 	AllowedTypes    []string `mapstructure:"allowed_types"`     // 允许的文件类型
 }
 
+// MidjourneyConfig Midjourney队列配置
+type MidjourneyConfig struct {
+	ChannelSize  int `mapstructure:"channel_size"`  // 任务队列channel大小
+	WorkerCount  int `mapstructure:"worker_count"`  // 工作进程数量
+	MaxRetries   int `mapstructure:"max_retries"`   // 最大重试次数
+	PollInterval int `mapstructure:"poll_interval"` // 轮询间隔（秒）
+}
+
 // LoadConfig 加载配置
 func LoadConfig(configPath string) (*Config, error) {
 	viper.SetConfigName("config")
@@ -266,6 +275,12 @@ func setDefaults() {
 	viper.SetDefault("s3.use_path_style", false)
 	viper.SetDefault("s3.max_file_size", 10*1024*1024) // 10MB
 	viper.SetDefault("s3.allowed_types", []string{"image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"})
+
+	// Midjourney默认值
+	viper.SetDefault("midjourney.channel_size", 1000)
+	viper.SetDefault("midjourney.worker_count", 3)
+	viper.SetDefault("midjourney.max_retries", 60)
+	viper.SetDefault("midjourney.poll_interval", 5)
 }
 
 // validateConfig 验证配置

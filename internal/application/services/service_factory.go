@@ -23,10 +23,11 @@ import (
 
 // ServiceFactory 服务工厂
 type ServiceFactory struct {
-	repoFactory  *infraRepos.RepositoryFactory
-	redisFactory *redisInfra.RedisFactory
-	config       *config.Config
-	logger       logger.Logger
+	repoFactory            *infraRepos.RepositoryFactory
+	redisFactory           *redisInfra.RedisFactory
+	config                 *config.Config
+	logger                 logger.Logger
+	midjourneyQueueService MidjourneyQueueService // 单例实例
 }
 
 // NewServiceFactory 创建服务工厂
@@ -198,18 +199,30 @@ func (f *ServiceFactory) MidjourneyService() MidjourneyService {
 	)
 }
 
-// MidjourneyQueueService 获取Midjourney队列服务
+// MidjourneyQueueService 获取Midjourney队列服务（单例）
 func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
-	return NewMidjourneyQueueService(
-		f.repoFactory.MidjourneyJobRepository(),
-		f.redisFactory.GetCacheService(),
-		f.WebhookService(),
-		f.ImageGenerationService(),
-		f.repoFactory.ProviderModelSupportRepository(),
-		f.repoFactory.ProviderRepository(),
-		f.BillingService(),
-		f.logger,
-	)
+	if f.midjourneyQueueService == nil {
+		var cacheService *redisInfra.CacheService
+		if f.redisFactory != nil {
+			cacheService = f.redisFactory.GetCacheService()
+		}
+		
+		f.midjourneyQueueService = NewMidjourneyQueueServiceWithConfig(
+			f.repoFactory.MidjourneyJobRepository(),
+			cacheService, // 可能为nil，这是安全的
+			f.WebhookService(),
+			f.ImageGenerationService(),
+			f.repoFactory.ProviderModelSupportRepository(),
+			f.repoFactory.ProviderRepository(),
+			f.BillingService(),
+			&f.config.Midjourney, // 传入配置
+			f.logger,
+		)
+		
+		f.logger.Info("Midjourney queue service created")
+	}
+	
+	return f.midjourneyQueueService
 }
 
 // WebhookService 获取Webhook服务

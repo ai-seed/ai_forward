@@ -32,7 +32,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-API-Key, X-Request-ID")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-API-Key, X-Request-ID, mj-api-secret")
 		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -77,7 +77,19 @@ func SecurityMiddleware() gin.HandlerFunc {
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		c.Header("Content-Security-Policy", "default-src 'self'")
+
+		// 对于 API 路由，使用更宽松的 CSP 策略以支持跨域请求
+		// 只对非 API 路由应用严格的 CSP
+		path := c.Request.URL.Path
+		if path == "/" || path == "/health" {
+			// 对于根路径和健康检查，使用严格的 CSP
+			c.Header("Content-Security-Policy", "default-src 'self'")
+		} else {
+			// 对于 API 路由，允许跨域请求
+			// 移除 CSP 或使用更宽松的策略
+			c.Header("Content-Security-Policy", "default-src * 'unsafe-inline' 'unsafe-eval'; img-src * data:; media-src *; font-src *")
+		}
+
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 
 		c.Next()

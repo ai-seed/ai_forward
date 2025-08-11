@@ -5,7 +5,9 @@
       "Bash(go build:*)",
       "Bash(go test:*)",
       "Bash(go get:*)",
-      "mcp__think__sequentialthinking"
+      "mcp__think__sequentialthinking",
+      "Bash(rg:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
