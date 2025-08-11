@@ -34,7 +34,9 @@ func NewUserHandler(userService services.UserService, logger logger.Logger) *Use
 // @Param request body dto.CreateUserRequest true "创建用户请求"
 // @Success 201 {object} dto.Response{data=dto.UserResponse} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
@@ -80,7 +82,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Param id path int true "用户ID"
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "获取成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 404 {object} dto.Response "用户不存在"
+// @Security BearerAuth
 // @Router /admin/users/{id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	idStr := c.Param("id")
@@ -122,7 +126,9 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Param request body dto.UpdateUserRequest true "更新用户请求"
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	idStr := c.Param("id")
@@ -178,7 +184,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Param id path int true "用户ID"
 // @Success 200 {object} dto.Response "删除成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
@@ -222,7 +230,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Param page_size query int false "每页数量" default(10)
 // @Success 200 {object} dto.Response{data=dto.UserListResponse} "获取成功"
 // @Failure 400 {object} dto.Response "分页参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	// 解析分页参数
@@ -267,7 +277,9 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Param request body dto.BalanceUpdateRequest true "余额更新请求"
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users/{id}/balance [post]
 func (h *UserHandler) UpdateBalance(c *gin.Context) {
 	idStr := c.Param("id")

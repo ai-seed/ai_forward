@@ -101,7 +101,9 @@ func (h *ToolHandler) GetPublicTools(c *gin.Context) {
 // @Produce json
 // @Param category query string false "工具类型" default(all)
 // @Success 200 {object} object "获取成功"
+// @Failure 401 {object} object "未认证"
 // @Failure 500 {object} object "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools [get]
 func (h *ToolHandler) GetUserToolInstances(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -130,9 +132,11 @@ func (h *ToolHandler) GetUserToolInstances(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body entities.UserToolInstance true "创建工具实例请求"
-// @Success 200 {object} object "创建成功"
+// @Success 201 {object} object "创建成功"
 // @Failure 400 {object} object "请求参数错误"
+// @Failure 401 {object} object "未认证"
 // @Failure 500 {object} object "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools [post]
 func (h *ToolHandler) CreateUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -173,8 +177,11 @@ func (h *ToolHandler) CreateUserToolInstance(c *gin.Context) {
 // @Param id path int true "工具实例ID"
 // @Success 200 {object} object "获取成功"
 // @Failure 400 {object} object "ID格式错误"
+// @Failure 401 {object} object "未认证"
+// @Failure 403 {object} object "访问被拒绝"
 // @Failure 404 {object} object "工具实例不存在"
 // @Failure 500 {object} object "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools/{id} [get]
 func (h *ToolHandler) GetUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -220,8 +227,11 @@ func (h *ToolHandler) GetUserToolInstance(c *gin.Context) {
 // @Param request body entities.UserToolInstance true "更新工具实例请求"
 // @Success 200 {object} object "更新成功"
 // @Failure 400 {object} object "请求参数错误"
+// @Failure 401 {object} object "未认证"
+// @Failure 403 {object} object "访问被拒绝"
 // @Failure 404 {object} object "工具实例不存在"
 // @Failure 500 {object} object "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools/{id} [put]
 func (h *ToolHandler) UpdateUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -277,8 +287,10 @@ func (h *ToolHandler) UpdateUserToolInstance(c *gin.Context) {
 // @Param id path int true "工具实例ID"
 // @Success 200 {object} object "删除成功"
 // @Failure 400 {object} object "ID格式错误"
+// @Failure 401 {object} object "未认证"
 // @Failure 404 {object} object "工具实例不存在"
 // @Failure 500 {object} object "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools/{id} [delete]
 func (h *ToolHandler) DeleteUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -353,7 +365,9 @@ func (h *ToolHandler) GetSharedToolInstance(c *gin.Context) {
 // @Produce json
 // @Param id path string true "工具ID"
 // @Success 200 {object} object{success=bool,message=string} "更新成功"
+// @Failure 401 {object} object "未认证"
 // @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools/{id}/usage [post]
 func (h *ToolHandler) IncrementUsage(c *gin.Context) {
 	toolID := c.Param("id")
@@ -459,7 +473,9 @@ func (h *ToolHandler) GetModels(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Success 200 {object} object{success=bool,data=[]entities.APIKey} "获取成功"
+// @Failure 401 {object} object "未认证"
 // @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/tools/api-keys [get]
 func (h *ToolHandler) GetUserAPIKeys(c *gin.Context) {
 	userID := c.GetInt64("user_id")

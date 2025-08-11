@@ -50,7 +50,9 @@ type UpdateQuotaRequest struct {
 // @Param id path int true "API密钥ID"
 // @Success 200 {object} dto.Response{data=[]entities.Quota} "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/quotas [get]
 func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
@@ -123,7 +125,10 @@ func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 // @Param request body CreateQuotaRequest true "创建配额请求"
 // @Success 201 {object} dto.Response{data=entities.Quota} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
+// @Failure 409 {object} dto.Response "配额已存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/quotas [post]
 func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
@@ -183,12 +188,14 @@ func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 // @Tags quotas
 // @Accept json
 // @Produce json
-// @Param id path int true "配额ID"
+// @Param quota_id path int true "配额ID"
 // @Param request body UpdateQuotaRequest true "更新配额请求"
 // @Success 200 {object} dto.Response{data=entities.Quota} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 404 {object} dto.Response "配额不存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/quotas/{quota_id} [put]
 func (h *QuotaHandler) UpdateQuota(c *gin.Context) {
 	quotaIDStr := c.Param("quota_id")
@@ -243,7 +250,9 @@ func (h *QuotaHandler) UpdateQuota(c *gin.Context) {
 // @Param quota_id path int true "配额ID"
 // @Success 200 {object} dto.Response "删除成功"
 // @Failure 400 {object} dto.Response "配额ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/quotas/{quota_id} [delete]
 func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 	quotaIDStr := c.Param("quota_id")
@@ -286,8 +295,10 @@ func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 // @Param id path int true "API密钥ID"
 // @Success 200 {object} dto.Response "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 404 {object} dto.Response "配额不存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/quota-status [get]
 func (h *QuotaHandler) GetQuotaStatus(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")

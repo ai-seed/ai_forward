@@ -41,7 +41,9 @@ func NewAPIKeyHandler(apiKeyService services.APIKeyService, usageLogRepo reposit
 // @Param request body dto.CreateAPIKeyRequest true "创建API密钥请求"
 // @Success 201 {object} dto.Response{data=dto.APIKeyResponse} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys [post]
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req dto.CreateAPIKeyRequest
@@ -87,7 +89,9 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 // @Param id path int true "API密钥ID"
 // @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 404 {object} dto.Response "API密钥不存在"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id} [get]
 func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
@@ -129,7 +133,9 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 // @Param request body dto.UpdateAPIKeyRequest true "更新API密钥请求"
 // @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
@@ -185,7 +191,9 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 // @Param id path int true "API密钥ID"
 // @Success 200 {object} dto.Response "删除成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
@@ -228,7 +236,9 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 // @Param id path int true "API密钥ID"
 // @Success 200 {object} dto.Response "撤销成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/revoke [post]
 func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
@@ -272,7 +282,9 @@ func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 // @Param page_size query int false "每页数量" default(10)
 // @Success 200 {object} dto.Response{data=dto.APIKeyListResponse} "获取成功"
 // @Failure 400 {object} dto.Response "分页参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	// 解析分页参数
@@ -316,7 +328,9 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 // @Param user_id path int true "用户ID"
 // @Success 200 {object} dto.Response{data=[]dto.APIKeyResponse} "获取成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/users/{user_id}/api-keys [get]
 func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 	userIDStr := c.Param("id")
@@ -364,7 +378,9 @@ func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 // @Param model query string false "模型名称"
 // @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/usage-logs [get]
 func (h *APIKeyHandler) GetAPIKeyUsageLogs(c *gin.Context) {
 	idStr := c.Param("id")
@@ -505,7 +521,9 @@ func getStringValue(s *string) string {
 // @Param end_date query string false "结束日期" format(date)
 // @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
+// @Failure 401 {object} dto.Response "未认证"
 // @Failure 500 {object} dto.Response "服务器内部错误"
+// @Security BearerAuth
 // @Router /admin/api-keys/{id}/billing-records [get]
 func (h *APIKeyHandler) GetAPIKeyBillingRecords(c *gin.Context) {
 	idStr := c.Param("id")
