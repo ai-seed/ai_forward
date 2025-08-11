@@ -51,7 +51,7 @@ type UpdateQuotaRequest struct {
 // @Success 200 {object} dto.Response{data=[]entities.Quota} "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/quotas [get]
+// @Router /admin/api-keys/{id}/quotas [get]
 func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
@@ -124,7 +124,7 @@ func (h *QuotaHandler) GetAPIKeyQuotas(c *gin.Context) {
 // @Success 201 {object} dto.Response{data=entities.Quota} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/quotas [post]
+// @Router /admin/api-keys/{id}/quotas [post]
 func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)
@@ -189,7 +189,7 @@ func (h *QuotaHandler) CreateAPIKeyQuota(c *gin.Context) {
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 404 {object} dto.Response "配额不存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/quotas/{id} [put]
+// @Router /admin/quotas/{quota_id} [put]
 func (h *QuotaHandler) UpdateQuota(c *gin.Context) {
 	quotaIDStr := c.Param("quota_id")
 	quotaID, err := strconv.ParseInt(quotaIDStr, 10, 64)
@@ -235,6 +235,16 @@ func (h *QuotaHandler) UpdateQuota(c *gin.Context) {
 }
 
 // DeleteQuota 删除配额
+// @Summary 删除配额
+// @Description 根据配额ID删除指定配额
+// @Tags quotas
+// @Accept json
+// @Produce json
+// @Param quota_id path int true "配额ID"
+// @Success 200 {object} dto.Response "删除成功"
+// @Failure 400 {object} dto.Response "配额ID格式错误"
+// @Failure 500 {object} dto.Response "服务器内部错误"
+// @Router /admin/quotas/{quota_id} [delete]
 func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 	quotaIDStr := c.Param("quota_id")
 	quotaID, err := strconv.ParseInt(quotaIDStr, 10, 64)
@@ -278,7 +288,7 @@ func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 404 {object} dto.Response "配额不存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/quota-status [get]
+// @Router /admin/api-keys/{id}/quota-status [get]
 func (h *QuotaHandler) GetQuotaStatus(c *gin.Context) {
 	apiKeyIDStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(apiKeyIDStr, 10, 64)

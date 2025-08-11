@@ -42,7 +42,7 @@ func NewAPIKeyHandler(apiKeyService services.APIKeyService, usageLogRepo reposit
 // @Success 201 {object} dto.Response{data=dto.APIKeyResponse} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys [post]
+// @Router /admin/api-keys [post]
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	var req dto.CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -88,7 +88,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 404 {object} dto.Response "API密钥不存在"
-// @Router /api/api-keys/{id} [get]
+// @Router /admin/api-keys/{id} [get]
 func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -130,7 +130,7 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.APIKeyResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id} [put]
+// @Router /admin/api-keys/{id} [put]
 func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -186,7 +186,7 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 // @Success 200 {object} dto.Response "删除成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id} [delete]
+// @Router /admin/api-keys/{id} [delete]
 func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -229,7 +229,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 // @Success 200 {object} dto.Response "撤销成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/revoke [patch]
+// @Router /admin/api-keys/{id}/revoke [post]
 func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -273,7 +273,7 @@ func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.APIKeyListResponse} "获取成功"
 // @Failure 400 {object} dto.Response "分页参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys [get]
+// @Router /admin/api-keys [get]
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	// 解析分页参数
 	var pagination dto.PaginationRequest
@@ -317,7 +317,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=[]dto.APIKeyResponse} "获取成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users/{user_id}/api-keys [get]
+// @Router /admin/users/{user_id}/api-keys [get]
 func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 	userIDStr := c.Param("id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
@@ -365,7 +365,7 @@ func (h *APIKeyHandler) GetUserAPIKeys(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/usage-logs [get]
+// @Router /admin/api-keys/{id}/usage-logs [get]
 func (h *APIKeyHandler) GetAPIKeyUsageLogs(c *gin.Context) {
 	idStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(idStr, 10, 64)
@@ -506,7 +506,7 @@ func getStringValue(s *string) string {
 // @Success 200 {object} dto.Response{data=dto.PaginatedResponse} "获取成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/api-keys/{id}/billing-records [get]
+// @Router /admin/api-keys/{id}/billing-records [get]
 func (h *APIKeyHandler) GetAPIKeyBillingRecords(c *gin.Context) {
 	idStr := c.Param("id")
 	apiKeyID, err := strconv.ParseInt(idStr, 10, 64)

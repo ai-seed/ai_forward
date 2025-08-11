@@ -35,7 +35,7 @@ func NewUserHandler(userService services.UserService, logger logger.Logger) *Use
 // @Success 201 {object} dto.Response{data=dto.UserResponse} "创建成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users [post]
+// @Router /admin/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -81,7 +81,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "获取成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
 // @Failure 404 {object} dto.Response "用户不存在"
-// @Router /api/users/{id} [get]
+// @Router /admin/users/{id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -123,7 +123,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users/{id} [put]
+// @Router /admin/users/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -179,7 +179,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Success 200 {object} dto.Response "删除成功"
 // @Failure 400 {object} dto.Response "用户ID格式错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users/{id} [delete]
+// @Router /admin/users/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -223,7 +223,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.UserListResponse} "获取成功"
 // @Failure 400 {object} dto.Response "分页参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users [get]
+// @Router /admin/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	// 解析分页参数
 	var pagination dto.PaginationRequest
@@ -268,7 +268,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Success 200 {object} dto.Response{data=dto.UserResponse} "更新成功"
 // @Failure 400 {object} dto.Response "请求参数错误"
 // @Failure 500 {object} dto.Response "服务器内部错误"
-// @Router /api/users/{id}/balance [patch]
+// @Router /admin/users/{id}/balance [post]
 func (h *UserHandler) UpdateBalance(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
