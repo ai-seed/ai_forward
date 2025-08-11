@@ -274,7 +274,7 @@ func (h *QuotaHandler) DeleteQuota(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "API密钥ID"
-// @Success 200 {object} dto.Response{data=map[string]interface{}} "获取成功"
+// @Success 200 {object} dto.Response "获取成功"
 // @Failure 400 {object} dto.Response "API密钥ID格式错误"
 // @Failure 404 {object} dto.Response "配额不存在"
 // @Failure 500 {object} dto.Response "服务器内部错误"

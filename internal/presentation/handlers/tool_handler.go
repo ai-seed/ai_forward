@@ -30,8 +30,8 @@ func NewToolHandler(toolService *services.ToolService, logger logger.Logger) *To
 // @Tags tools
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{}{success=bool,data=[]entities.Tool} "获取成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "获取成功"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/tools [get]
 func (h *ToolHandler) GetTools(c *gin.Context) {
 	tools, err := h.toolService.GetTools(c.Request.Context())
@@ -58,8 +58,8 @@ func (h *ToolHandler) GetTools(c *gin.Context) {
 // @Produce json
 // @Param limit query int false "限制数量" default(20)
 // @Param offset query int false "偏移量" default(0)
-// @Success 200 {object} map[string]interface{}{success=bool,data=[]entities.UserToolInstance,total=int} "获取成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "获取成功"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/tools/public [get]
 func (h *ToolHandler) GetPublicTools(c *gin.Context) {
 	// 解析分页参数
@@ -100,8 +100,8 @@ func (h *ToolHandler) GetPublicTools(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param category query string false "工具类型" default(all)
-// @Success 200 {object} map[string]interface{}{success=bool,data=[]entities.UserToolInstance} "获取成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "获取成功"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/user/tools [get]
 func (h *ToolHandler) GetUserToolInstances(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -130,9 +130,9 @@ func (h *ToolHandler) GetUserToolInstances(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body entities.UserToolInstance true "创建工具实例请求"
-// @Success 200 {object} map[string]interface{}{success=bool,data=entities.UserToolInstance} "创建成功"
-// @Failure 400 {object} map[string]interface{}{success=bool,message=string} "请求参数错误"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "创建成功"
+// @Failure 400 {object} object "请求参数错误"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/user/tools [post]
 func (h *ToolHandler) CreateUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -171,10 +171,10 @@ func (h *ToolHandler) CreateUserToolInstance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工具实例ID"
-// @Success 200 {object} map[string]interface{}{success=bool,data=entities.UserToolInstance} "获取成功"
-// @Failure 400 {object} map[string]interface{}{success=bool,message=string} "ID格式错误"
-// @Failure 404 {object} map[string]interface{}{success=bool,message=string} "工具实例不存在"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "获取成功"
+// @Failure 400 {object} object "ID格式错误"
+// @Failure 404 {object} object "工具实例不存在"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/user/tools/{id} [get]
 func (h *ToolHandler) GetUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -218,10 +218,10 @@ func (h *ToolHandler) GetUserToolInstance(c *gin.Context) {
 // @Produce json
 // @Param id path int true "工具实例ID"
 // @Param request body entities.UserToolInstance true "更新工具实例请求"
-// @Success 200 {object} map[string]interface{}{success=bool,data=entities.UserToolInstance} "更新成功"
-// @Failure 400 {object} map[string]interface{}{success=bool,message=string} "请求参数错误"
-// @Failure 404 {object} map[string]interface{}{success=bool,message=string} "工具实例不存在"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "更新成功"
+// @Failure 400 {object} object "请求参数错误"
+// @Failure 404 {object} object "工具实例不存在"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/user/tools/{id} [put]
 func (h *ToolHandler) UpdateUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -275,10 +275,10 @@ func (h *ToolHandler) UpdateUserToolInstance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "工具实例ID"
-// @Success 200 {object} map[string]interface{}{success=bool,message=string} "删除成功"
-// @Failure 400 {object} map[string]interface{}{success=bool,message=string} "ID格式错误"
-// @Failure 404 {object} map[string]interface{}{success=bool,message=string} "工具实例不存在"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object "删除成功"
+// @Failure 400 {object} object "ID格式错误"
+// @Failure 404 {object} object "工具实例不存在"
+// @Failure 500 {object} object "服务器内部错误"
 // @Router /api/user/tools/{id} [delete]
 func (h *ToolHandler) DeleteUserToolInstance(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -314,9 +314,9 @@ func (h *ToolHandler) DeleteUserToolInstance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "共享ID"
-// @Success 200 {object} map[string]interface{}{success=bool,data=entities.UserToolInstance} "获取成功"
-// @Failure 404 {object} map[string]interface{}{success=bool,message=string} "工具实例不存在"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object{success=bool,data=entities.UserToolInstance} "获取成功"
+// @Failure 404 {object} object{success=bool,message=string} "工具实例不存在"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /api/tools/shared/{id} [get]
 func (h *ToolHandler) GetSharedToolInstance(c *gin.Context) {
 	shareToken := c.Param("token")
@@ -352,8 +352,8 @@ func (h *ToolHandler) GetSharedToolInstance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path string true "工具ID"
-// @Success 200 {object} map[string]interface{}{success=bool,message=string} "更新成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object{success=bool,message=string} "更新成功"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /api/tools/{id}/increment-usage [post]
 func (h *ToolHandler) IncrementUsage(c *gin.Context) {
 	toolID := c.Param("id")
@@ -381,9 +381,9 @@ func (h *ToolHandler) IncrementUsage(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param code path string true "授权代码"
-// @Success 200 {object} map[string]interface{}{success=bool,data=entities.UserToolInstance} "获取成功"
-// @Failure 404 {object} map[string]interface{}{success=bool,message=string} "工具实例不存在"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object{success=bool,data=entities.UserToolInstance} "获取成功"
+// @Failure 404 {object} object{success=bool,message=string} "工具实例不存在"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /api/tools/code/{code} [get]
 func (h *ToolHandler) GetToolInstanceByCode(c *gin.Context) {
 	code := c.Param("code")
@@ -431,8 +431,8 @@ func (h *ToolHandler) GetToolInstanceByCode(c *gin.Context) {
 // @Tags models
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{}{success=bool,data=[]entities.Model} "获取成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object{success=bool,data=[]entities.Model} "获取成功"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /api/models [get]
 func (h *ToolHandler) GetModels(c *gin.Context) {
 	// 获取聊天类型的活跃模型
@@ -458,8 +458,8 @@ func (h *ToolHandler) GetModels(c *gin.Context) {
 // @Tags api-keys
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{}{success=bool,data=[]entities.APIKey} "获取成功"
-// @Failure 500 {object} map[string]interface{}{success=bool,message=string,error=string} "服务器内部错误"
+// @Success 200 {object} object{success=bool,data=[]entities.APIKey} "获取成功"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /api/user/api-keys [get]
 func (h *ToolHandler) GetUserAPIKeys(c *gin.Context) {
 	userID := c.GetInt64("user_id")
