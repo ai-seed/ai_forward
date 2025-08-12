@@ -1717,13 +1717,18 @@ type AnthropicProviderInfo struct {
 }
 
 func (h *AIHandler) processAnthropicRequest(ctx context.Context, request *clients.AnthropicMessageRequest, userID, apiKeyID int64, requestID string) (*clients.AnthropicMessageResponse, *AnthropicProviderInfo, error) {
+	// 检测是否为thinking模型
+	isThinkingModel := strings.Contains(request.Model, "thinking")
+
 	h.logger.WithFields(map[string]interface{}{
-		"request_id": requestID,
-		"user_id":    userID,
-		"api_key_id": apiKeyID,
-		"model":      request.Model,
-		"max_tokens": request.MaxTokens,
-		"stream":     request.Stream,
+		"request_id":        requestID,
+		"user_id":           userID,
+		"api_key_id":        apiKeyID,
+		"model":             request.Model,
+		"max_tokens":        request.MaxTokens,
+		"stream":            request.Stream,
+		"thinking":          request.Thinking,
+		"is_thinking_model": isThinkingModel,
 	}).Info("开始处理 Anthropic 请求")
 
 	// 从数据库获取支持该模型的提供商
@@ -1846,6 +1851,7 @@ func (h *AIHandler) sendAnthropicRequestToProvider(ctx context.Context, provider
 		"upstream_model_name": modelInfo.UpstreamModelName,
 		"max_tokens":          request.MaxTokens,
 		"stream":              request.Stream,
+		"thinking":            request.Thinking,
 	}).Info("开始直接发送 Anthropic 格式请求")
 
 	// 构造请求URL - 强制使用 /messages 端点
@@ -1926,6 +1932,9 @@ func (h *AIHandler) sendAnthropicRequestToProvider(ctx context.Context, provider
 		}).Error("解析响应失败")
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
+
+	// 检查是否包含thinking内容并进行标记
+	h.processThinkingContentBlocks(&anthropicResponse)
 
 	h.logger.WithFields(map[string]interface{}{
 		"provider_id":    provider.ID,
@@ -2144,6 +2153,9 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 		url = fmt.Sprintf("%s/v1/messages", baseURL)
 	}
 
+	// 检测是否为thinking模型
+	isThinkingModel := strings.Contains(request.Model, "thinking")
+
 	h.logger.WithFields(map[string]interface{}{
 		"provider_id":         provider.ID,
 		"provider_name":       provider.Name,
@@ -2152,6 +2164,7 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 		"stream_url":          url,
 		"original_model":      request.Model,
 		"upstream_model_name": modelInfo.UpstreamModelName,
+		"is_thinking_model":   isThinkingModel,
 	}).Info("开始发送流式请求到 /v1/messages 端点")
 
 	// 构造请求头
@@ -2180,6 +2193,7 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 		"stream_url":  url,
 		"final_model": requestCopy.Model,
 		"stream":      requestCopy.Stream,
+		"thinking":    requestCopy.Thinking,
 		"headers":     headers,
 	}).Info("准备发送流式 HTTP 请求")
 
@@ -2222,11 +2236,17 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 	usageInfo := &AnthropicStreamUsageInfo{}
 	scanner := bufio.NewScanner(resp.Body)
 
+	// 用于跟踪thinking状态
+	var currentEvent string
+	var isThinkingBlock bool
+	var currentBlockIndex int
+
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		// 处理 event: 行
 		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimSpace(line[7:]) // 移除 "event: " 前缀
 			w.Write([]byte(line + "\n"))
 			flusher.Flush()
 		} else if strings.HasPrefix(line, "data: ") {
@@ -2237,7 +2257,7 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 				break
 			}
 
-			// 尝试解析数据以提取使用量信息
+			// 尝试解析数据以提取使用量信息和thinking状态
 			var streamData map[string]interface{}
 			if err := json.Unmarshal([]byte(data), &streamData); err == nil {
 				// 检查是否包含使用量信息
@@ -2255,9 +2275,51 @@ func (h *AIHandler) sendAnthropicStreamRequestToProvider(c *gin.Context, provide
 						}
 					}
 				}
+
+				// 检查thinking相关事件
+				if currentEvent == "content_block_start" {
+					if contentBlock, exists := streamData["content_block"]; exists {
+						if blockMap, ok := contentBlock.(map[string]interface{}); ok {
+							if blockType, exists := blockMap["type"]; exists && blockType == "thinking" {
+								isThinkingBlock = true
+								if index, exists := streamData["index"]; exists {
+									if idx, ok := index.(float64); ok {
+										currentBlockIndex = int(idx)
+									}
+								}
+								h.logger.WithFields(map[string]interface{}{
+									"block_index":       currentBlockIndex,
+									"block_type":        "thinking",
+									"is_thinking_model": isThinkingModel,
+								}).Debug("Detected thinking block start")
+							}
+						}
+					}
+				} else if currentEvent == "content_block_stop" {
+					if index, exists := streamData["index"]; exists {
+						if idx, ok := index.(float64); ok && int(idx) == currentBlockIndex && isThinkingBlock {
+							isThinkingBlock = false
+							h.logger.WithFields(map[string]interface{}{
+								"block_index": currentBlockIndex,
+							}).Debug("Thinking block ended")
+						}
+					}
+				} else if currentEvent == "content_block_delta" && isThinkingBlock {
+					// 为thinking内容添加特殊标记
+					if delta, exists := streamData["delta"]; exists {
+						if deltaMap, ok := delta.(map[string]interface{}); ok {
+							deltaMap["content_type"] = "thinking"
+							streamData["delta"] = deltaMap
+						}
+					}
+					// 重新序列化修改后的数据
+					if modifiedData, err := json.Marshal(streamData); err == nil {
+						data = string(modifiedData)
+					}
+				}
 			}
 
-			// 直接转发Anthropic格式的数据
+			// 转发数据
 			w.Write([]byte(fmt.Sprintf("data: %s\n", data)))
 			flusher.Flush()
 		} else if line == "" {
@@ -2725,5 +2787,38 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 			}).Info("Client disconnected from thinking stream")
 			return
 		}
+	}
+}
+
+// processThinkingContentBlocks 处理响应中的thinking内容块
+func (h *AIHandler) processThinkingContentBlocks(response *clients.AnthropicMessageResponse) {
+	var thinkingBlocks, textBlocks int
+
+	for i := range response.Content {
+		block := &response.Content[i]
+
+		// 如果是thinking类型的内容块，可以在这里添加特殊处理
+		if block.Type == "thinking" {
+			thinkingBlocks++
+			h.logger.WithFields(map[string]interface{}{
+				"block_index": i,
+				"block_type":  "thinking",
+				"text_length": len(block.Text),
+			}).Debug("Found thinking content block in response")
+
+			// 可以在这里添加thinking内容的特殊处理逻辑
+			// 例如：添加特殊标记、格式化等
+		} else if block.Type == "text" {
+			textBlocks++
+		}
+	}
+
+	// 记录thinking内容的统计信息
+	if thinkingBlocks > 0 {
+		h.logger.WithFields(map[string]interface{}{
+			"thinking_blocks": thinkingBlocks,
+			"text_blocks":     textBlocks,
+			"total_blocks":    len(response.Content),
+		}).Info("Processed response with thinking content")
 	}
 }

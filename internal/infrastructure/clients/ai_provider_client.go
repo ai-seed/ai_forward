@@ -59,15 +59,15 @@ type AIRequest struct {
 
 // ChatCompletionRequest 聊天补全请求
 type ChatCompletionRequest struct {
-	Model       string      `json:"model" binding:"required" example:"gpt-3.5-turbo"`
-	Messages    []AIMessage `json:"messages" binding:"required,min=1"`
-	MaxTokens   int         `json:"max_tokens,omitempty" example:"150"`
-	Temperature float64     `json:"temperature,omitempty" example:"0.7"`
-	Stream      bool        `json:"stream,omitempty" example:"false"`
-	Tools       []Tool      `json:"tools,omitempty"`                      // Function call tools
-	ToolChoice  interface{} `json:"tool_choice,omitempty"`                // Tool choice strategy
-	WebSearch   bool        `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
-	Thinking    *ThinkingConfig `json:"thinking,omitempty"`               // 深度思考配置
+	Model       string          `json:"model" binding:"required" example:"gpt-3.5-turbo"`
+	Messages    []AIMessage     `json:"messages" binding:"required,min=1"`
+	MaxTokens   int             `json:"max_tokens,omitempty" example:"150"`
+	Temperature float64         `json:"temperature,omitempty" example:"0.7"`
+	Stream      bool            `json:"stream,omitempty" example:"false"`
+	Tools       []Tool          `json:"tools,omitempty"`                      // Function call tools
+	ToolChoice  interface{}     `json:"tool_choice,omitempty"`                // Tool choice strategy
+	WebSearch   bool            `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
+	Thinking    *ThinkingConfig `json:"thinking,omitempty"`                   // 深度思考配置
 }
 
 // CompletionRequest 文本补全请求
@@ -712,8 +712,8 @@ func (am *AnthropicMessage) GetTextContent() string {
 
 // AnthropicContentBlock Anthropic 内容块
 type AnthropicContentBlock struct {
-	Type   string `json:"type" example:"text" enum:"text,image,tool_use,tool_result" description:"内容块类型"`
-	Text   string `json:"text,omitempty" example:"Hello, how can I help you?" description:"文本内容（当type为text时）"`
+	Type   string `json:"type" example:"text" enum:"text,image,tool_use,tool_result,thinking" description:"内容块类型"`
+	Text   string `json:"text,omitempty" example:"Hello, how can I help you?" description:"文本内容（当type为text或thinking时）"`
 	Source *struct {
 		Type      string `json:"type" example:"base64" description:"图片数据类型"`
 		MediaType string `json:"media_type" example:"image/jpeg" description:"图片MIME类型"`
@@ -770,11 +770,11 @@ type AnthropicThinkingConfig struct {
 
 // ThinkingConfig 通用思考配置
 type ThinkingConfig struct {
-	Enabled         bool   `json:"enabled" example:"true"`                     // 是否启用深度思考
-	ShowProcess     bool   `json:"show_process" example:"true"`                // 是否显示思考过程
-	MaxTokens       int    `json:"max_tokens,omitempty" example:"2048"`        // 思考部分最大token数
-	ThinkingPrompt  string `json:"thinking_prompt,omitempty"`                  // 自定义思考提示词
-	Language        string `json:"language,omitempty" example:"zh"`            // 思考语言（zh/en）
+	Enabled        bool   `json:"enabled" example:"true"`              // 是否启用深度思考
+	ShowProcess    bool   `json:"show_process" example:"true"`         // 是否显示思考过程
+	MaxTokens      int    `json:"max_tokens,omitempty" example:"2048"` // 思考部分最大token数
+	ThinkingPrompt string `json:"thinking_prompt,omitempty"`           // 自定义思考提示词
+	Language       string `json:"language,omitempty" example:"zh"`     // 思考语言（zh/en）
 }
 
 // AnthropicMessageResponse Anthropic 消息响应
@@ -826,6 +826,7 @@ func (c *aiProviderClientImpl) isAnthropicModel(model string) bool {
 		"claude-3-haiku-20240307",
 		"claude-3-5-sonnet-20240620",
 		"claude-3-5-haiku-20241022",
+		"claude-sonnet-4-20250514-thinking",
 		"claude-2.1",
 		"claude-2.0",
 		"claude-instant-1.2",
@@ -839,4 +840,10 @@ func (c *aiProviderClientImpl) isAnthropicModel(model string) bool {
 
 	// 也可以通过前缀判断
 	return strings.HasPrefix(model, "claude-")
+}
+
+// isThinkingModel 判断是否为thinking模型
+func (c *aiProviderClientImpl) isThinkingModel(model string) bool {
+	// Claude thinking模型通常包含"thinking"关键字
+	return strings.Contains(model, "thinking")
 }
