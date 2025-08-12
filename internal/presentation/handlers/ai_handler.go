@@ -278,6 +278,23 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 			}
 
 			// 构造SSE数据
+			delta := map[string]interface{}{}
+
+			// 添加普通内容
+			if chunk.Content != "" {
+				delta["content"] = chunk.Content
+			}
+
+			// 添加推理内容（Claude thinking模型）
+			if chunk.ReasoningContent != "" {
+				delta["reasoning_content"] = chunk.ReasoningContent
+			}
+
+			// 如果有content_type标记，也添加到delta中
+			if chunk.ContentType != "" {
+				delta["content_type"] = chunk.ContentType
+			}
+
 			data := map[string]interface{}{
 				"id":      chunk.ID,
 				"object":  "chat.completion.chunk",
@@ -285,10 +302,8 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				"model":   chunk.Model,
 				"choices": []map[string]interface{}{
 					{
-						"index": 0,
-						"delta": map[string]interface{}{
-							"content": chunk.Content,
-						},
+						"index":         0,
+						"delta":         delta,
 						"finish_reason": chunk.FinishReason,
 					},
 				},
@@ -2715,6 +2730,23 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 
 			// 发送处理后的数据块
 			for _, processedChunk := range processedChunks {
+				delta := map[string]interface{}{}
+
+				// 添加普通内容
+				if processedChunk.Content != "" {
+					delta["content"] = processedChunk.Content
+				}
+
+				// 添加推理内容（如果有）
+				if chunk.ReasoningContent != "" {
+					delta["reasoning_content"] = chunk.ReasoningContent
+				}
+
+				// 添加内容类型标记
+				if processedChunk.ContentType != "" {
+					delta["content_type"] = processedChunk.ContentType
+				}
+
 				data := map[string]interface{}{
 					"id":      chunk.ID,
 					"object":  "chat.completion.chunk",
@@ -2722,11 +2754,8 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 					"model":   chunk.Model,
 					"choices": []map[string]interface{}{
 						{
-							"index": 0,
-							"delta": map[string]interface{}{
-								"content":      processedChunk.Content,
-								"content_type": processedChunk.ContentType,
-							},
+							"index":         0,
+							"delta":         delta,
 							"finish_reason": chunk.FinishReason,
 						},
 					},

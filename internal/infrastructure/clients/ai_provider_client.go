@@ -31,15 +31,16 @@ type AIProviderClient interface {
 
 // StreamChunk 流式响应数据块
 type StreamChunk struct {
-	ID           string   `json:"id"`
-	Object       string   `json:"object"`
-	Created      int64    `json:"created"`
-	Model        string   `json:"model"`
-	Content      string   `json:"content"`
-	ContentType  string   `json:"content_type,omitempty"` // "thinking" | "response"
-	FinishReason *string  `json:"finish_reason"`
-	Usage        *AIUsage `json:"usage,omitempty"`
-	Cost         *AICost  `json:"cost,omitempty"`
+	ID               string   `json:"id"`
+	Object           string   `json:"object"`
+	Created          int64    `json:"created"`
+	Model            string   `json:"model"`
+	Content          string   `json:"content"`
+	ReasoningContent string   `json:"reasoning_content,omitempty"` // Claude thinking模型的推理内容
+	ContentType      string   `json:"content_type,omitempty"`      // "thinking" | "response"
+	FinishReason     *string  `json:"finish_reason"`
+	Usage            *AIUsage `json:"usage,omitempty"`
+	Cost             *AICost  `json:"cost,omitempty"`
 }
 
 // AIRequest AI请求 (通用结构)
@@ -642,11 +643,26 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 
 			// 提取内容
 			content := ""
+			reasoningContent := ""
+			contentType := ""
+
 			if choices, ok := sseData["choices"].([]interface{}); ok && len(choices) > 0 {
 				if choice, ok := choices[0].(map[string]interface{}); ok {
 					if delta, ok := choice["delta"].(map[string]interface{}); ok {
+						// 提取普通内容
 						if deltaContent, ok := delta["content"].(string); ok {
 							content = deltaContent
+						}
+
+						// 提取推理内容（Claude thinking模型）
+						if deltaReasoningContent, ok := delta["reasoning_content"].(string); ok {
+							reasoningContent = deltaReasoningContent
+							contentType = "thinking" // 标记为thinking内容
+						}
+
+						// 提取content_type（如果有）
+						if deltaContentType, ok := delta["content_type"].(string); ok {
+							contentType = deltaContentType
 						}
 					}
 				}
@@ -654,11 +670,13 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 
 			// 构造流式数据块
 			chunk := &StreamChunk{
-				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-				Object:  "chat.completion.chunk",
-				Created: time.Now().Unix(),
-				Model:   model,
-				Content: content,
+				ID:               fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
+				Object:           "chat.completion.chunk",
+				Created:          time.Now().Unix(),
+				Model:            model,
+				Content:          content,
+				ReasoningContent: reasoningContent,
+				ContentType:      contentType,
 			}
 
 			// 发送数据块

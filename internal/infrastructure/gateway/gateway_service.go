@@ -29,14 +29,16 @@ type GatewayService interface {
 
 // StreamChunk 流式响应块
 type StreamChunk struct {
-	ID           string           `json:"id"`
-	Object       string           `json:"object"`
-	Created      int64            `json:"created"`
-	Model        string           `json:"model"`
-	Content      string           `json:"content"`
-	FinishReason *string          `json:"finish_reason"`
-	Usage        *clients.AIUsage `json:"usage,omitempty"`
-	Cost         *CostInfo        `json:"cost,omitempty"`
+	ID               string           `json:"id"`
+	Object           string           `json:"object"`
+	Created          int64            `json:"created"`
+	Model            string           `json:"model"`
+	Content          string           `json:"content"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"` // Claude thinking模型的推理内容
+	ContentType      string           `json:"content_type,omitempty"`      // "thinking" | "response"
+	FinishReason     *string          `json:"finish_reason"`
+	Usage            *clients.AIUsage `json:"usage,omitempty"`
+	Cost             *CostInfo        `json:"cost,omitempty"`
 }
 
 // GatewayRequest 网关请求
@@ -208,7 +210,7 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 
 	// 注意：
 	// 1. 使用日志记录已由billing中间件统一处理，这里不再重复记录
-	// 2. 配额消费已在中间件中处理，这里不再重复消费  
+	// 2. 配额消费已在中间件中处理，这里不再重复消费
 	// 3. 计费处理已由billing中间件统一处理，这里不再重复处理
 
 	response := &GatewayResponse{
@@ -256,7 +258,7 @@ func (g *gatewayServiceImpl) calculateCost(ctx context.Context, modelID int64, i
 // recordUsageLog 已废弃 - 使用日志记录已由billing中间件统一处理
 // func (g *gatewayServiceImpl) recordUsageLog(ctx context.Context, request *GatewayRequest, provider *entities.Provider, model *entities.Model, usage *UsageInfo, cost *CostInfo, duration time.Duration, requestError error) *entities.UsageLog {
 //     // 此方法已被移除，所有使用日志记录由billing中间件统一管理
-//     return nil  
+//     return nil
 // }
 
 // 注意：consumeQuotas 函数已删除，配额消费现在只在中间件中处理，避免重复消费
