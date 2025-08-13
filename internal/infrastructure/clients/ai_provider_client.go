@@ -14,10 +14,16 @@ import (
 	"ai-api-gateway/internal/domain/entities"
 )
 
+// AIProviderResponse AI提供商响应（包含原始数据和解析后的结构体）
+type AIProviderResponse struct {
+	Response    *AIResponse `json:"response"`     // 解析后的结构化响应
+	RawResponse []byte      `json:"raw_response"` // 原始响应数据
+}
+
 // AIProviderClient AI提供商客户端接口
 type AIProviderClient interface {
 	// SendRequest 发送请求到AI提供商
-	SendRequest(ctx context.Context, provider *entities.Provider, request *AIRequest) (*AIResponse, error)
+	SendRequest(ctx context.Context, provider *entities.Provider, request *AIRequest) (*AIProviderResponse, error)
 
 	// SendStreamRequest 发送流式请求到AI提供商
 	SendStreamRequest(ctx context.Context, provider *entities.Provider, request *AIRequest, streamChan chan<- *StreamChunk) error
@@ -41,6 +47,7 @@ type StreamChunk struct {
 	FinishReason     *string  `json:"finish_reason"`
 	Usage            *AIUsage `json:"usage,omitempty"`
 	Cost             *AICost  `json:"cost,omitempty"`
+	RawData          []byte   `json:"-"` // 原始SSE数据，不序列化到JSON
 }
 
 // AIRequest AI请求 (通用结构)
@@ -339,7 +346,7 @@ func NewAIProviderClient(httpClient HTTPClient) AIProviderClient {
 }
 
 // SendRequest 发送请求到AI提供商
-func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entities.Provider, request *AIRequest) (*AIResponse, error) {
+func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entities.Provider, request *AIRequest) (*AIProviderResponse, error) {
 	// 构造请求URL
 	url := fmt.Sprintf("%s/v1/chat/completions", provider.BaseURL)
 
@@ -409,6 +416,10 @@ func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entiti
 	fmt.Printf("  - Status Code: %d\n", resp.StatusCode)
 	fmt.Printf("  - Content Length: %d bytes\n", len(resp.Body))
 
+	// 保存原始响应数据
+	rawResponse := make([]byte, len(resp.Body))
+	copy(rawResponse, resp.Body)
+
 	// 解析响应
 	var aiResp AIResponse
 
@@ -426,14 +437,20 @@ func (c *aiProviderClientImpl) SendRequest(ctx context.Context, provider *entiti
 	fmt.Printf("  - Completion Tokens: %d\n", aiResp.Usage.CompletionTokens)
 	fmt.Printf("  - Total Tokens: %d\n", aiResp.Usage.TotalTokens)
 
+	// 构造包含原始数据和解析数据的响应
+	providerResponse := &AIProviderResponse{
+		Response:    &aiResp,
+		RawResponse: rawResponse,
+	}
+
 	// 检查是否有错误
 	if aiResp.Error != nil {
 		fmt.Printf("[AI_CLIENT] 提供商返回错误: %s\n", aiResp.Error.Message)
-		return &aiResp, fmt.Errorf("provider %s returned error: %s", provider.Name, aiResp.Error.Message)
+		return providerResponse, fmt.Errorf("provider %s returned error: %s", provider.Name, aiResp.Error.Message)
 	}
 
 	fmt.Printf("[AI_CLIENT] 请求处理完成，返回响应\n")
-	return &aiResp, nil
+	return providerResponse, nil
 }
 
 // HealthCheck 健康检查
@@ -627,59 +644,73 @@ func (c *aiProviderClientImpl) processStreamResponse(ctx context.Context, body i
 				continue
 			}
 
+			// 保存原始SSE行数据
+			rawSSELine := line + "\n"
+
 			// 移除 "data: " 前缀
 			data := strings.TrimPrefix(line, "data: ")
 
 			// 检查是否是结束标记
 			if data == "[DONE]" {
+				// 发送结束标记的原始数据
+				chunk := &StreamChunk{
+					RawData: []byte(rawSSELine),
+				}
+				select {
+				case streamChan <- chunk:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 				return nil
 			}
 
-			// 解析JSON数据
-			var sseData map[string]interface{}
-			if err := json.Unmarshal([]byte(data), &sseData); err != nil {
-				continue
+			// 创建基础chunk，无论解析是否成功都包含原始数据
+			chunk := &StreamChunk{
+				RawData: []byte(rawSSELine),
 			}
 
-			// 提取内容
-			content := ""
-			reasoningContent := ""
-			contentType := ""
+			// 尝试解析JSON数据以提取元数据（仅用于内部处理，如token统计）
+			var sseData map[string]interface{}
+			if err := json.Unmarshal([]byte(data), &sseData); err == nil {
+				// 提取内容（用于内部处理，如token统计）
+				content := ""
+				reasoningContent := ""
+				contentType := ""
 
-			if choices, ok := sseData["choices"].([]interface{}); ok && len(choices) > 0 {
-				if choice, ok := choices[0].(map[string]interface{}); ok {
-					if delta, ok := choice["delta"].(map[string]interface{}); ok {
-						// 提取普通内容
-						if deltaContent, ok := delta["content"].(string); ok {
-							content = deltaContent
-						}
+				if choices, ok := sseData["choices"].([]interface{}); ok && len(choices) > 0 {
+					if choice, ok := choices[0].(map[string]interface{}); ok {
+						if delta, ok := choice["delta"].(map[string]interface{}); ok {
+							// 提取普通内容
+							if deltaContent, ok := delta["content"].(string); ok {
+								content = deltaContent
+							}
 
-						// 提取推理内容（Claude thinking模型）
-						if deltaReasoningContent, ok := delta["reasoning_content"].(string); ok {
-							reasoningContent = deltaReasoningContent
-							contentType = "thinking" // 标记为thinking内容
-						}
+							// 提取推理内容（Claude thinking模型）
+							if deltaReasoningContent, ok := delta["reasoning_content"].(string); ok {
+								reasoningContent = deltaReasoningContent
+								contentType = "thinking" // 标记为thinking内容
+							}
 
-						// 提取content_type（如果有）
-						if deltaContentType, ok := delta["content_type"].(string); ok {
-							contentType = deltaContentType
+							// 提取content_type（如果有）
+							if deltaContentType, ok := delta["content_type"].(string); ok {
+								contentType = deltaContentType
+							}
 						}
 					}
 				}
-			}
 
-			// 构造流式数据块
-			chunk := &StreamChunk{
-				ID:               fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-				Object:           "chat.completion.chunk",
-				Created:          time.Now().Unix(),
-				Model:            model,
-				Content:          content,
-				ReasoningContent: reasoningContent,
-				ContentType:      contentType,
+				// 填充解析出的元数据到chunk中
+				chunk.ID = fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
+				chunk.Object = "chat.completion.chunk"
+				chunk.Created = time.Now().Unix()
+				chunk.Model = model
+				chunk.Content = content
+				chunk.ReasoningContent = reasoningContent
+				chunk.ContentType = contentType
 			}
+			// 如果解析失败，chunk只包含原始数据，这也是可以的
 
-			// 发送数据块
+			// 发送数据块（无论解析是否成功都发送）
 			select {
 			case streamChan <- chunk:
 			case <-ctx.Done():

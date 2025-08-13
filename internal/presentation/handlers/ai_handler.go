@@ -212,14 +212,8 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 					}).Warn("Using estimated token count for streaming response - compare with actual provider tokens")
 				}
 
-				// 发送结束标记
-				_, err := w.Write([]byte("data: [DONE]\n\n"))
-				if err != nil {
-					h.logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"error":      err.Error(),
-					}).Error("Failed to write stream end marker")
-				}
+				// 流结束时不需要发送额外的结束标记，因为原始数据中已经包含了
+				// 但仍需要flush确保数据发送完成
 				w.Flush()
 
 				// 输出流式AI提供商响应结果
@@ -264,7 +258,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				return
 			}
 
-			// 收集输出内容
+			// 收集输出内容（用于token统计）
 			if chunk.Content != "" {
 				outputContent.WriteString(chunk.Content)
 			}
@@ -277,57 +271,22 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				totalCost += chunk.Cost.TotalCost
 			}
 
-			// 构造SSE数据
-			delta := map[string]interface{}{}
-
-			// 添加普通内容
-			if chunk.Content != "" {
-				delta["content"] = chunk.Content
-			}
-
-			// 添加推理内容（Claude thinking模型）
-			if chunk.ReasoningContent != "" {
-				delta["reasoning_content"] = chunk.ReasoningContent
-			}
-
-			// 如果有content_type标记，也添加到delta中
-			if chunk.ContentType != "" {
-				delta["content_type"] = chunk.ContentType
-			}
-
-			data := map[string]interface{}{
-				"id":      chunk.ID,
-				"object":  "chat.completion.chunk",
-				"created": chunk.Created,
-				"model":   chunk.Model,
-				"choices": []map[string]interface{}{
-					{
-						"index":         0,
-						"delta":         delta,
-						"finish_reason": chunk.FinishReason,
-					},
-				},
-			}
-
-			// 序列化为JSON
-			jsonData, err := json.Marshal(data)
-			if err != nil {
+			// 直接转发原始SSE数据，不做任何结构化处理
+			if len(chunk.RawData) > 0 {
+				_, err := w.Write(chunk.RawData)
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"error":      err.Error(),
+					}).Error("Failed to write raw stream chunk")
+					return
+				}
+			} else {
+				// 如果没有原始数据，记录警告但继续处理
 				h.logger.WithFields(map[string]interface{}{
 					"request_id": requestID,
-					"error":      err.Error(),
-				}).Error("Failed to marshal stream chunk")
-				continue
-			}
-
-			// 发送SSE数据
-			sseMessage := fmt.Sprintf("data: %s\n\n", jsonData)
-			_, err = w.Write([]byte(sseMessage))
-			if err != nil {
-				h.logger.WithFields(map[string]interface{}{
-					"request_id": requestID,
-					"error":      err.Error(),
-				}).Error("Failed to write stream chunk")
-				return
+					"chunk_id":   chunk.ID,
+				}).Warn("Stream chunk missing raw data, skipping")
 			}
 
 			// 立即刷新缓冲区
@@ -595,8 +554,9 @@ func (h *AIHandler) ChatCompletions(c *gin.Context) {
 		}
 	}
 
-	// 返回AI响应（保持与OpenAI API兼容的格式）
-	c.JSON(http.StatusOK, response.Response)
+	// 直接返回上游原始响应数据，不做数据结构化
+	c.Header("Content-Type", "application/json")
+	c.Data(http.StatusOK, "application/json", response.RawResponse)
 }
 
 // Completions 处理文本完成请求
@@ -2412,6 +2372,11 @@ func (h *AIHandler) convertAnthropicToAIRequest(request *clients.AnthropicMessag
 // presetProviderInfo 预先设置 provider 信息到 context 中
 // 用于确保 billing 中间件能够获取到正确的 provider_id
 func (h *AIHandler) presetProviderInfo(ctx context.Context, c *gin.Context, modelSlug string) error {
+	// 如果 providerModelSupportRepo 为 nil（如在测试中），跳过预设置
+	if h.providerModelSupportRepo == nil {
+		return nil
+	}
+
 	// 获取支持该模型的提供商
 	supportInfos, err := h.providerModelSupportRepo.GetSupportingProviders(ctx, modelSlug)
 	if err != nil {

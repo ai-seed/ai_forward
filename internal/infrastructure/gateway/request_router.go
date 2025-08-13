@@ -38,13 +38,14 @@ type RouteRequest struct {
 
 // RouteResponse 路由响应
 type RouteResponse struct {
-	Response  *clients.AIResponse `json:"response"`
-	Provider  *entities.Provider  `json:"provider"`
-	Model     *entities.Model     `json:"model"`
-	Duration  time.Duration       `json:"duration"`
-	Retries   int                 `json:"retries"`
-	RequestID string              `json:"request_id"`
-	Error     error               `json:"error,omitempty"`
+	Response    *clients.AIResponse `json:"response"`
+	RawResponse []byte              `json:"raw_response"` // 原始响应数据
+	Provider    *entities.Provider  `json:"provider"`
+	Model       *entities.Model     `json:"model"`
+	Duration    time.Duration       `json:"duration"`
+	Retries     int                 `json:"retries"`
+	RequestID   string              `json:"request_id"`
+	Error       error               `json:"error,omitempty"`
 }
 
 // requestRouterImpl 请求路由器实现
@@ -185,12 +186,13 @@ func (r *requestRouterImpl) RouteRequest(ctx context.Context, request *RouteRequ
 		}).Info("Request completed successfully")
 
 		return &RouteResponse{
-			Response:  response,
-			Provider:  provider,
-			Model:     model,
-			Duration:  duration,
-			Retries:   retries,
-			RequestID: request.RequestID,
+			Response:    response.Response,
+			RawResponse: response.RawResponse,
+			Provider:    provider,
+			Model:       model,
+			Duration:    duration,
+			Retries:     retries,
+			RequestID:   request.RequestID,
 		}, nil
 	}
 
@@ -240,7 +242,7 @@ func (r *requestRouterImpl) GetAvailableProviders(ctx context.Context, modelSlug
 }
 
 // sendRequest 发送请求到提供商
-func (r *requestRouterImpl) sendRequest(ctx context.Context, provider *entities.Provider, model *entities.Model, request *RouteRequest) (*clients.AIResponse, error) {
+func (r *requestRouterImpl) sendRequest(ctx context.Context, provider *entities.Provider, model *entities.Model, request *RouteRequest) (*clients.AIProviderResponse, error) {
 	// 设置超时
 	timeout := request.Timeout
 	if timeout <= 0 {

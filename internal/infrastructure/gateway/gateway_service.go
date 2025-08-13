@@ -39,6 +39,7 @@ type StreamChunk struct {
 	FinishReason     *string          `json:"finish_reason"`
 	Usage            *clients.AIUsage `json:"usage,omitempty"`
 	Cost             *CostInfo        `json:"cost,omitempty"`
+	RawData          []byte           `json:"-"` // 原始SSE数据，不序列化到JSON
 }
 
 // GatewayRequest 网关请求
@@ -52,14 +53,15 @@ type GatewayRequest struct {
 
 // GatewayResponse 网关响应
 type GatewayResponse struct {
-	Response   *clients.AIResponse `json:"response"`
-	Usage      *UsageInfo          `json:"usage"`
-	Cost       *CostInfo           `json:"cost"`
-	Provider   string              `json:"provider"`
-	ProviderID int64               `json:"provider_id"`
-	Model      string              `json:"model"`
-	Duration   time.Duration       `json:"duration"`
-	RequestID  string              `json:"request_id"`
+	Response    *clients.AIResponse `json:"response"`
+	RawResponse []byte              `json:"raw_response"` // 原始响应数据
+	Usage       *UsageInfo          `json:"usage"`
+	Cost        *CostInfo           `json:"cost"`
+	Provider    string              `json:"provider"`
+	ProviderID  int64               `json:"provider_id"`
+	Model       string              `json:"model"`
+	Duration    time.Duration       `json:"duration"`
+	RequestID   string              `json:"request_id"`
 }
 
 // UsageInfo 使用信息
@@ -214,14 +216,15 @@ func (g *gatewayServiceImpl) ProcessRequest(ctx context.Context, request *Gatewa
 	// 3. 计费处理已由billing中间件统一处理，这里不再重复处理
 
 	response := &GatewayResponse{
-		Response:   routeResponse.Response,
-		Usage:      usage,
-		Cost:       cost,
-		Provider:   routeResponse.Provider.Name,
-		ProviderID: routeResponse.Provider.ID,
-		Model:      routeResponse.Model.Name,
-		Duration:   routeResponse.Duration,
-		RequestID:  request.RequestID,
+		Response:    routeResponse.Response,
+		RawResponse: routeResponse.RawResponse,
+		Usage:       usage,
+		Cost:        cost,
+		Provider:    routeResponse.Provider.Name,
+		ProviderID:  routeResponse.Provider.ID,
+		Model:       routeResponse.Model.Name,
+		Duration:    routeResponse.Duration,
+		RequestID:   request.RequestID,
 	}
 
 	g.logger.WithFields(map[string]interface{}{
