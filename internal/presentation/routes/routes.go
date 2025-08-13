@@ -65,7 +65,7 @@ func (r *Router) SetupRoutes() {
 	)
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(&r.config.RateLimit, r.logger)
 	quotaMiddleware := middleware.NewQuotaMiddleware(r.serviceFactory.QuotaService(), r.logger)
-	
+
 	// 创建计费中间件
 	billingInterceptor := r.serviceFactory.BillingInterceptor()
 
@@ -145,6 +145,13 @@ func (r *Router) SetupRoutes() {
 	vectorizerHandler := handlers.NewVectorizerHandler(r.serviceFactory.VectorizerService(), r.logger)
 	ai302Handler := handlers.NewAI302Handler(r.serviceFactory.AI302Service(), r.logger)
 
+	// 创建通用代理处理器
+	genericProxyHandler := handlers.NewGenericProxyHandler(
+		r.serviceFactory.ProviderRepository(),
+		r.serviceFactory.ProviderModelSupportRepository(),
+		r.logger,
+	)
+
 	// 健康检查路由（无需认证）
 	r.engine.GET("/health", healthHandler.HealthCheck)
 
@@ -193,21 +200,22 @@ func (r *Router) SetupRoutes() {
 	v1 := r.engine.Group("/v1")
 	v1.Use(rateLimitMiddleware.IPRateLimit(100)) // IP级别限流
 	{
-		// AI请求路由（需要认证、计费预检查、配额检查）
-		aiRoutes := v1.Group("/")
-		aiRoutes.Use(authMiddleware.Authenticate())
-		aiRoutes.Use(rateLimitMiddleware.RateLimit())
-		aiRoutes.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
-		aiRoutes.Use(quotaMiddleware.CheckQuota())
-		aiRoutes.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
-		aiRoutes.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
+		// 使用通用代理处理器的路由（测试用）
+		proxyRoutes := v1.Group("/")
+		proxyRoutes.Use(authMiddleware.Authenticate())
+		proxyRoutes.Use(rateLimitMiddleware.RateLimit())
+		proxyRoutes.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
+		proxyRoutes.Use(quotaMiddleware.CheckQuota())
+		proxyRoutes.Use(quotaMiddleware.ConsumeQuota())             // 在请求完成后消费配额
+		proxyRoutes.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
-			aiRoutes.POST("/chat/completions", aiHandler.ChatCompletions)
-			aiRoutes.POST("/completions", aiHandler.Completions)
-			aiRoutes.POST("/messages", aiHandler.AnthropicMessages) // Anthropic Messages API
+			// 使用通用代理处理器处理所有 AI 请求
+			proxyRoutes.POST("/chat/completions", genericProxyHandler.ProxyRequest)
+			proxyRoutes.POST("/completions", genericProxyHandler.ProxyRequest)
+			proxyRoutes.POST("/messages", genericProxyHandler.ProxyRequest) // Anthropic Messages API
 		}
 
-		// 信息查询路由（需要认证但不消费配额）
+		// 信息查询路由（保持使用原有处理器）
 		infoRoutes := v1.Group("/")
 		infoRoutes.Use(authMiddleware.Authenticate())
 		infoRoutes.Use(rateLimitMiddleware.RateLimit())
@@ -306,7 +314,7 @@ func (r *Router) SetupRoutes() {
 		mjSubmit.Use(rateLimitMiddleware.RateLimit())
 		mjSubmit.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		mjSubmit.Use(quotaMiddleware.CheckQuota())
-		mjSubmit.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		mjSubmit.Use(quotaMiddleware.ConsumeQuota())             // 在请求完成后消费配额
 		mjSubmit.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			mjSubmit.POST("/imagine", midjourneyHandler.Imagine)
@@ -336,7 +344,7 @@ func (r *Router) SetupRoutes() {
 		sdV1.Use(rateLimitMiddleware.RateLimit())
 		sdV1.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		sdV1.Use(quotaMiddleware.CheckQuota())
-		sdV1.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		sdV1.Use(quotaMiddleware.ConsumeQuota())             // 在请求完成后消费配额
 		sdV1.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			// V1 Text-to-Image (原有接口)
@@ -406,7 +414,7 @@ func (r *Router) SetupRoutes() {
 		ai302.Use(rateLimitMiddleware.RateLimit())
 		ai302.Use(billingInterceptor.PreRequestMiddleware()) // 计费预检查
 		ai302.Use(quotaMiddleware.CheckQuota())
-		ai302.Use(quotaMiddleware.ConsumeQuota()) // 在请求完成后消费配额
+		ai302.Use(quotaMiddleware.ConsumeQuota())             // 在请求完成后消费配额
 		ai302.Use(billingInterceptor.PostRequestMiddleware()) // 计费处理
 		{
 			ai302.POST("/upscale", ai302Handler.Upscale)
