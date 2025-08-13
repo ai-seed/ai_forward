@@ -88,7 +88,7 @@ func (h *GenericProxyHandler) ProxyRequest(c *gin.Context) {
 	}).Info("Processing generic proxy request")
 
 	// 从请求体中提取模型信息并获取提供商配置
-	provider, authType, selectedModelInfo, err := h.getProviderByRequest(c.Request.Context(), body)
+	provider, authType, selectedModelInfo, err := h.getProviderByRequest(c.Request.Context(), path, body)
 	if err != nil {
 		// 根据错误类型返回不同的状态码和错误信息
 		statusCode, errorCode, errorMessage := h.categorizeProviderError(err)
@@ -111,6 +111,9 @@ func (h *GenericProxyHandler) ProxyRequest(c *gin.Context) {
 		})
 		return
 	}
+
+	// 设置提供商信息到上下文供计费中间件使用
+	h.setBillingContext(c, provider, selectedModelInfo)
 
 	// 转换请求体（如果需要）
 	transformedBody, transformedPath, err := h.transformRequest(provider, selectedModelInfo, body, path)
@@ -180,6 +183,9 @@ func (h *GenericProxyHandler) handleNormalRequest(c *gin.Context, proxyClient cl
 		c.Header(key, value)
 	}
 
+	// 尝试从响应中提取使用量信息并设置到上下文
+	h.extractAndSetUsageFromResponse(c, response.Body, path)
+
 	// 返回响应
 	c.Data(response.StatusCode, c.GetHeader("Content-Type"), response.Body)
 }
@@ -243,6 +249,7 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 	// 逐行读取并转发流式响应
 	scanner := bufio.NewScanner(streamResponse.Reader)
 	lineCount := 0
+	var totalInputTokens, totalOutputTokens int
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -259,6 +266,13 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 			// 转发有效的 SSE 行
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
+
+			// 尝试从流式数据中提取token使用量
+			if strings.HasPrefix(line, "data: ") {
+				inputTokens, outputTokens := h.extractTokensFromStreamLine(line)
+				totalInputTokens += inputTokens
+				totalOutputTokens += outputTokens
+			}
 
 			// 检查是否为结束标记
 			if strings.Contains(line, "data: [DONE]") {
@@ -277,6 +291,9 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 			}).Debug("Skipping invalid SSE line")
 		}
 	}
+
+	// 设置累积的token使用量到上下文
+	h.setStreamTokenUsage(c, totalInputTokens, totalOutputTokens, path)
 
 	if err := scanner.Err(); err != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -347,7 +364,7 @@ func (h *GenericProxyHandler) isStreamRequest(headers map[string]string, body []
 }
 
 // getProviderByRequest 根据请求内容获取对应的提供商配置
-func (h *GenericProxyHandler) getProviderByRequest(ctx context.Context, body []byte) (*entities.Provider, string, *entities.ModelSupportInfo, error) {
+func (h *GenericProxyHandler) getProviderByRequest(ctx context.Context, path string, body []byte) (*entities.Provider, string, *entities.ModelSupportInfo, error) {
 	// 从请求体中提取模型信息
 	modelSlug, err := h.extractModelFromRequest(body)
 	if err != nil {
@@ -699,6 +716,181 @@ func (h *GenericProxyHandler) transformPath(provider *entities.Provider, path st
 	}
 
 	return path
+}
+
+// setBillingContext 设置计费上下文信息
+func (h *GenericProxyHandler) setBillingContext(c *gin.Context, provider *entities.Provider, modelInfo *entities.ModelSupportInfo) {
+	// 设置提供商信息供计费中间件使用
+	c.Set("provider_id", provider.ID)
+	c.Set("provider_name", provider.Name)
+
+	// 设置模型信息
+	c.Set("model_name", modelInfo.ModelSlug)
+
+	h.logger.WithFields(map[string]interface{}{
+		"provider_id":   provider.ID,
+		"provider_name": provider.Name,
+		"model_slug":    modelInfo.ModelSlug,
+		"context_set":   true,
+	}).Debug("Set billing context for generic proxy request")
+}
+
+// extractAndSetUsageFromResponse 从响应中提取使用量信息并设置到上下文
+func (h *GenericProxyHandler) extractAndSetUsageFromResponse(c *gin.Context, responseBody []byte, path string) {
+	if len(responseBody) == 0 {
+		return
+	}
+
+	// 尝试解析响应体
+	var responseData map[string]interface{}
+	if err := json.Unmarshal(responseBody, &responseData); err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"error": err.Error(),
+			"path":  path,
+		}).Debug("Failed to parse response body for usage extraction")
+		return
+	}
+
+	// 提取 usage 信息（OpenAI 格式）
+	if usage, exists := responseData["usage"]; exists {
+		if usageMap, ok := usage.(map[string]interface{}); ok {
+			h.setTokenUsageFromMap(c, usageMap, path)
+		}
+	}
+
+	// 提取 cost 信息（如果有）
+	if cost, exists := responseData["cost"]; exists {
+		if costFloat, ok := cost.(float64); ok {
+			c.Set("cost_used", costFloat)
+			h.logger.WithFields(map[string]interface{}{
+				"cost": costFloat,
+				"path": path,
+			}).Debug("Set cost information from response")
+		}
+	}
+}
+
+// setTokenUsageFromMap 从usage map中设置token使用量
+func (h *GenericProxyHandler) setTokenUsageFromMap(c *gin.Context, usageMap map[string]interface{}, path string) {
+	var inputTokens, outputTokens, totalTokens int
+
+	// 提取输入token
+	if promptTokens, exists := usageMap["prompt_tokens"]; exists {
+		if tokens, ok := promptTokens.(float64); ok {
+			inputTokens = int(tokens)
+		}
+	}
+
+	// 提取输出token
+	if completionTokens, exists := usageMap["completion_tokens"]; exists {
+		if tokens, ok := completionTokens.(float64); ok {
+			outputTokens = int(tokens)
+		}
+	}
+
+	// 提取总token
+	if total, exists := usageMap["total_tokens"]; exists {
+		if tokens, ok := total.(float64); ok {
+			totalTokens = int(tokens)
+		}
+	}
+
+	// 如果没有总token，计算一个
+	if totalTokens == 0 && (inputTokens > 0 || outputTokens > 0) {
+		totalTokens = inputTokens + outputTokens
+	}
+
+	// 设置到上下文
+	if inputTokens > 0 {
+		c.Set("input_tokens", inputTokens)
+	}
+	if outputTokens > 0 {
+		c.Set("output_tokens", outputTokens)
+	}
+	if totalTokens > 0 {
+		c.Set("total_tokens", totalTokens)
+		c.Set("tokens_used", totalTokens)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"input_tokens":  inputTokens,
+		"output_tokens": outputTokens,
+		"total_tokens":  totalTokens,
+		"path":          path,
+	}).Debug("Set token usage information from response")
+}
+
+// extractTokensFromStreamLine 从流式响应行中提取token使用量
+func (h *GenericProxyHandler) extractTokensFromStreamLine(line string) (int, int) {
+	// 移除 "data: " 前缀
+	if !strings.HasPrefix(line, "data: ") {
+		return 0, 0
+	}
+
+	dataContent := strings.TrimPrefix(line, "data: ")
+
+	// 跳过特殊标记
+	if dataContent == "[DONE]" || dataContent == "" {
+		return 0, 0
+	}
+
+	// 尝试解析JSON
+	var streamData map[string]interface{}
+	if err := json.Unmarshal([]byte(dataContent), &streamData); err != nil {
+		return 0, 0
+	}
+
+	// 查找usage信息
+	if usage, exists := streamData["usage"]; exists {
+		if usageMap, ok := usage.(map[string]interface{}); ok {
+			var inputTokens, outputTokens int
+
+			if promptTokens, exists := usageMap["prompt_tokens"]; exists {
+				if tokens, ok := promptTokens.(float64); ok {
+					inputTokens = int(tokens)
+				}
+			}
+
+			if completionTokens, exists := usageMap["completion_tokens"]; exists {
+				if tokens, ok := completionTokens.(float64); ok {
+					outputTokens = int(tokens)
+				}
+			}
+
+			return inputTokens, outputTokens
+		}
+	}
+
+	return 0, 0
+}
+
+// setStreamTokenUsage 设置流式请求的token使用量到上下文
+func (h *GenericProxyHandler) setStreamTokenUsage(c *gin.Context, inputTokens, outputTokens int, path string) {
+	if inputTokens <= 0 && outputTokens <= 0 {
+		return
+	}
+
+	totalTokens := inputTokens + outputTokens
+
+	// 设置到上下文
+	if inputTokens > 0 {
+		c.Set("input_tokens", inputTokens)
+	}
+	if outputTokens > 0 {
+		c.Set("output_tokens", outputTokens)
+	}
+	if totalTokens > 0 {
+		c.Set("total_tokens", totalTokens)
+		c.Set("tokens_used", totalTokens)
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"input_tokens":  inputTokens,
+		"output_tokens": outputTokens,
+		"total_tokens":  totalTokens,
+		"path":          path,
+		"stream":        true,
+	}).Debug("Set token usage information from stream response")
 }
 
 // getAuthTypeByProvider 根据提供商类型获取认证方式
