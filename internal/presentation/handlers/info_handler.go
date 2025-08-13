@@ -37,7 +37,7 @@ func NewInfoHandler(
 // @Tags AI接口
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} clients.ModelsResponse "模型列表"
+// @Success 200 {object} object{object=string,data=[]object} "模型列表"
 // @Failure 401 {object} dto.Response "认证失败"
 // @Failure 500 {object} dto.Response "服务器内部错误"
 // @Router /v1/models [get]
