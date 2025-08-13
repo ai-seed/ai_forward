@@ -206,7 +206,7 @@ func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
 		if f.redisFactory != nil {
 			cacheService = f.redisFactory.GetCacheService()
 		}
-		
+
 		f.midjourneyQueueService = NewMidjourneyQueueServiceWithConfig(
 			f.repoFactory.MidjourneyJobRepository(),
 			cacheService, // 可能为nil，这是安全的
@@ -218,10 +218,10 @@ func (f *ServiceFactory) MidjourneyQueueService() MidjourneyQueueService {
 			&f.config.Midjourney, // 传入配置
 			f.logger,
 		)
-		
+
 		f.logger.Info("Midjourney queue service created")
 	}
-	
+
 	return f.midjourneyQueueService
 }
 
@@ -379,11 +379,6 @@ func (f *ServiceFactory) createAsyncQuotaService() (services.QuotaService, error
 		config,
 		f.logger,
 	)
-}
-
-// ThinkingService 获取思考服务
-func (f *ServiceFactory) ThinkingService() ThinkingService {
-	return NewThinkingService(f.logger)
 }
 
 // BillingInterceptor 获取计费拦截器

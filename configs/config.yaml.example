@@ -186,53 +186,9 @@ distributed_lock:
   # 获取锁的最大重试次数
   max_retries: 10
 
-# Function Call 配置
-function_call:
-  # 是否启用 Function Call 功能
-  enabled: true
 
-  # 搜索服务配置
-  search_service:
-    # 搜索服务类型: search1api, google, bing, serpapi, serper, duckduckgo, searxng
-    service: "google"
-    # 最大搜索结果数
-    max_results: 5
-    # 深度搜索数量（仅 search1api 支持）
-    crawl_results: 0
-    # 是否爬取网页内容并转换为Markdown（启用后会显示数据源）
-    crawl_content: true
 
-    # 各搜索服务的 API 密钥（根据使用的服务配置）
-    # search1api_key: "your_search1api_key"
-    google_cx: "05afc7eed6abd4a3c"
-    google_key: "AIzaSyAJ-0mmqqaR610601edOxYw4MsS6GoavcY"
-    # bing_key: "your_bing_search_api_key"
-    # serpapi_key: "your_serpapi_key"
-    # serper_key: "your_serper_key"
-    # searxng_base_url: "https://your-searxng-instance.com"
 
-# 深度思考功能配置
-thinking:
-  # 是否启用深度思考功能
-  enabled: true
-  
-  # 默认配置
-  default:
-    # 是否默认显示思考过程
-    show_process: true
-    # 默认最大思考token数
-    max_tokens: 2048
-    # 默认思考语言
-    language: "zh"
-  
-  # 性能配置
-  performance:
-    # 思考处理超时时间
-    timeout: "60s"
-    # 是否启用思考过程缓存
-    enable_cache: false
-    # 缓存TTL
-    cache_ttl: "5m"
 
 # 邮件服务配置
 email:

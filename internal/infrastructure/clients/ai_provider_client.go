@@ -58,160 +58,13 @@ type AIRequest struct {
 	MaxTokens   int                    `json:"max_tokens,omitempty"`
 	Temperature float64                `json:"temperature,omitempty"`
 	Stream      bool                   `json:"stream,omitempty"`
-	Tools       []Tool                 `json:"tools,omitempty"`       // Function call tools
-	ToolChoice  interface{}            `json:"tool_choice,omitempty"` // Tool choice strategy
-	WebSearch   bool                   `json:"web_search,omitempty"`  // 是否启用联网搜索
-	Thinking    *ThinkingConfig        `json:"thinking,omitempty"`    // 深度思考配置
-	Extra       map[string]interface{} `json:"-"`                     // 额外参数
-}
-
-// ChatCompletionRequest 聊天补全请求
-type ChatCompletionRequest struct {
-	Model       string          `json:"model" binding:"required" example:"gpt-3.5-turbo"`
-	Messages    []AIMessage     `json:"messages" binding:"required,min=1"`
-	MaxTokens   int             `json:"max_tokens,omitempty" example:"150"`
-	Temperature float64         `json:"temperature,omitempty" example:"0.7"`
-	Stream      bool            `json:"stream,omitempty" example:"false"`
-	Tools       []Tool          `json:"tools,omitempty"`                      // Function call tools
-	ToolChoice  interface{}     `json:"tool_choice,omitempty"`                // Tool choice strategy
-	WebSearch   bool            `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
-	Thinking    *ThinkingConfig `json:"thinking,omitempty"`                   // 深度思考配置
-}
-
-// CompletionRequest 文本补全请求
-type CompletionRequest struct {
-	Model       string  `json:"model" binding:"required" example:"gpt-3.5-turbo"`
-	Prompt      string  `json:"prompt" binding:"required" example:"Once upon a time"`
-	MaxTokens   int     `json:"max_tokens,omitempty" example:"150"`
-	Temperature float64 `json:"temperature,omitempty" example:"0.7"`
-	Stream      bool    `json:"stream,omitempty" example:"false"`
-	WebSearch   bool    `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
-}
-
-// AnthropicMessageRequest Anthropic Messages API 请求结构
-type AnthropicMessageRequest struct {
-	Model         string                   `json:"model" binding:"required" example:"claude-3-sonnet-20240229" swaggertype:"string" description:"要使用的模型名称，如 claude-3-sonnet-20240229, claude-3-haiku-20240307 等"`
-	Messages      []AnthropicMessage       `json:"messages" binding:"required,min=1" description:"对话消息数组，至少包含一条消息"`
-	MaxTokens     int                      `json:"max_tokens" binding:"required" example:"1024" minimum:"1" maximum:"4096" description:"生成的最大token数量"`
-	Temperature   *float64                 `json:"temperature,omitempty" example:"0.7" minimum:"0" maximum:"1" description:"控制输出随机性，0-1之间，值越高越随机"`
-	Stream        bool                     `json:"stream,omitempty" example:"false" description:"是否启用流式响应"`
-	System        interface{}              `json:"system,omitempty" swaggertype:"string" example:"You are a helpful assistant." description:"系统提示，可以是字符串或数组格式"`
-	StopSequences []string                 `json:"stop_sequences,omitempty" example:"[\"\\n\\n\"]" description:"停止序列，遇到这些字符串时停止生成"`
-	TopK          *int                     `json:"top_k,omitempty" example:"5" minimum:"1" description:"Top-K采样，从概率最高的K个token中选择"`
-	TopP          *float64                 `json:"top_p,omitempty" example:"0.7" minimum:"0" maximum:"1" description:"Top-P采样，累积概率达到P时停止"`
-	Tools         []AnthropicTool          `json:"tools,omitempty" description:"可用的工具列表"`
-	ToolChoice    interface{}              `json:"tool_choice,omitempty" swaggertype:"string" example:"auto" description:"工具选择策略：auto, any, none 或指定工具名"`
-	Metadata      *AnthropicMetadata       `json:"metadata,omitempty" description:"请求元数据"`
-	ServiceTier   string                   `json:"service_tier,omitempty" example:"auto" enum:"auto,standard_only" description:"服务层级"`
-	Container     *string                  `json:"container,omitempty" description:"容器标识符"`
-	MCPServers    []AnthropicMCPServer     `json:"mcp_servers,omitempty" description:"MCP服务器配置"`
-	Thinking      *AnthropicThinkingConfig `json:"thinking,omitempty" description:"思考配置"`
-}
-
-// ClaudeMessageRequest Claude消息请求 (保持向后兼容)
-type ClaudeMessageRequest struct {
-	Model         string          `json:"model" binding:"required" example:"claude-3-sonnet-20240229"`
-	Messages      []ClaudeMessage `json:"messages" binding:"required,min=1"`
-	MaxTokens     int             `json:"max_tokens" binding:"required" example:"1024"`
-	Temperature   *float64        `json:"temperature,omitempty" example:"0.7"`
-	Stream        bool            `json:"stream,omitempty" example:"false"`
-	System        interface{}     `json:"system,omitempty"` // 支持字符串或数组格式
-	StopSequences []string        `json:"stop_sequences,omitempty"`
-	TopK          *int            `json:"top_k,omitempty" example:"5"`
-	TopP          *float64        `json:"top_p,omitempty" example:"0.7"`
-	Tools         []Tool          `json:"tools,omitempty"`
-	ToolChoice    interface{}     `json:"tool_choice,omitempty"`
-	WebSearch     bool            `json:"web_search,omitempty" example:"false"` // 是否启用联网搜索
-
-	// Claude特有字段
-	Metadata    *ClaudeMetadata `json:"metadata,omitempty"`
-	ServiceTier string          `json:"service_tier,omitempty"` // "auto", "standard_only"
-}
-
-// ClaudeMetadata Claude元数据
-type ClaudeMetadata struct {
-	UserID string `json:"user_id,omitempty"` // 外部用户标识符
-}
-
-// ClaudeContentBlock Claude内容块
-type ClaudeContentBlock struct {
-	Type   string `json:"type"`           // "text", "image", "tool_use", "tool_result"
-	Text   string `json:"text,omitempty"` // 文本内容
-	Source *struct {
-		Type      string `json:"type"`       // "base64"
-		MediaType string `json:"media_type"` // "image/jpeg", "image/png", etc.
-		Data      string `json:"data"`       // base64编码的图片数据
-	} `json:"source,omitempty"` // 图片源
-	ID        string      `json:"id,omitempty"`          // tool_use的ID
-	Name      string      `json:"name,omitempty"`        // tool_use的名称
-	Input     interface{} `json:"input,omitempty"`       // tool_use的输入
-	ToolUseID string      `json:"tool_use_id,omitempty"` // tool_result对应的tool_use_id
-	Content   interface{} `json:"content,omitempty"`     // tool_result的内容
-	IsError   bool        `json:"is_error,omitempty"`    // tool_result是否为错误
-}
-
-// ClaudeMessage Claude消息格式
-type ClaudeMessage struct {
-	Role    string      `json:"role"`    // "user", "assistant"
-	Content interface{} `json:"content"` // 可以是string或[]ClaudeContentBlock
-}
-
-// UnmarshalJSON 自定义JSON解析
-func (cm *ClaudeMessage) UnmarshalJSON(data []byte) error {
-	// 先解析基本结构
-	type Alias ClaudeMessage
-	aux := &struct {
-		*Alias
-		Content json.RawMessage `json:"content"`
-	}{
-		Alias: (*Alias)(cm),
-	}
-
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	// 尝试解析content为字符串
-	var str string
-	if err := json.Unmarshal(aux.Content, &str); err == nil {
-		cm.Content = str
-		return nil
-	}
-
-	// 尝试解析content为数组
-	var blocks []ClaudeContentBlock
-	if err := json.Unmarshal(aux.Content, &blocks); err == nil {
-		cm.Content = blocks
-		return nil
-	}
-
-	return fmt.Errorf("content must be string or array of content blocks")
-}
-
-// GetTextContent 获取文本内容
-func (cm *ClaudeMessage) GetTextContent() string {
-	if str, ok := cm.Content.(string); ok {
-		return str
-	}
-
-	if blocks, ok := cm.Content.([]ClaudeContentBlock); ok {
-		for _, block := range blocks {
-			if block.Type == "text" {
-				return block.Text
-			}
-		}
-	}
-
-	return ""
+	Extra       map[string]interface{} `json:"-"` // 额外参数
 }
 
 // AIMessage AI消息 (保持向后兼容)
 type AIMessage struct {
-	Role       string     `json:"role" binding:"required" example:"user" enums:"system,user,assistant,tool"`
-	Content    string     `json:"content" example:"Hello, how are you?"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // Function calls made by assistant
-	ToolCallID string     `json:"tool_call_id,omitempty"` // ID of the tool call this message is responding to
-	Name       string     `json:"name,omitempty"`         // Name of the function for tool messages
+	Role    string `json:"role" binding:"required" example:"user" enums:"system,user,assistant,tool"`
+	Content string `json:"content" example:"Hello, how are you?"`
 }
 
 // AIResponse AI响应
@@ -227,11 +80,10 @@ type AIResponse struct {
 
 // AIChoice AI选择
 type AIChoice struct {
-	Index        int        `json:"index"`
-	Message      AIMessage  `json:"message,omitempty"`
-	Text         string     `json:"text,omitempty"`
-	FinishReason string     `json:"finish_reason"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"` // Function calls in streaming mode
+	Index        int       `json:"index"`
+	Message      AIMessage `json:"message,omitempty"`
+	Text         string    `json:"text,omitempty"`
+	FinishReason string    `json:"finish_reason"`
 }
 
 // AIUsage AI使用情况
@@ -270,13 +122,11 @@ type ClaudeMessageResponse struct {
 
 // ClaudeContent Claude内容块
 type ClaudeContent struct {
-	Type     string      `json:"type"`
-	Text     string      `json:"text,omitempty"`
-	ToolUse  *ToolCall   `json:"tool_use,omitempty"`
-	ToolCall *ToolCall   `json:"tool_call,omitempty"` // 兼容性字段
-	ID       string      `json:"id,omitempty"`
-	Name     string      `json:"name,omitempty"`
-	Input    interface{} `json:"input,omitempty"`
+	Type  string      `json:"type"`
+	Text  string      `json:"text,omitempty"`
+	ID    string      `json:"id,omitempty"`
+	Name  string      `json:"name,omitempty"`
+	Input interface{} `json:"input,omitempty"`
 }
 
 // ClaudeUsage Claude使用情况
@@ -305,32 +155,6 @@ type UsageResponse struct {
 	TotalRequests int     `json:"total_requests"`
 	TotalTokens   int     `json:"total_tokens"`
 	TotalCost     float64 `json:"total_cost"`
-}
-
-// Tool Function call tool definition
-type Tool struct {
-	Type     string   `json:"type" example:"function"`
-	Function Function `json:"function"`
-}
-
-// Function Function definition for tool calls
-type Function struct {
-	Name        string      `json:"name" example:"search"`
-	Description string      `json:"description" example:"Search for information"`
-	Parameters  interface{} `json:"parameters"` // JSON Schema for function parameters
-}
-
-// ToolCall Function call made by the assistant
-type ToolCall struct {
-	ID       string       `json:"id" example:"call_123"`
-	Type     string       `json:"type" example:"function"`
-	Function FunctionCall `json:"function"`
-}
-
-// FunctionCall Function call details
-type FunctionCall struct {
-	Name      string `json:"name" example:"search"`
-	Arguments string `json:"arguments"` // JSON string of function arguments
 }
 
 // aiProviderClientImpl AI提供商客户端实现
@@ -811,21 +635,6 @@ type AnthropicToolConfiguration struct {
 	Enabled      *bool    `json:"enabled,omitempty"`
 }
 
-// AnthropicThinkingConfig 思考配置
-type AnthropicThinkingConfig struct {
-	Type         string `json:"type" binding:"required"` // "enabled"
-	BudgetTokens int    `json:"budget_tokens" binding:"required,min=1024"`
-}
-
-// ThinkingConfig 通用思考配置
-type ThinkingConfig struct {
-	Enabled        bool   `json:"enabled" example:"true"`              // 是否启用深度思考
-	ShowProcess    bool   `json:"show_process" example:"true"`         // 是否显示思考过程
-	MaxTokens      int    `json:"max_tokens,omitempty" example:"2048"` // 思考部分最大token数
-	ThinkingPrompt string `json:"thinking_prompt,omitempty"`           // 自定义思考提示词
-	Language       string `json:"language,omitempty" example:"zh"`     // 思考语言（zh/en）
-}
-
 // AnthropicMessageResponse Anthropic 消息响应
 type AnthropicMessageResponse struct {
 	ID           string                  `json:"id" example:"msg_013Zva2CMHLNnXjNJJKqJ2EF" description:"消息的唯一标识符"`
@@ -889,10 +698,4 @@ func (c *aiProviderClientImpl) isAnthropicModel(model string) bool {
 
 	// 也可以通过前缀判断
 	return strings.HasPrefix(model, "claude-")
-}
-
-// isThinkingModel 判断是否为thinking模型
-func (c *aiProviderClientImpl) isThinkingModel(model string) bool {
-	// Claude thinking模型通常包含"thinking"关键字
-	return strings.Contains(model, "thinking")
 }
