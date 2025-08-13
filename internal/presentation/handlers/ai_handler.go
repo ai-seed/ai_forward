@@ -2693,56 +2693,24 @@ func (h *AIHandler) handleStreamingRequestWithThinking(c *gin.Context, gatewayRe
 				continue
 			}
 
-			// 发送处理后的数据块
+			// 发送处理后的数据块 - 直接转发原始数据
 			for _, processedChunk := range processedChunks {
-				delta := map[string]interface{}{}
-
-				// 添加普通内容
-				if processedChunk.Content != "" {
-					delta["content"] = processedChunk.Content
-				}
-
-				// 添加推理内容（如果有）
-				if chunk.ReasoningContent != "" {
-					delta["reasoning_content"] = chunk.ReasoningContent
-				}
-
-				// 添加内容类型标记
-				if processedChunk.ContentType != "" {
-					delta["content_type"] = processedChunk.ContentType
-				}
-
-				data := map[string]interface{}{
-					"id":      chunk.ID,
-					"object":  "chat.completion.chunk",
-					"created": chunk.Created,
-					"model":   chunk.Model,
-					"choices": []map[string]interface{}{
-						{
-							"index":         0,
-							"delta":         delta,
-							"finish_reason": chunk.FinishReason,
-						},
-					},
-				}
-
-				jsonData, err := json.Marshal(data)
-				if err != nil {
+				// 直接转发thinking处理器生成的原始SSE数据
+				if len(processedChunk.RawData) > 0 {
+					_, err := w.Write(processedChunk.RawData)
+					if err != nil {
+						h.logger.WithFields(map[string]interface{}{
+							"request_id": requestID,
+							"error":      err.Error(),
+						}).Error("Failed to write thinking raw stream chunk")
+						return
+					}
+				} else {
+					// 如果没有原始数据，记录警告但继续处理
 					h.logger.WithFields(map[string]interface{}{
 						"request_id": requestID,
-						"error":      err.Error(),
-					}).Error("Failed to marshal thinking stream chunk")
-					continue
-				}
-
-				sseMessage := fmt.Sprintf("data: %s\n\n", jsonData)
-				_, err = w.Write([]byte(sseMessage))
-				if err != nil {
-					h.logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"error":      err.Error(),
-					}).Error("Failed to write thinking stream chunk")
-					return
+						"chunk_id":   processedChunk.ID,
+					}).Warn("Thinking processed chunk missing raw data, skipping")
 				}
 
 				if flusher, ok := w.(http.Flusher); ok {
