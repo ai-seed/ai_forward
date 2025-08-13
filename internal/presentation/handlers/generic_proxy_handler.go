@@ -115,6 +115,9 @@ func (h *GenericProxyHandler) ProxyRequest(c *gin.Context) {
 	// 设置提供商信息到上下文供计费中间件使用
 	h.setBillingContext(c, provider, selectedModelInfo)
 
+	// 保存原始请求体用于token估算
+	c.Set("original_request_body", body)
+
 	// 转换请求体（如果需要）
 	transformedBody, transformedPath, err := h.transformRequest(provider, selectedModelInfo, body, path)
 	if err != nil {
@@ -252,6 +255,7 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 	var totalInputTokens, totalOutputTokens int
 	var lastInputTokens, lastOutputTokens int // 记录最后一次的token数，用于处理累积值
 	var hasUsageInfo bool
+	var outputContent strings.Builder // 收集输出内容用于token估算
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -270,7 +274,7 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 
-			// 尝试从流式数据中提取token使用量
+			// 尝试从流式数据中提取token使用量和内容
 			if strings.HasPrefix(line, "data: ") {
 				inputTokens, outputTokens := h.extractTokensFromStreamLine(line)
 				if inputTokens > 0 || outputTokens > 0 {
@@ -301,6 +305,12 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 
 					// 实时更新上下文，确保计费中间件能获取到最新的token信息
 					h.updateStreamTokenContext(c, lastInputTokens, lastOutputTokens, path)
+				}
+
+				// 提取输出内容用于token估算（当没有usage信息时）
+				content := h.extractContentFromStreamLine(line)
+				if content != "" {
+					outputContent.WriteString(content)
 				}
 			}
 
@@ -338,10 +348,16 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 		} else {
 			finalOutputTokens = totalOutputTokens
 		}
+	} else {
+		// 没有usage信息时，使用备用估算方法
+		finalInputTokens, finalOutputTokens = h.estimateTokensFromContent(c, outputContent.String(), path)
 	}
 
 	// 设置最终的token使用量到上下文
 	h.setStreamTokenUsage(c, finalInputTokens, finalOutputTokens, path)
+
+	// 调试：检查上下文中的所有相关值
+	h.debugContextValues(c, path)
 
 	if err := scanner.Err(); err != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -1033,4 +1049,176 @@ func (h *GenericProxyHandler) getAuthTypeByProvider(providerSlug string) string 
 		}).Debug("Using default bearer auth for unknown provider")
 		return "bearer" // 默认使用 Bearer token
 	}
+}
+
+// debugContextValues 调试上下文中的计费相关值
+func (h *GenericProxyHandler) debugContextValues(c *gin.Context, path string) {
+	// 获取所有计费相关的上下文值
+	contextValues := map[string]interface{}{
+		"provider_id":   c.GetInt64("provider_id"),
+		"provider_name": c.GetString("provider_name"),
+		"model_name":    c.GetString("model_name"),
+		"input_tokens":  c.GetInt("input_tokens"),
+		"output_tokens": c.GetInt("output_tokens"),
+		"total_tokens":  c.GetInt("total_tokens"),
+		"tokens_used":   c.GetInt("tokens_used"),
+		"cost_used":     c.GetFloat64("cost_used"),
+	}
+
+	// 检查哪些值存在
+	existingValues := make(map[string]interface{})
+	missingValues := make([]string, 0)
+
+	for key, value := range contextValues {
+		if exists, ok := c.Get(key); ok && exists != nil {
+			existingValues[key] = value
+		} else {
+			missingValues = append(missingValues, key)
+		}
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"path":            path,
+		"existing_values": existingValues,
+		"missing_values":  missingValues,
+		"context_debug":   true,
+	}).Info("Context values for billing middleware")
+}
+
+// extractContentFromStreamLine 从流式响应行中提取内容
+func (h *GenericProxyHandler) extractContentFromStreamLine(line string) string {
+	// 移除 "data: " 前缀
+	if !strings.HasPrefix(line, "data: ") {
+		return ""
+	}
+
+	dataContent := strings.TrimPrefix(line, "data: ")
+
+	// 跳过特殊标记
+	if dataContent == "[DONE]" || dataContent == "" {
+		return ""
+	}
+
+	// 尝试解析JSON
+	var streamData map[string]interface{}
+	if err := json.Unmarshal([]byte(dataContent), &streamData); err != nil {
+		return ""
+	}
+
+	// 提取choices中的content
+	if choices, exists := streamData["choices"]; exists {
+		if choicesArray, ok := choices.([]interface{}); ok && len(choicesArray) > 0 {
+			if choice, ok := choicesArray[0].(map[string]interface{}); ok {
+				if delta, exists := choice["delta"]; exists {
+					if deltaMap, ok := delta.(map[string]interface{}); ok {
+						if content, exists := deltaMap["content"]; exists {
+							if contentStr, ok := content.(string); ok {
+								return contentStr
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// estimateTokensFromContent 从内容估算token数量
+func (h *GenericProxyHandler) estimateTokensFromContent(c *gin.Context, outputContent, path string) (int, int) {
+	// 估算输入token（从原始请求中）
+	var inputTokens int
+
+	// 尝试从请求体中提取输入内容进行估算
+	if requestBody, exists := c.Get("original_request_body"); exists {
+		if bodyBytes, ok := requestBody.([]byte); ok {
+			inputTokens = h.estimateInputTokensFromRequest(bodyBytes)
+		}
+	}
+
+	// 估算输出token
+	outputTokens := h.estimateOutputTokens(outputContent)
+
+	h.logger.WithFields(map[string]interface{}{
+		"path":               path,
+		"input_tokens":       inputTokens,
+		"output_tokens":      outputTokens,
+		"output_content_len": len(outputContent),
+		"estimation_method":  "fallback",
+		"stream":             true,
+	}).Info("Estimated token usage from content (fallback method)")
+
+	return inputTokens, outputTokens
+}
+
+// estimateInputTokensFromRequest 从请求体估算输入token
+func (h *GenericProxyHandler) estimateInputTokensFromRequest(body []byte) int {
+	if len(body) == 0 {
+		return 0
+	}
+
+	var requestData map[string]interface{}
+	if err := json.Unmarshal(body, &requestData); err != nil {
+		return 0
+	}
+
+	var inputText strings.Builder
+
+	// 提取messages中的内容
+	if messages, exists := requestData["messages"]; exists {
+		if messagesArray, ok := messages.([]interface{}); ok {
+			for _, msg := range messagesArray {
+				if msgMap, ok := msg.(map[string]interface{}); ok {
+					if content, exists := msgMap["content"]; exists {
+						if contentStr, ok := content.(string); ok {
+							inputText.WriteString(contentStr)
+							inputText.WriteString(" ")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 提取prompt内容（如果有）
+	if prompt, exists := requestData["prompt"]; exists {
+		if promptStr, ok := prompt.(string); ok {
+			inputText.WriteString(promptStr)
+		}
+	}
+
+	return h.estimateTokensFromText(inputText.String())
+}
+
+// estimateOutputTokens 估算输出token数量
+func (h *GenericProxyHandler) estimateOutputTokens(content string) int {
+	return h.estimateTokensFromText(content)
+}
+
+// estimateTokensFromText 从文本估算token数量
+func (h *GenericProxyHandler) estimateTokensFromText(text string) int {
+	if text == "" {
+		return 0
+	}
+
+	// 简单的token估算算法
+	// 英文：约4个字符 = 1个token
+	// 中文：约1个字符 = 1个token
+	// 这是一个粗略的估算，实际情况可能有差异
+
+	runes := []rune(text)
+	var tokens float64
+
+	for _, r := range runes {
+		if r >= 0x4e00 && r <= 0x9fff { // 中文字符
+			tokens += 1.0
+		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			tokens += 0.25 // 英文字符约4个=1token
+		} else {
+			tokens += 0.5 // 其他字符
+		}
+	}
+
+	return int(tokens + 0.5) // 四舍五入
 }
