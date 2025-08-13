@@ -250,6 +250,8 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 	scanner := bufio.NewScanner(streamResponse.Reader)
 	lineCount := 0
 	var totalInputTokens, totalOutputTokens int
+	var lastInputTokens, lastOutputTokens int // 记录最后一次的token数，用于处理累积值
+	var hasUsageInfo bool
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -270,8 +272,32 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 			// 尝试从流式数据中提取token使用量
 			if strings.HasPrefix(line, "data: ") {
 				inputTokens, outputTokens := h.extractTokensFromStreamLine(line)
-				totalInputTokens += inputTokens
-				totalOutputTokens += outputTokens
+				if inputTokens > 0 || outputTokens > 0 {
+					hasUsageInfo = true
+
+					// 对于某些提供商，usage信息是累积的，我们需要取最大值
+					if inputTokens > lastInputTokens {
+						lastInputTokens = inputTokens
+					}
+					if outputTokens > lastOutputTokens {
+						lastOutputTokens = outputTokens
+					}
+
+					// 同时也累积增量（适用于增量式的提供商）
+					totalInputTokens += inputTokens
+					totalOutputTokens += outputTokens
+
+					h.logger.WithFields(map[string]interface{}{
+						"path":           path,
+						"line_count":     lineCount,
+						"current_input":  inputTokens,
+						"current_output": outputTokens,
+						"total_input":    totalInputTokens,
+						"total_output":   totalOutputTokens,
+						"last_input":     lastInputTokens,
+						"last_output":    lastOutputTokens,
+					}).Debug("Updated token usage from stream")
+				}
 			}
 
 			// 检查是否为结束标记
@@ -292,8 +318,26 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 		}
 	}
 
-	// 设置累积的token使用量到上下文
-	h.setStreamTokenUsage(c, totalInputTokens, totalOutputTokens, path)
+	// 决定使用哪种token计数方式
+	var finalInputTokens, finalOutputTokens int
+	if hasUsageInfo {
+		// 如果有usage信息，优先使用最后一次的值（通常是累积值）
+		// 如果最后一次的值为0，则使用累积值
+		if lastInputTokens > 0 {
+			finalInputTokens = lastInputTokens
+		} else {
+			finalInputTokens = totalInputTokens
+		}
+
+		if lastOutputTokens > 0 {
+			finalOutputTokens = lastOutputTokens
+		} else {
+			finalOutputTokens = totalOutputTokens
+		}
+	}
+
+	// 设置最终的token使用量到上下文
+	h.setStreamTokenUsage(c, finalInputTokens, finalOutputTokens, path)
 
 	if err := scanner.Err(); err != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -837,60 +881,98 @@ func (h *GenericProxyHandler) extractTokensFromStreamLine(line string) (int, int
 	// 尝试解析JSON
 	var streamData map[string]interface{}
 	if err := json.Unmarshal([]byte(dataContent), &streamData); err != nil {
+		// 记录解析失败的详细信息
+		h.logger.WithFields(map[string]interface{}{
+			"error":        err.Error(),
+			"data_content": dataContent,
+			"line_length":  len(dataContent),
+		}).Debug("Failed to parse stream line JSON")
 		return 0, 0
 	}
 
-	// 查找usage信息
+	var inputTokens, outputTokens int
+
+	// 查找usage信息 - 支持多种格式
 	if usage, exists := streamData["usage"]; exists {
 		if usageMap, ok := usage.(map[string]interface{}); ok {
-			var inputTokens, outputTokens int
-
+			// OpenAI格式
 			if promptTokens, exists := usageMap["prompt_tokens"]; exists {
 				if tokens, ok := promptTokens.(float64); ok {
 					inputTokens = int(tokens)
 				}
 			}
-
 			if completionTokens, exists := usageMap["completion_tokens"]; exists {
 				if tokens, ok := completionTokens.(float64); ok {
 					outputTokens = int(tokens)
 				}
 			}
 
-			return inputTokens, outputTokens
+			// Anthropic格式
+			if inputTokensField, exists := usageMap["input_tokens"]; exists {
+				if tokens, ok := inputTokensField.(float64); ok {
+					inputTokens = int(tokens)
+				}
+			}
+			if outputTokensField, exists := usageMap["output_tokens"]; exists {
+				if tokens, ok := outputTokensField.(float64); ok {
+					outputTokens = int(tokens)
+				}
+			}
+
+			// 记录找到的usage信息
+			if inputTokens > 0 || outputTokens > 0 {
+				h.logger.WithFields(map[string]interface{}{
+					"input_tokens":  inputTokens,
+					"output_tokens": outputTokens,
+					"usage_format":  "standard",
+				}).Debug("Extracted token usage from stream line")
+			}
 		}
 	}
 
-	return 0, 0
+	// 检查是否为最终的usage信息（某些提供商在最后一个chunk中提供完整usage）
+	if finishReason, exists := streamData["finish_reason"]; exists && finishReason != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"finish_reason": finishReason,
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+			"is_final":      true,
+		}).Debug("Found final chunk with finish_reason")
+	}
+
+	return inputTokens, outputTokens
 }
 
 // setStreamTokenUsage 设置流式请求的token使用量到上下文
 func (h *GenericProxyHandler) setStreamTokenUsage(c *gin.Context, inputTokens, outputTokens int, path string) {
-	if inputTokens <= 0 && outputTokens <= 0 {
-		return
-	}
-
 	totalTokens := inputTokens + outputTokens
 
-	// 设置到上下文
-	if inputTokens > 0 {
-		c.Set("input_tokens", inputTokens)
-	}
-	if outputTokens > 0 {
-		c.Set("output_tokens", outputTokens)
-	}
-	if totalTokens > 0 {
-		c.Set("total_tokens", totalTokens)
-		c.Set("tokens_used", totalTokens)
+	// 即使token为0也要记录，这样计费中间件知道我们尝试过获取token信息
+	c.Set("input_tokens", inputTokens)
+	c.Set("output_tokens", outputTokens)
+	c.Set("total_tokens", totalTokens)
+	c.Set("tokens_used", totalTokens)
+
+	logLevel := "Info"
+	if inputTokens <= 0 && outputTokens <= 0 {
+		logLevel = "Warn"
 	}
 
-	h.logger.WithFields(map[string]interface{}{
+	logFields := map[string]interface{}{
 		"input_tokens":  inputTokens,
 		"output_tokens": outputTokens,
 		"total_tokens":  totalTokens,
 		"path":          path,
 		"stream":        true,
-	}).Debug("Set token usage information from stream response")
+		"context_set":   true,
+	}
+
+	if logLevel == "Warn" {
+		logFields["issue"] = "no_token_usage_found"
+		h.logger.WithFields(logFields).Warn("No token usage found in stream response - billing may be inaccurate")
+	} else {
+		h.logger.WithFields(logFields).Info("Set token usage information from stream response")
+	}
 }
 
 // getAuthTypeByProvider 根据提供商类型获取认证方式
