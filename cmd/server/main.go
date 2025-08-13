@@ -36,10 +36,8 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/application/services"
-	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/database"
-	"ai-api-gateway/internal/infrastructure/gateway"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/infrastructure/redis"
 	"ai-api-gateway/internal/infrastructure/repositories"
@@ -121,40 +119,6 @@ func main() {
 	// 创建服务工厂
 	serviceFactory := services.NewServiceFactory(repoFactory, redisFactory, cfg, log)
 
-	// 创建HTTP客户端
-	httpClient := clients.NewHTTPClient(30 * time.Second)
-
-	// 创建AI提供商客户端
-	aiClient := clients.NewAIProviderClient(httpClient)
-
-	// 创建负载均衡器
-	loadBalancer := gateway.NewLoadBalancer(
-		gateway.LoadBalanceStrategy(cfg.LoadBalance.Strategy),
-		log,
-	)
-
-	// 创建请求路由器
-	requestRouter := gateway.NewRequestRouter(
-		serviceFactory.ProviderService(),
-		serviceFactory.ModelService(),
-		repoFactory.ProviderModelSupportRepository(),
-		loadBalancer,
-		aiClient,
-		log,
-	)
-
-	// 创建网关服务
-	gatewayService := gateway.NewGatewayService(
-		requestRouter,
-		serviceFactory.UserService(),
-		serviceFactory.APIKeyService(),
-		serviceFactory.QuotaService(),
-		serviceFactory.BillingService(),
-		serviceFactory.UsageLogService(),
-		repoFactory.BillingRecordRepository(),
-		log,
-	)
-
 	// 启动 Midjourney 队列服务
 	midjourneyQueueService := serviceFactory.MidjourneyQueueService()
 	ctx := context.Background()
@@ -169,7 +133,7 @@ func main() {
 	}).Info("Midjourney queue workers started")
 
 	// 创建路由器
-	router := routes.NewRouter(cfg, log, serviceFactory, gatewayService)
+	router := routes.NewRouter(cfg, log, serviceFactory)
 	router.SetupRoutes()
 
 	// 创建HTTP服务器

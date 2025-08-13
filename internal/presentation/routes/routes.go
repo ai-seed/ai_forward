@@ -5,7 +5,6 @@ import (
 
 	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/infrastructure/config"
-	"ai-api-gateway/internal/infrastructure/gateway"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/presentation/handlers"
 	"ai-api-gateway/internal/presentation/middleware"
@@ -23,7 +22,6 @@ type Router struct {
 	config         *config.Config
 	logger         logger.Logger
 	serviceFactory *services.ServiceFactory
-	gatewayService gateway.GatewayService
 }
 
 // NewRouter 创建路由器
@@ -31,7 +29,6 @@ func NewRouter(
 	config *config.Config,
 	logger logger.Logger,
 	serviceFactory *services.ServiceFactory,
-	gatewayService gateway.GatewayService,
 ) *Router {
 	// 设置Gin模式
 	if config.Logging.Level == "debug" {
@@ -47,7 +44,6 @@ func NewRouter(
 		config:         config,
 		logger:         logger,
 		serviceFactory: serviceFactory,
-		gatewayService: gatewayService,
 	}
 }
 
@@ -90,7 +86,7 @@ func (r *Router) SetupRoutes() {
 		r.serviceFactory.ModelRepository(),
 		r.logger,
 	)
-	healthHandler := handlers.NewHealthHandler(r.gatewayService, r.logger)
+	healthHandler := handlers.NewHealthHandler(r.logger)
 	authHandler := handlers.NewAuthHandler(r.serviceFactory.AuthService(), r.logger)
 	oauthHandler := handlers.NewOAuthHandler(r.serviceFactory.OAuthService(), r.logger, r.config)
 	toolHandler := handlers.NewToolHandler(r.serviceFactory.ToolService(), r.logger)

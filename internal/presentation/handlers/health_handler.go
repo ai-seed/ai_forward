@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/application/dto"
-	"ai-api-gateway/internal/infrastructure/gateway"
 	"ai-api-gateway/internal/infrastructure/logger"
 
 	"github.com/gin-gonic/gin"
@@ -13,17 +12,15 @@ import (
 
 // HealthHandler 健康检查处理器
 type HealthHandler struct {
-	gatewayService gateway.GatewayService
-	logger         logger.Logger
-	startTime      time.Time
+	logger    logger.Logger
+	startTime time.Time
 }
 
 // NewHealthHandler 创建健康检查处理器
-func NewHealthHandler(gatewayService gateway.GatewayService, logger logger.Logger) *HealthHandler {
+func NewHealthHandler(logger logger.Logger) *HealthHandler {
 	return &HealthHandler{
-		gatewayService: gatewayService,
-		logger:         logger,
-		startTime:      time.Now(),
+		logger:    logger,
+		startTime: time.Now(),
 	}
 }
 
@@ -36,19 +33,16 @@ func NewHealthHandler(gatewayService gateway.GatewayService, logger logger.Logge
 // @Failure 503 {object} dto.Response "健康检查失败"
 // @Router /health [get]
 func (h *HealthHandler) HealthCheck(c *gin.Context) {
-	result, err := h.gatewayService.HealthCheck(c.Request.Context())
-	if err != nil {
-		h.logger.WithField("error", err.Error()).Error("Health check failed")
-		c.JSON(http.StatusServiceUnavailable, dto.ErrorResponse(
-			"HEALTH_CHECK_FAILED",
-			"Health check failed",
-			map[string]interface{}{
-				"details": err.Error(),
-			},
-		))
-		return
+	// 简单的健康检查实现
+	result := map[string]interface{}{
+		"status":    "healthy",
+		"timestamp": time.Now(),
+		"uptime":    time.Since(h.startTime).String(),
+		"service":   "ai-api-gateway",
+		"version":   "1.0.0",
 	}
 
+	h.logger.Info("Health check passed")
 	c.JSON(http.StatusOK, dto.SuccessResponse(result, "Health check passed"))
 }
 
@@ -102,17 +96,16 @@ func (h *HealthHandler) LivenessCheck(c *gin.Context) {
 // @Failure 500 {object} dto.Response "获取统计失败"
 // @Router /health/stats [get]
 func (h *HealthHandler) GetStats(c *gin.Context) {
-	stats, err := h.gatewayService.GetStats(c.Request.Context())
-	if err != nil {
-		h.logger.WithField("error", err.Error()).Error("Failed to get stats")
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"GET_STATS_FAILED",
-			"Failed to get statistics",
-			map[string]interface{}{
-				"details": err.Error(),
-			},
-		))
-		return
+	// 简单的统计信息实现
+	stats := map[string]interface{}{
+		"uptime":              time.Since(h.startTime).String(),
+		"start_time":          h.startTime,
+		"current_time":        time.Now(),
+		"service":             "ai-api-gateway",
+		"version":             "1.0.0",
+		"total_requests":      0, // TODO: 实现请求计数
+		"successful_requests": 0, // TODO: 实现成功请求计数
+		"failed_requests":     0, // TODO: 实现失败请求计数
 	}
 
 	c.JSON(http.StatusOK, dto.SuccessResponse(stats, "Statistics retrieved successfully"))
