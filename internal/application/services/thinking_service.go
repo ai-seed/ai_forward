@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/logger"
@@ -14,10 +15,10 @@ import (
 type ThinkingService interface {
 	// ProcessThinkingRequest 处理带思考的请求
 	ProcessThinkingRequest(ctx context.Context, request *clients.AIRequest) (*clients.AIRequest, error)
-	
+
 	// ParseThinkingResponse 解析包含思考过程的响应
 	ParseThinkingResponse(response string) (*ThinkingResult, error)
-	
+
 	// IsThinkingEnabled 检查是否启用思考模式
 	IsThinkingEnabled(request *clients.AIRequest) bool
 }
@@ -51,10 +52,10 @@ func (s *thinkingServiceImpl) ProcessThinkingRequest(ctx context.Context, reques
 
 	// 创建请求副本
 	thinkingRequest := *request
-	
+
 	// 构造思考提示词
 	thinkingPrompt := s.buildThinkingPrompt(request.Thinking)
-	
+
 	// 修改消息，添加思考指令
 	if len(thinkingRequest.Messages) > 0 {
 		lastMessage := &thinkingRequest.Messages[len(thinkingRequest.Messages)-1]
@@ -68,7 +69,7 @@ func (s *thinkingServiceImpl) ProcessThinkingRequest(ctx context.Context, reques
 		"original_messages": len(request.Messages),
 		"modified_messages": len(thinkingRequest.Messages),
 		"thinking_enabled":  request.Thinking.Enabled,
-		"show_process":     request.Thinking.ShowProcess,
+		"show_process":      request.Thinking.ShowProcess,
 	}).Info("Thinking request processed")
 
 	return &thinkingRequest, nil
@@ -117,9 +118,9 @@ func (s *thinkingServiceImpl) ParseThinkingResponse(response string) (*ThinkingR
 	}
 
 	s.logger.WithFields(map[string]interface{}{
-		"has_thinking":      result.HasThinking,
-		"thinking_length":   len(result.ThinkingProcess),
-		"answer_length":     len(result.FinalAnswer),
+		"has_thinking":    result.HasThinking,
+		"thinking_length": len(result.ThinkingProcess),
+		"answer_length":   len(result.FinalAnswer),
 	}).Debug("Thinking response parsed")
 
 	return result, nil
@@ -185,11 +186,11 @@ Your final answer here (without thinking tags).`
 
 // StreamThinkingProcessor 流式思考处理器
 type StreamThinkingProcessor struct {
-	logger        logger.Logger
-	buffer        strings.Builder
-	inThinking    bool
-	thinkingDone  bool
-	sendThinking  bool
+	logger       logger.Logger
+	buffer       strings.Builder
+	inThinking   bool
+	thinkingDone bool
+	sendThinking bool
 }
 
 // NewStreamThinkingProcessor 创建流式思考处理器
@@ -213,9 +214,12 @@ func (p *StreamThinkingProcessor) ProcessChunk(chunk string) ([]*clients.StreamC
 		// 发送思考开始前的内容
 		beforeThinking := strings.Split(currentBuffer, "<thinking>")[0]
 		if beforeThinking != "" {
+			// 为thinking处理生成的chunk创建模拟的原始数据
+			rawData := fmt.Sprintf(`data: {"id":"thinking-chunk-%d","object":"chat.completion.chunk","choices":[{"delta":{"content":"%s"}}]}`, time.Now().UnixNano(), beforeThinking) + "\n"
 			results = append(results, &clients.StreamChunk{
 				Content:     beforeThinking,
 				ContentType: "response",
+				RawData:     []byte(rawData),
 			})
 		}
 		// 清空缓冲区，保留thinking之后的内容
@@ -234,9 +238,12 @@ func (p *StreamThinkingProcessor) ProcessChunk(chunk string) ([]*clients.StreamC
 			afterThinking := strings.Join(parts[1:], "</thinking>")
 
 			if p.sendThinking && thinkingContent != "" {
+				// 为thinking内容创建模拟的原始数据
+				rawData := fmt.Sprintf(`data: {"id":"thinking-chunk-%d","object":"chat.completion.chunk","choices":[{"delta":{"content":"%s","content_type":"thinking"}}]}`, time.Now().UnixNano(), thinkingContent) + "\n"
 				results = append(results, &clients.StreamChunk{
 					Content:     thinkingContent,
 					ContentType: "thinking",
+					RawData:     []byte(rawData),
 				})
 			}
 
@@ -245,9 +252,12 @@ func (p *StreamThinkingProcessor) ProcessChunk(chunk string) ([]*clients.StreamC
 
 			// 开始发送最终答案
 			if afterThinking != "" {
+				// 为最终答案创建模拟的原始数据
+				rawData := fmt.Sprintf(`data: {"id":"thinking-chunk-%d","object":"chat.completion.chunk","choices":[{"delta":{"content":"%s"}}]}`, time.Now().UnixNano(), afterThinking) + "\n"
 				results = append(results, &clients.StreamChunk{
 					Content:     afterThinking,
 					ContentType: "response",
+					RawData:     []byte(rawData),
 				})
 			}
 
@@ -255,16 +265,20 @@ func (p *StreamThinkingProcessor) ProcessChunk(chunk string) ([]*clients.StreamC
 			p.buffer.Reset()
 		} else if p.sendThinking {
 			// 还在思考中，发送思考内容
+			rawData := fmt.Sprintf(`data: {"id":"thinking-chunk-%d","object":"chat.completion.chunk","choices":[{"delta":{"content":"%s","content_type":"thinking"}}]}`, time.Now().UnixNano(), chunk) + "\n"
 			results = append(results, &clients.StreamChunk{
 				Content:     chunk,
 				ContentType: "thinking",
+				RawData:     []byte(rawData),
 			})
 		}
 	} else if p.thinkingDone || !p.inThinking {
 		// 思考完成后的内容，或者没有思考标签的内容
+		rawData := fmt.Sprintf(`data: {"id":"thinking-chunk-%d","object":"chat.completion.chunk","choices":[{"delta":{"content":"%s"}}]}`, time.Now().UnixNano(), chunk) + "\n"
 		results = append(results, &clients.StreamChunk{
 			Content:     chunk,
 			ContentType: "response",
+			RawData:     []byte(rawData),
 		})
 	}
 

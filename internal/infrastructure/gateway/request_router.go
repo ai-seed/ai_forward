@@ -431,13 +431,16 @@ func (r *requestRouterImpl) sendStreamRequest(ctx context.Context, provider *ent
 
 				// 转换数据格式
 				gatewayChunk := &StreamChunk{
-					ID:           chunk.ID,
-					Object:       chunk.Object,
-					Created:      chunk.Created,
-					Model:        chunk.Model,
-					Content:      chunk.Content,
-					FinishReason: chunk.FinishReason,
-					Usage:        chunk.Usage,
+					ID:               chunk.ID,
+					Object:           chunk.Object,
+					Created:          chunk.Created,
+					Model:            chunk.Model,
+					Content:          chunk.Content,
+					ReasoningContent: chunk.ReasoningContent,
+					ContentType:      chunk.ContentType,
+					FinishReason:     chunk.FinishReason,
+					Usage:            chunk.Usage,
+					RawData:          chunk.RawData, // 复制原始数据
 					Cost: func() *CostInfo {
 						if chunk.Cost != nil {
 							return &CostInfo{
