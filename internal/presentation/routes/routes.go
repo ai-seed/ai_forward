@@ -4,9 +4,7 @@ import (
 	"time"
 
 	"ai-api-gateway/internal/application/services"
-	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
-	"ai-api-gateway/internal/infrastructure/functioncall"
 	"ai-api-gateway/internal/infrastructure/gateway"
 	"ai-api-gateway/internal/infrastructure/logger"
 	"ai-api-gateway/internal/presentation/handlers"
@@ -78,40 +76,11 @@ func (r *Router) SetupRoutes() {
 	r.engine.Use(middleware.TimeoutMiddleware(30 * time.Second))
 
 	// 创建处理器
-	// 创建 Function Call 相关服务（始终创建，通过 web_search 参数控制使用）
-	searchConfig := &functioncall.SearchConfig{
-		Service:        r.config.FunctionCall.SearchService.Service,
-		MaxResults:     r.config.FunctionCall.SearchService.MaxResults,
-		CrawlResults:   r.config.FunctionCall.SearchService.CrawlResults,
-		CrawlContent:   r.config.FunctionCall.SearchService.CrawlContent,
-		Search1APIKey:  r.config.FunctionCall.SearchService.Search1APIKey,
-		GoogleCX:       r.config.FunctionCall.SearchService.GoogleCX,
-		GoogleKey:      r.config.FunctionCall.SearchService.GoogleKey,
-		BingKey:        r.config.FunctionCall.SearchService.BingKey,
-		SerpAPIKey:     r.config.FunctionCall.SearchService.SerpAPIKey,
-		SerperKey:      r.config.FunctionCall.SearchService.SerperKey,
-		SearXNGBaseURL: r.config.FunctionCall.SearchService.SearXNGBaseURL,
-	}
-	searchService := functioncall.NewSearchService(searchConfig, r.logger)
-	functionCallHandler := functioncall.NewFunctionCallHandler(searchService, r.logger)
-
-	// 创建HTTP客户端
-	httpClient := clients.NewHTTPClient(30 * time.Second)
-
-	// 创建AI提供商客户端
-	aiClient := clients.NewAIProviderClient(httpClient)
-
-	aiHandler := handlers.NewAIHandler(
-		r.gatewayService,
+	// 创建信息查询处理器
+	infoHandler := handlers.NewInfoHandler(
 		r.serviceFactory.ModelService(),
 		r.serviceFactory.UsageLogService(),
 		r.logger,
-		r.config,
-		functionCallHandler,
-		r.serviceFactory.ProviderModelSupportRepository(),
-		httpClient,
-		aiClient,
-		r.serviceFactory.ThinkingService(),
 	)
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(
@@ -220,8 +189,8 @@ func (r *Router) SetupRoutes() {
 		infoRoutes.Use(authMiddleware.Authenticate())
 		infoRoutes.Use(rateLimitMiddleware.RateLimit())
 		{
-			infoRoutes.GET("/models", aiHandler.Models)
-			infoRoutes.GET("/usage", aiHandler.Usage)
+			infoRoutes.GET("/models", infoHandler.Models)
+			infoRoutes.GET("/usage", infoHandler.Usage)
 		}
 	}
 
