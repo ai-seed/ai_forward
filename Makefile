@@ -38,56 +38,17 @@ clean:
 # Generate Swagger documentation
 swagger:
 	@echo "Generating Swagger documentation..."
-ifeq ($(OS),Windows_NT)
-	@if exist scripts\generate-swagger.bat ( \
-		scripts\generate-swagger.bat \
-	) else ( \
-		go run scripts/generate-swagger.go \
-	)
-else
-	@if [ -f scripts/generate-swagger.sh ]; then \
-		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh; \
-	else \
-		go run scripts/generate-swagger.go; \
-	fi
-endif
+	@go run scripts/generate-swagger.go
 
 # Clean Swagger documentation
 swagger-clean:
 	@echo "Cleaning Swagger documentation..."
-ifeq ($(OS),Windows_NT)
-	@if exist scripts\generate-swagger.bat ( \
-		scripts\generate-swagger.bat --clean \
-	) else ( \
-		go run scripts/generate-swagger.go --clean \
-	)
-else
-	@if [ -f scripts/generate-swagger.sh ]; then \
-		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh --clean; \
-	else \
-		go run scripts/generate-swagger.go --clean; \
-	fi
-endif
+	@go run scripts/generate-swagger.go --clean
 
 # Verify Swagger documentation
 swagger-verify:
 	@echo "Verifying Swagger documentation..."
-ifeq ($(OS),Windows_NT)
-	@if exist scripts\generate-swagger.bat ( \
-		scripts\generate-swagger.bat --verify \
-	) else ( \
-		go run scripts/generate-swagger.go --verify \
-	)
-else
-	@if [ -f scripts/generate-swagger.sh ]; then \
-		chmod +x scripts/generate-swagger.sh && scripts/generate-swagger.sh --verify; \
-	else \
-		go run scripts/generate-swagger.go --verify; \
-	fi
-endif
-	@rm -rf data/
-
-
+	@go run scripts/generate-swagger.go --verify
 
 # Build Docker image
 docker-build:

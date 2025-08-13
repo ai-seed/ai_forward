@@ -86,11 +86,6 @@ func main() {
 		log.WithField("error", err.Error()).Fatal("Failed to connect to PostgreSQL with GORM")
 	}
 
-	// 执行数据库自动迁移
-	// if err := database.InitializeDatabase(gormDB, log); err != nil {
-	// 	log.WithField("error", err.Error()).Fatal("Database initialization failed")
-	// }
-
 	// 进行健康检查
 	if err := database.HealthCheck(gormDB); err != nil {
 		log.WithField("error", err.Error()).Fatal("Database health check failed")
@@ -105,7 +100,7 @@ func main() {
 		var err error
 		redisFactory, err = redis.NewRedisFactory(log)
 		if err != nil {
-			log.WithFields(map[string]interface{}{
+			log.WithFields(map[string]any{
 				"error": err.Error(),
 			}).Warn("Failed to initialize Redis, continuing without cache and distributed locks")
 			redisFactory = nil
@@ -164,11 +159,11 @@ func main() {
 	midjourneyQueueService := serviceFactory.MidjourneyQueueService()
 	ctx := context.Background()
 	workerCount := cfg.Midjourney.WorkerCount // 从配置文件读取
-	
+
 	if err := midjourneyQueueService.StartWorkers(ctx, workerCount); err != nil {
 		log.WithField("error", err.Error()).Fatal("Failed to start Midjourney queue workers")
 	}
-	log.WithFields(map[string]interface{}{
+	log.WithFields(map[string]any{
 		"worker_count": workerCount,
 		"channel_size": cfg.Midjourney.ChannelSize,
 	}).Info("Midjourney queue workers started")

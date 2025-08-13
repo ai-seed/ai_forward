@@ -57,4 +57,4 @@ bin/
 # Temporary files
 tmp/
 temp/
-node_modules/"configs/config.yaml" 
+node_modules/
