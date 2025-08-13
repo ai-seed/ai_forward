@@ -265,16 +265,25 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				totalCost += chunk.Cost.TotalCost
 			}
 
-			// 直接转发原始SSE数据，不做任何结构化处理
+			// 处理原始SSE数据，为每行添加 event type
 			if len(chunk.RawData) > 0 {
-				_, err := w.Write(chunk.RawData)
-				if err != nil {
-					h.logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"error":      err.Error(),
-					}).Error("Failed to write raw stream chunk")
-					return
+				// 解析原始数据并添加 event type
+				rawDataStr := string(chunk.RawData)
+				lines := strings.Split(rawDataStr, "\n")
+
+				for _, line := range lines {
+					if strings.HasPrefix(line, "data: ") {
+						// 为数据行添加 event type
+						w.Write([]byte("event: message\n"))
+						w.Write([]byte(line + "\n"))
+						w.Write([]byte("\n")) // 添加空行分隔
+					} else if line != "" {
+						// 保持其他行不变（如注释行）
+						w.Write([]byte(line + "\n"))
+					}
 				}
+
+				w.Flush()
 			} else {
 				// 如果没有原始数据，记录警告但继续处理
 				h.logger.WithFields(map[string]interface{}{
@@ -282,9 +291,6 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 					"chunk_id":   chunk.ID,
 				}).Warn("Stream chunk missing raw data, skipping")
 			}
-
-			// 立即刷新缓冲区
-			w.Flush()
 
 		case err := <-errorChan:
 			if err != nil {
@@ -1252,15 +1258,22 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 				return
 			}
 
-			// 直接转发原始SSE数据，不做任何结构化处理
+			// 处理原始SSE数据，为每行添加 event type
 			if len(chunk.RawData) > 0 {
-				_, err := w.Write(chunk.RawData)
-				if err != nil {
-					h.logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"error":      err.Error(),
-					}).Error("Failed to write Claude raw stream chunk")
-					return
+				// 解析原始数据并添加 event type
+				rawDataStr := string(chunk.RawData)
+				lines := strings.Split(rawDataStr, "\n")
+
+				for _, line := range lines {
+					if strings.HasPrefix(line, "data: ") {
+						// 为数据行添加 event type
+						w.Write([]byte("event: message\n"))
+						w.Write([]byte(line + "\n"))
+						w.Write([]byte("\n")) // 添加空行分隔
+					} else if line != "" {
+						// 保持其他行不变（如注释行）
+						w.Write([]byte(line + "\n"))
+					}
 				}
 			} else {
 				// 如果没有原始数据，记录警告但继续处理
