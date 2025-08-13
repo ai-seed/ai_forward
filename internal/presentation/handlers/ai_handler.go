@@ -274,7 +274,7 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 				for _, line := range lines {
 					if strings.HasPrefix(line, "data: ") {
 						// 为数据行添加 event type
-						w.Write([]byte("event: message\n"))
+						// w.Write([]byte("event: message\n"))
 						w.Write([]byte(line + "\n"))
 						w.Write([]byte("\n")) // 添加空行分隔
 					} else if line != "" {
@@ -1267,7 +1267,7 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 				for _, line := range lines {
 					if strings.HasPrefix(line, "data: ") {
 						// 为数据行添加 event type
-						w.Write([]byte("event: message\n"))
+						// w.Write([]byte("event: message\n"))
 						w.Write([]byte(line + "\n"))
 						w.Write([]byte("\n")) // 添加空行分隔
 					} else if line != "" {
