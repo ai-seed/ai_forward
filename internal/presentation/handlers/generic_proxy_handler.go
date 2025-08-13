@@ -258,10 +258,11 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 		lineCount++
 
 		h.logger.WithFields(map[string]interface{}{
-			"path":       path,
-			"line_count": lineCount,
-			"line":       line,
-		}).Debug("Processing stream line")
+			"path":        path,
+			"line_count":  lineCount,
+			"line":        line,
+			"line_length": len(line),
+		}).Info("Processing stream line") // 改为Info级别便于观察原始数据
 
 		// 处理 SSE 格式的数据
 		if h.isValidSSELine(line) {
@@ -296,7 +297,10 @@ func (h *GenericProxyHandler) handleStreamRequest(c *gin.Context, proxyClient cl
 						"total_output":   totalOutputTokens,
 						"last_input":     lastInputTokens,
 						"last_output":    lastOutputTokens,
-					}).Debug("Updated token usage from stream")
+					}).Info("Updated token usage from stream") // 改为Info级别便于观察
+
+					// 实时更新上下文，确保计费中间件能获取到最新的token信息
+					h.updateStreamTokenContext(c, lastInputTokens, lastOutputTokens, path)
 				}
 			}
 
@@ -943,6 +947,26 @@ func (h *GenericProxyHandler) extractTokensFromStreamLine(line string) (int, int
 	return inputTokens, outputTokens
 }
 
+// updateStreamTokenContext 实时更新流式请求的token上下文
+func (h *GenericProxyHandler) updateStreamTokenContext(c *gin.Context, inputTokens, outputTokens int, path string) {
+	totalTokens := inputTokens + outputTokens
+
+	// 实时更新上下文
+	c.Set("input_tokens", inputTokens)
+	c.Set("output_tokens", outputTokens)
+	c.Set("total_tokens", totalTokens)
+	c.Set("tokens_used", totalTokens)
+
+	h.logger.WithFields(map[string]interface{}{
+		"input_tokens":    inputTokens,
+		"output_tokens":   outputTokens,
+		"total_tokens":    totalTokens,
+		"path":            path,
+		"stream":          true,
+		"context_updated": true,
+	}).Info("Real-time updated token context for billing")
+}
+
 // setStreamTokenUsage 设置流式请求的token使用量到上下文
 func (h *GenericProxyHandler) setStreamTokenUsage(c *gin.Context, inputTokens, outputTokens int, path string) {
 	totalTokens := inputTokens + outputTokens
@@ -965,13 +989,14 @@ func (h *GenericProxyHandler) setStreamTokenUsage(c *gin.Context, inputTokens, o
 		"path":          path,
 		"stream":        true,
 		"context_set":   true,
+		"final":         true,
 	}
 
 	if logLevel == "Warn" {
 		logFields["issue"] = "no_token_usage_found"
 		h.logger.WithFields(logFields).Warn("No token usage found in stream response - billing may be inaccurate")
 	} else {
-		h.logger.WithFields(logFields).Info("Set token usage information from stream response")
+		h.logger.WithFields(logFields).Info("Set final token usage information from stream response")
 	}
 }
 
