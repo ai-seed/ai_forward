@@ -81,6 +81,10 @@ func (h *AIHandler) handleStreamingRequest(c *gin.Context, gatewayRequest *gatew
 	// 获取响应写入器
 	w := c.Writer
 
+	// 立即发送头部并刷新，确保浏览器识别为 EventStream
+	c.Status(http.StatusOK)
+	w.Flush()
+
 	// 预先获取并设置 provider 信息，确保 billing 中间件能够获取到
 	if err := h.presetProviderInfo(c.Request.Context(), c, gatewayRequest.ModelSlug); err != nil {
 		h.logger.WithFields(map[string]interface{}{
@@ -1184,6 +1188,10 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 	// 获取响应写入器
 	w := c.Writer
 
+	// 立即发送头部并刷新，确保浏览器识别为 EventStream
+	c.Status(http.StatusOK)
+	w.Flush()
+
 	// 删除了 Function Call 的特殊处理
 
 	// 创建流式响应通道
@@ -1244,18 +1252,24 @@ func (h *AIHandler) handleClaudeStreamingRequest(c *gin.Context, gatewayRequest 
 				return
 			}
 
-			// 转换为Claude格式
-			claudeChunk := h.convertToClaudeStreamChunk(chunk)
-			chunkJSON, err := json.Marshal(claudeChunk)
-			if err != nil {
+			// 直接转发原始SSE数据，不做任何结构化处理
+			if len(chunk.RawData) > 0 {
+				_, err := w.Write(chunk.RawData)
+				if err != nil {
+					h.logger.WithFields(map[string]interface{}{
+						"request_id": requestID,
+						"error":      err.Error(),
+					}).Error("Failed to write Claude raw stream chunk")
+					return
+				}
+			} else {
+				// 如果没有原始数据，记录警告但继续处理
 				h.logger.WithFields(map[string]interface{}{
 					"request_id": requestID,
-					"error":      err.Error(),
-				}).Error("Failed to marshal Claude stream chunk")
-				continue
+					"chunk_id":   chunk.ID,
+				}).Warn("Claude stream chunk missing raw data, skipping")
 			}
 
-			w.Write([]byte(fmt.Sprintf("data: %s\n\n", chunkJSON)))
 			flusher.Flush()
 
 			if chunk.Usage != nil {
