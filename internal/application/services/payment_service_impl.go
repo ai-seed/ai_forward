@@ -232,21 +232,18 @@ func (s *paymentServiceImpl) CancelRechargeOrder(ctx context.Context, userID int
 func (s *paymentServiceImpl) QueryRechargeRecords(ctx context.Context, req *dto.QueryRechargeRecordsRequest) (*dto.PaginatedRechargeResponse, error) {
 	offset := (req.Page - 1) * req.PageSize
 
-	var records []*entities.RechargeRecord
-	var total int64
-	var err error
-
-	if req.StartTime != nil && req.EndTime != nil {
-		records, total, err = s.rechargeRepo.GetByDateRange(ctx, req.UserID, *req.StartTime, *req.EndTime, req.PageSize, offset)
-	} else {
-		if req.UserID != nil {
-			records, total, err = s.rechargeRepo.GetByUserID(ctx, *req.UserID, req.PageSize, offset)
-		} else {
-			// 管理员查询所有记录的逻辑需要在仓储层实现
-			return nil, fmt.Errorf("admin query not implemented yet")
-		}
+	// 构建过滤条件
+	filters := &repositories.RechargeQueryFilters{
+		UserID:    req.UserID,
+		OrderNo:   req.OrderNo,
+		Status:    req.Status,
+		Method:    req.Method,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
 	}
 
+	// 使用新的过滤查询方法
+	records, total, err := s.rechargeRepo.QueryWithFilters(ctx, filters, req.PageSize, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query recharge records: %w", err)
 	}

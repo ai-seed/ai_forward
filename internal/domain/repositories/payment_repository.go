@@ -32,6 +32,19 @@ type RechargeRecordRepository interface {
 
 	// GetByDateRange 根据日期范围获取充值记录
 	GetByDateRange(ctx context.Context, userID *int64, startTime, endTime time.Time, limit, offset int) ([]*entities.RechargeRecord, int64, error)
+
+	// QueryWithFilters 根据多个条件查询充值记录
+	QueryWithFilters(ctx context.Context, filters *RechargeQueryFilters, limit, offset int) ([]*entities.RechargeRecord, int64, error)
+}
+
+// RechargeQueryFilters 充值记录查询过滤条件
+type RechargeQueryFilters struct {
+	UserID    *int64                   `json:"user_id,omitempty"`
+	OrderNo   *string                  `json:"order_no,omitempty"`
+	Status    *entities.RechargeStatus `json:"status,omitempty"`
+	Method    *string                  `json:"method,omitempty"`
+	StartTime *time.Time               `json:"start_time,omitempty"`
+	EndTime   *time.Time               `json:"end_time,omitempty"`
 }
 
 // GiftRecordRepository 赠送记录仓储接口

@@ -183,6 +183,24 @@ func (h *PaymentHandler) QueryRechargeRecords(c *gin.Context) {
 		req.Method = &method
 	}
 
+	if orderNo := c.Query("order_no"); orderNo != "" {
+		req.OrderNo = &orderNo
+	}
+
+	if startTime := c.Query("start_time"); startTime != "" {
+		if t, err := time.Parse("2006-01-02", startTime); err == nil {
+			req.StartTime = &t
+		}
+	}
+
+	if endTime := c.Query("end_time"); endTime != "" {
+		if t, err := time.Parse("2006-01-02", endTime); err == nil {
+			// 设置为当天的23:59:59
+			endOfDay := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
+			req.EndTime = &endOfDay
+		}
+	}
+
 	response, err := h.paymentSvc.QueryRechargeRecords(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse("QUERY_FAILED", "Failed to query recharge records", map[string]interface{}{"error": err.Error()}))

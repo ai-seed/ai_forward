@@ -214,6 +214,7 @@ type QueryTransactionsRequest struct {
 // QueryRechargeRecordsRequest 查询充值记录请求
 type QueryRechargeRecordsRequest struct {
 	UserID    *int64                   `json:"user_id,omitempty"`
+	OrderNo   *string                  `json:"order_no,omitempty"`
 	Status    *entities.RechargeStatus `json:"status,omitempty"`
 	Method    *string                  `json:"method,omitempty"`
 	StartTime *time.Time               `json:"start_time,omitempty"`

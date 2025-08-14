@@ -83,11 +83,11 @@ func (r *rechargeRecordRepository) UpdateStatus(ctx context.Context, id int64, s
 func (r *rechargeRecordRepository) GetPendingRecords(ctx context.Context, expiredBefore *time.Time) ([]*entities.RechargeRecord, error) {
 	var records []*entities.RechargeRecord
 	query := r.db.WithContext(ctx).Where("status = ?", entities.RechargeStatusPending)
-	
+
 	if expiredBefore != nil {
 		query = query.Where("expired_at < ?", *expiredBefore)
 	}
-	
+
 	err := query.Find(&records).Error
 	return records, err
 }
@@ -102,6 +102,52 @@ func (r *rechargeRecordRepository) GetByDateRange(ctx context.Context, userID *i
 
 	if userID != nil {
 		query = query.Where("user_id = ?", *userID)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 获取记录
+	err := query.Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&records).Error
+
+	return records, total, err
+}
+
+// QueryWithFilters 根据多个条件查询充值记录
+func (r *rechargeRecordRepository) QueryWithFilters(ctx context.Context, filters *repositories.RechargeQueryFilters, limit, offset int) ([]*entities.RechargeRecord, int64, error) {
+	var records []*entities.RechargeRecord
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&entities.RechargeRecord{})
+
+	// 应用过滤条件
+	if filters.UserID != nil {
+		query = query.Where("user_id = ?", *filters.UserID)
+	}
+
+	if filters.OrderNo != nil && *filters.OrderNo != "" {
+		query = query.Where("order_no LIKE ?", "%"+*filters.OrderNo+"%")
+	}
+
+	if filters.Status != nil {
+		query = query.Where("status = ?", *filters.Status)
+	}
+
+	if filters.Method != nil && *filters.Method != "" {
+		query = query.Where("payment_method_code = ?", *filters.Method)
+	}
+
+	if filters.StartTime != nil {
+		query = query.Where("created_at >= ?", *filters.StartTime)
+	}
+
+	if filters.EndTime != nil {
+		query = query.Where("created_at <= ?", *filters.EndTime)
 	}
 
 	// 获取总数
