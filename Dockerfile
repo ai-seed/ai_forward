@@ -22,7 +22,6 @@ RUN go mod download
 COPY . .
 
 # 生成Swagger文档
-RUN swag init -g cmd/server/main.go -o docs --parseDependency --parseInternal
 
 # 构建应用
 RUN GOOS=linux go build  -o main cmd/server/main.go
