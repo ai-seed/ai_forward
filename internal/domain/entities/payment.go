@@ -240,8 +240,15 @@ type PaymentMethod struct {
 	Status      PaymentMethodStatus `json:"status" gorm:"not null;size:20;index"`
 	SortOrder   int                 `json:"sort_order" gorm:"default:0"`
 	Config      *string             `json:"config" gorm:"type:text"` // 支付方式特定配置
-	CreatedAt   time.Time           `json:"created_at" gorm:"not null;autoCreateTime"`
-	UpdatedAt   time.Time           `json:"updated_at" gorm:"not null;autoUpdateTime"`
+	// 多语言字段
+	DisplayNameZh *string   `json:"display_name_zh" gorm:"column:display_name_zh;size:100"` // 中文显示名称
+	DisplayNameEn *string   `json:"display_name_en" gorm:"column:display_name_en;size:100"` // 英文显示名称
+	DisplayNameJa *string   `json:"display_name_ja" gorm:"column:display_name_ja;size:100"` // 日文显示名称
+	DescriptionZh *string   `json:"description_zh" gorm:"column:description_zh;size:500"`   // 中文描述
+	DescriptionEn *string   `json:"description_en" gorm:"column:description_en;size:500"`   // 英文描述
+	DescriptionJa *string   `json:"description_ja" gorm:"column:description_ja;size:500"`   // 日文描述
+	CreatedAt     time.Time `json:"created_at" gorm:"not null;autoCreateTime"`
+	UpdatedAt     time.Time `json:"updated_at" gorm:"not null;autoUpdateTime"`
 
 	// 关联关系
 	Provider *PaymentProvider `json:"provider,omitempty" gorm:"foreignKey:ProviderID"`

@@ -542,5 +542,51 @@ func (s *paymentServiceImpl) toPaymentMethodResponse(method *entities.PaymentMet
 		response.Description = method.Description
 	}
 
+	// 构建多语言字段
+	displayNameI18n := make(map[string]string)
+	descriptionI18n := make(map[string]string)
+
+	// 添加中文
+	if method.DisplayNameZh != nil && *method.DisplayNameZh != "" {
+		displayNameI18n["zh"] = *method.DisplayNameZh
+	} else {
+		displayNameI18n["zh"] = method.DisplayName // 回退到默认值
+	}
+	if method.DescriptionZh != nil && *method.DescriptionZh != "" {
+		descriptionI18n["zh"] = *method.DescriptionZh
+	} else if method.Description != nil {
+		descriptionI18n["zh"] = *method.Description // 回退到默认值
+	}
+
+	// 添加英文
+	if method.DisplayNameEn != nil && *method.DisplayNameEn != "" {
+		displayNameI18n["en"] = *method.DisplayNameEn
+	} else {
+		displayNameI18n["en"] = method.DisplayName // 回退到默认值
+	}
+	if method.DescriptionEn != nil && *method.DescriptionEn != "" {
+		descriptionI18n["en"] = *method.DescriptionEn
+	} else if method.Description != nil {
+		descriptionI18n["en"] = *method.Description // 回退到默认值
+	}
+
+	// 添加日文
+	if method.DisplayNameJa != nil && *method.DisplayNameJa != "" {
+		displayNameI18n["ja"] = *method.DisplayNameJa
+	} else {
+		displayNameI18n["ja"] = method.DisplayName // 回退到默认值
+	}
+	if method.DescriptionJa != nil && *method.DescriptionJa != "" {
+		descriptionI18n["ja"] = *method.DescriptionJa
+	} else if method.Description != nil {
+		descriptionI18n["ja"] = *method.Description // 回退到默认值
+	}
+
+	// 设置多语言字段（确保一致性）
+	response.DisplayNameI18n = displayNameI18n
+	if len(descriptionI18n) > 0 {
+		response.DescriptionI18n = descriptionI18n
+	}
+
 	return response
 }

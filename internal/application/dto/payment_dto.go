@@ -45,6 +45,9 @@ type PaymentMethodResponse struct {
 	FixedFee    float64 `json:"fixed_fee"`
 	Status      string  `json:"status"`
 	SortOrder   int     `json:"sort_order"`
+	// 多语言字段
+	DisplayNameI18n map[string]string `json:"display_name_i18n,omitempty"`
+	DescriptionI18n map[string]string `json:"description_i18n,omitempty"`
 }
 
 // PaymentProviderResponse 支付服务商响应
