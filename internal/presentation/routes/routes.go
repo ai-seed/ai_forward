@@ -216,6 +216,11 @@ func (r *Router) SetupRoutes() {
 		payment.GET("/recharge-options", paymentHandler.GetRechargeOptions)
 		payment.POST("/callback", paymentHandler.ProcessPaymentCallback)
 
+		// 支付页面接口（无需认证，模拟第三方支付页面）
+		payment.GET("/pay", paymentHandler.GetPaymentPage)
+		payment.POST("/qr-pay", paymentHandler.SimulateQRCodePayment)
+		payment.POST("/simulate-success", paymentHandler.SimulatePaymentSuccess)
+
 		// 需要认证的接口
 		paymentAuth := payment.Group("/")
 		paymentAuth.Use(authMiddleware.Authenticate())

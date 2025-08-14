@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/domain/entities"
@@ -267,6 +270,214 @@ func (h *PaymentHandler) ProcessPaymentCallback(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.SuccessResponse(nil, "Payment callback processed successfully"))
+}
+
+// GetPaymentPage 获取支付页面信息
+// @Summary 获取支付页面信息
+// @Description 获取支付页面的订单信息，用于展示支付页面
+// @Tags 支付
+// @Accept json
+// @Produce json
+// @Param order_no query string true "订单号"
+// @Success 200 {object} dto.SuccessResponse{data=dto.PaymentPageResponse}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/payment/pay [get]
+func (h *PaymentHandler) GetPaymentPage(c *gin.Context) {
+	orderNo := c.Query("order_no")
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number is required", nil))
+		return
+	}
+
+	pageInfo, err := h.paymentSvc.GetPaymentPage(c.Request.Context(), orderNo)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no": orderNo,
+			"error":    err.Error(),
+		}).Error("Failed to get payment page")
+
+		if err.Error() == "recharge order not found: record not found" {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse("ORDER_NOT_FOUND", "Payment order not found", nil))
+		} else if err.Error() == "payment order has expired" {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse("ORDER_EXPIRED", "Payment order has expired", nil))
+		} else if strings.Contains(err.Error(), "not pending") {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse("ORDER_NOT_PENDING", "Payment order is not pending", nil))
+		} else {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse("GET_PAYMENT_PAGE_FAILED", "Failed to get payment page", nil))
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(pageInfo, "Payment page info retrieved successfully"))
+}
+
+// SimulateQRCodePayment 模拟扫码支付
+// @Summary 模拟扫码支付
+// @Description 模拟用户扫码支付，调用支付回调接口完成支付
+// @Tags 支付
+// @Accept json
+// @Produce json
+// @Param order_no query string true "订单号"
+// @Success 200 {object} dto.SuccessResponse{data=dto.PaymentResultResponse}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/payment/qr-pay [post]
+func (h *PaymentHandler) SimulateQRCodePayment(c *gin.Context) {
+	orderNo := c.Query("order_no")
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number is required", nil))
+		return
+	}
+
+	// 获取订单信息
+	pageInfo, err := h.paymentSvc.GetPaymentPage(c.Request.Context(), orderNo)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no": orderNo,
+			"error":    err.Error(),
+		}).Error("Failed to get payment page for QR payment")
+
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse("ORDER_NOT_FOUND", "Payment order not found", nil))
+		} else if strings.Contains(err.Error(), "expired") {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse("ORDER_EXPIRED", "Payment order has expired", nil))
+		} else if strings.Contains(err.Error(), "not pending") {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse("ORDER_NOT_PENDING", "Payment order is not pending", nil))
+		} else {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse("GET_ORDER_FAILED", "Failed to get order info", nil))
+		}
+		return
+	}
+
+	// 生成模拟支付数据
+	paymentID := fmt.Sprintf("QR_PAY_%d_%d", time.Now().Unix(), time.Now().Nanosecond()%10000)
+	now := time.Now()
+
+	// 构建支付回调请求
+	callbackReq := dto.PaymentCallbackRequest{
+		OrderNo:   orderNo,
+		PaymentID: paymentID,
+		Status:    "success",
+		Amount:    pageInfo.Amount,
+		PaidAt:    &now,
+		Signature: fmt.Sprintf("qr_payment_%s_%s", orderNo, paymentID),
+		ExtraData: map[string]interface{}{
+			"provider":     "qr_simulator",
+			"payment_type": "qr_code",
+			"simulated":    true,
+		},
+	}
+
+	// 处理支付回调
+	err = h.paymentSvc.ProcessPaymentCallback(c.Request.Context(), &callbackReq)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no":   orderNo,
+			"payment_id": paymentID,
+			"error":      err.Error(),
+		}).Error("Failed to process QR payment callback")
+
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse("QR_PAYMENT_FAILED", "Failed to process QR payment", nil))
+		return
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"order_no":   orderNo,
+		"payment_id": paymentID,
+		"amount":     pageInfo.Amount,
+	}).Info("QR payment simulated successfully")
+
+	// 返回支付结果
+	result := dto.PaymentResultResponse{
+		OrderNo:      orderNo,
+		Status:       "success",
+		Amount:       pageInfo.Amount,
+		ActualAmount: pageInfo.ActualAmount,
+		PaymentID:    paymentID,
+		PaidAt:       now,
+		Message:      "QR payment completed successfully",
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(result, "QR payment completed successfully"))
+}
+
+// ProcessPayment 处理支付确认
+// @Summary 处理支付确认
+// @Description 确认支付并更新订单状态，充值用户余额
+// @Tags 支付
+// @Accept json
+// @Produce json
+// @Param order_no query string true "订单号"
+// @Success 200 {object} dto.SuccessResponse{data=dto.PaymentResultResponse}
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/payment/pay [post]
+func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
+	orderNo := c.Query("order_no")
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number is required", nil))
+		return
+	}
+
+	result, err := h.paymentSvc.ProcessPayment(c.Request.Context(), orderNo)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no": orderNo,
+			"error":    err.Error(),
+		}).Error("Failed to process payment")
+
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse("ORDER_NOT_FOUND", "Payment order not found", nil))
+		} else if strings.Contains(err.Error(), "expired") {
+			c.JSON(http.StatusBadRequest, dto.ErrorResponse("ORDER_EXPIRED", "Payment order has expired", nil))
+		} else {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse("PROCESS_PAYMENT_FAILED", "Failed to process payment", nil))
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(result, "Payment processed successfully"))
+}
+
+// SimulatePaymentSuccess 模拟支付成功
+// @Summary 模拟支付成功
+// @Description 模拟第三方支付成功，用于测试环境
+// @Tags 支付
+// @Accept json
+// @Produce json
+// @Param order_no query string true "订单号"
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/payment/simulate-success [post]
+func (h *PaymentHandler) SimulatePaymentSuccess(c *gin.Context) {
+	orderNo := c.Query("order_no")
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number is required", nil))
+		return
+	}
+
+	err := h.paymentSvc.SimulatePaymentSuccess(c.Request.Context(), orderNo)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no": orderNo,
+			"error":    err.Error(),
+		}).Error("Failed to simulate payment success")
+
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse("ORDER_NOT_FOUND", "Payment order not found", nil))
+		} else {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse("SIMULATE_PAYMENT_FAILED", "Failed to simulate payment success", nil))
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(nil, "Payment simulated successfully"))
 }
 
 // GetUserBalance 获取用户余额

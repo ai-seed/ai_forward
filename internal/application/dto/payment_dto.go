@@ -67,6 +67,29 @@ type PaymentCallbackRequest struct {
 	Signature string                 `json:"signature"`
 }
 
+// PaymentPageResponse 支付页面响应
+type PaymentPageResponse struct {
+	OrderNo       string     `json:"order_no"`
+	Amount        float64    `json:"amount"`
+	ActualAmount  float64    `json:"actual_amount"`
+	PaymentMethod string     `json:"payment_method"`
+	DisplayName   string     `json:"display_name"`
+	Status        string     `json:"status"`
+	ExpiredAt     *time.Time `json:"expired_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// PaymentResultResponse 支付结果响应
+type PaymentResultResponse struct {
+	OrderNo      string    `json:"order_no"`
+	Status       string    `json:"status"`
+	Amount       float64   `json:"amount"`
+	ActualAmount float64   `json:"actual_amount"`
+	PaymentID    string    `json:"payment_id"`
+	PaidAt       time.Time `json:"paid_at"`
+	Message      string    `json:"message"`
+}
+
 // CreateGiftRequest 创建赠送请求
 type CreateGiftRequest struct {
 	UserID       int64             `json:"user_id" validate:"required"`

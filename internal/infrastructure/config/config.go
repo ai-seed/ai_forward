@@ -126,8 +126,8 @@ type SearchConfig struct {
 
 // ThinkingConfig 深度思考配置
 type ThinkingConfig struct {
-	Enabled     bool                     `mapstructure:"enabled"`     // 是否启用深度思考功能
-	Default     ThinkingDefaultConfig    `mapstructure:"default"`     // 默认配置
+	Enabled     bool                      `mapstructure:"enabled"`     // 是否启用深度思考功能
+	Default     ThinkingDefaultConfig     `mapstructure:"default"`     // 默认配置
 	Performance ThinkingPerformanceConfig `mapstructure:"performance"` // 性能配置
 }
 

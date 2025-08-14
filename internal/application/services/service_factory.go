@@ -422,6 +422,7 @@ func (f *ServiceFactory) PaymentService() services.PaymentService {
 		f.repoFactory.TransactionRepository(),
 		f.repoFactory.UserRepository(),
 		f.TransactionService(),
+		f.config,
 		f.logger,
 	)
 }

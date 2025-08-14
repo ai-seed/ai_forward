@@ -83,9 +83,9 @@ func main() {
 	if err != nil {
 		log.WithField("error", err.Error()).Fatal("Failed to connect to PostgreSQL with GORM")
 	}
-	if err := database.InitializeDatabase(gormDB, log); err != nil {
-		log.WithField("error", err.Error()).Fatal("Failed to initialize database")
-	}
+	// if err := database.InitializeDatabase(gormDB, log); err != nil {
+	// 	log.WithField("error", err.Error()).Fatal("Failed to initialize database")
+	// }
 	// 进行健康检查
 	if err := database.HealthCheck(gormDB); err != nil {
 		log.WithField("error", err.Error()).Fatal("Database health check failed")

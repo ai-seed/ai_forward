@@ -33,6 +33,15 @@ type PaymentService interface {
 
 	// GetPaymentMethods 获取支付方式列表（包含服务商信息）
 	GetPaymentMethods(ctx context.Context, activeOnly bool) ([]*dto.PaymentMethodResponse, error)
+
+	// GetPaymentPage 获取支付页面信息
+	GetPaymentPage(ctx context.Context, orderNo string) (*dto.PaymentPageResponse, error)
+
+	// ProcessPayment 处理支付确认（更新订单状态并充值）
+	ProcessPayment(ctx context.Context, orderNo string) (*dto.PaymentResultResponse, error)
+
+	// SimulatePaymentSuccess 模拟支付成功（用于测试）
+	SimulatePaymentSuccess(ctx context.Context, orderNo string) error
 }
 
 // GiftService 赠送服务接口

@@ -9,6 +9,7 @@ import (
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/domain/services"
+	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/logger"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type paymentServiceImpl struct {
 	transactionRepo    repositories.TransactionRepository
 	userRepo           repositories.UserRepository
 	transactionSvc     services.TransactionService
+	config             *config.Config
 	logger             logger.Logger
 }
 
@@ -33,6 +35,7 @@ func NewPaymentService(
 	transactionRepo repositories.TransactionRepository,
 	userRepo repositories.UserRepository,
 	transactionSvc services.TransactionService,
+	config *config.Config,
 	logger logger.Logger,
 ) services.PaymentService {
 	return &paymentServiceImpl{
@@ -42,6 +45,7 @@ func NewPaymentService(
 		transactionRepo:    transactionRepo,
 		userRepo:           userRepo,
 		transactionSvc:     transactionSvc,
+		config:             config,
 		logger:             logger,
 	}
 }
@@ -320,9 +324,176 @@ func (s *paymentServiceImpl) calculateExpiredTime() *time.Time {
 
 // generatePaymentURL 生成支付链接
 func (s *paymentServiceImpl) generatePaymentURL(record *entities.RechargeRecord, req *dto.CreateRechargeRequest) string {
-	// 这里需要根据具体的支付提供商实现
-	// 暂时返回空字符串
-	return ""
+	// 从配置中获取前端地址
+	frontendBaseURL := s.config.OAuth.FrontendURL
+	if frontendBaseURL == "" {
+		// 如果配置为空，使用默认值
+		frontendBaseURL = "http://localhost:3000"
+		s.logger.Warn("Frontend URL not configured, using default: http://localhost:3000")
+	}
+
+	// 构建前端支付页面URL，包含订单信息
+	paymentURL := fmt.Sprintf("%s/admin/pay?order_no=%s&amount=%.2f&method=%s",
+		frontendBaseURL, record.OrderNo, record.Amount, record.PaymentMethodCode)
+
+	s.logger.WithFields(map[string]interface{}{
+		"order_no":     record.OrderNo,
+		"amount":       record.Amount,
+		"method":       record.PaymentMethodCode,
+		"frontend_url": frontendBaseURL,
+		"payment_url":  paymentURL,
+	}).Info("Generated payment URL")
+
+	return paymentURL
+}
+
+// GetPaymentPage 获取支付页面信息
+func (s *paymentServiceImpl) GetPaymentPage(ctx context.Context, orderNo string) (*dto.PaymentPageResponse, error) {
+	// 获取充值记录
+	record, err := s.rechargeRepo.GetByOrderNo(ctx, orderNo)
+	if err != nil {
+		return nil, fmt.Errorf("recharge order not found: %w", err)
+	}
+
+	// 检查订单是否已过期
+	if record.ExpiredAt != nil && time.Now().After(*record.ExpiredAt) {
+		return nil, fmt.Errorf("payment order has expired")
+	}
+
+	// 检查订单状态
+	if record.Status != entities.RechargeStatusPending {
+		return nil, fmt.Errorf("payment order is not pending, current status: %s", record.Status)
+	}
+
+	// 获取支付方式信息
+	paymentMethod, err := s.paymentMethodRepo.GetByID(ctx, record.PaymentMethodID)
+	if err != nil {
+		s.logger.WithField("payment_method_id", record.PaymentMethodID).Warn("Failed to get payment method")
+	}
+
+	displayName := record.PaymentMethodCode
+	if paymentMethod != nil {
+		displayName = paymentMethod.DisplayName
+	}
+
+	return &dto.PaymentPageResponse{
+		OrderNo:       record.OrderNo,
+		Amount:        record.Amount,
+		ActualAmount:  record.ActualAmount,
+		PaymentMethod: record.PaymentMethodCode,
+		DisplayName:   displayName,
+		Status:        string(record.Status),
+		ExpiredAt:     record.ExpiredAt,
+		CreatedAt:     record.CreatedAt,
+	}, nil
+}
+
+// ProcessPayment 处理支付确认（更新订单状态并充值）
+func (s *paymentServiceImpl) ProcessPayment(ctx context.Context, orderNo string) (*dto.PaymentResultResponse, error) {
+	// 获取充值记录
+	record, err := s.rechargeRepo.GetByOrderNo(ctx, orderNo)
+	if err != nil {
+		return nil, fmt.Errorf("recharge order not found: %w", err)
+	}
+
+	// 检查订单状态
+	if record.Status != entities.RechargeStatusPending {
+		paymentID := ""
+		if record.PaymentID != nil {
+			paymentID = *record.PaymentID
+		}
+		return &dto.PaymentResultResponse{
+			OrderNo:      record.OrderNo,
+			Status:       string(record.Status),
+			Amount:       record.Amount,
+			ActualAmount: record.ActualAmount,
+			PaymentID:    paymentID,
+			Message:      fmt.Sprintf("Order is already %s", record.Status),
+		}, nil
+	}
+
+	// 检查订单是否已过期
+	if record.ExpiredAt != nil && time.Now().After(*record.ExpiredAt) {
+		// 更新订单状态为过期
+		record.Status = entities.RechargeStatusExpired
+		if err := s.rechargeRepo.Update(ctx, record); err != nil {
+			s.logger.WithField("order_no", orderNo).Error("Failed to update expired order status")
+		}
+		return nil, fmt.Errorf("payment order has expired")
+	}
+
+	// 生成支付ID和时间
+	paymentID := fmt.Sprintf("PAY_%d_%d", time.Now().Unix(), time.Now().Nanosecond()%10000)
+	now := time.Now()
+
+	// 构建支付回调请求，复用现有的回调处理逻辑
+	callbackReq := &dto.PaymentCallbackRequest{
+		OrderNo:   orderNo,
+		PaymentID: paymentID,
+		Status:    "success",
+		Amount:    record.Amount,
+		PaidAt:    &now,
+		Signature: fmt.Sprintf("direct_payment_%s_%s", orderNo, paymentID),
+		ExtraData: map[string]interface{}{
+			"provider":   "direct_payment",
+			"source":     "payment_page",
+			"direct_pay": true,
+		},
+	}
+
+	// 处理支付回调
+	if err := s.ProcessPaymentCallback(ctx, callbackReq); err != nil {
+		return nil, fmt.Errorf("failed to process payment: %w", err)
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"order_no":      record.OrderNo,
+		"user_id":       record.UserID,
+		"amount":        record.Amount,
+		"actual_amount": record.ActualAmount,
+		"payment_id":    paymentID,
+	}).Info("Payment processed successfully")
+
+	return &dto.PaymentResultResponse{
+		OrderNo:      record.OrderNo,
+		Status:       string(entities.RechargeStatusSuccess),
+		Amount:       record.Amount,
+		ActualAmount: record.ActualAmount,
+		PaymentID:    paymentID,
+		PaidAt:       now,
+		Message:      "Payment processed successfully",
+	}, nil
+}
+
+// SimulatePaymentSuccess 模拟支付成功
+func (s *paymentServiceImpl) SimulatePaymentSuccess(ctx context.Context, orderNo string) error {
+	// 生成模拟的支付回调数据
+	paymentID := fmt.Sprintf("mock_payment_%d_%d", time.Now().Unix(), time.Now().Nanosecond()%10000)
+	now := time.Now()
+
+	// 获取订单信息
+	record, err := s.rechargeRepo.GetByOrderNo(ctx, orderNo)
+	if err != nil {
+		return fmt.Errorf("recharge order not found: %w", err)
+	}
+
+	// 构建回调请求
+	callbackReq := &dto.PaymentCallbackRequest{
+		OrderNo:   orderNo,
+		PaymentID: paymentID,
+		Status:    "success",
+		Amount:    record.Amount,
+		PaidAt:    &now,
+		Signature: fmt.Sprintf("mock_signature_%s_%s", orderNo, paymentID),
+		ExtraData: map[string]interface{}{
+			"provider":       "mock_provider",
+			"transaction_id": paymentID,
+			"test_mode":      true,
+		},
+	}
+
+	// 处理支付回调
+	return s.ProcessPaymentCallback(ctx, callbackReq)
 }
 
 // verifySignature 验证签名
