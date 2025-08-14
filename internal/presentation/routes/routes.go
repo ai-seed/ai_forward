@@ -78,6 +78,14 @@ func (r *Router) SetupRoutes() {
 		r.serviceFactory.UsageLogService(),
 		r.logger,
 	)
+
+	// 创建支付处理器
+	paymentHandler := handlers.NewPaymentHandler(
+		r.serviceFactory.PaymentService(),
+		r.serviceFactory.TransactionService(),
+		r.serviceFactory.GiftService(),
+		r.logger,
+	)
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(
 		r.serviceFactory.APIKeyService(),
@@ -197,6 +205,31 @@ func (r *Router) SetupRoutes() {
 	{
 		files.POST("/upload", fileUploadHandler.UploadFile)
 		files.DELETE("/delete", fileUploadHandler.DeleteFile)
+	}
+
+	// 支付系统API路由
+	payment := r.engine.Group("/api/v1/payment")
+	payment.Use(rateLimitMiddleware.RateLimit())
+	{
+		// 公开接口（无需认证）
+		payment.GET("/methods", paymentHandler.GetPaymentMethods)
+		payment.GET("/recharge-options", paymentHandler.GetRechargeOptions)
+		payment.POST("/callback", paymentHandler.ProcessPaymentCallback)
+
+		// 需要认证的接口
+		paymentAuth := payment.Group("/")
+		paymentAuth.Use(authMiddleware.Authenticate())
+		{
+			// 充值相关
+			paymentAuth.POST("/recharge", paymentHandler.CreateRechargeOrder)
+			paymentAuth.GET("/recharge", paymentHandler.QueryRechargeRecords)
+			paymentAuth.GET("/recharge/:id", paymentHandler.GetRechargeOrder)
+			paymentAuth.POST("/recharge/:id/cancel", paymentHandler.CancelRechargeOrder)
+
+			// 余额和交易
+			paymentAuth.GET("/balance", paymentHandler.GetUserBalance)
+			paymentAuth.GET("/transactions", paymentHandler.QueryTransactions)
+		}
 	}
 
 	// 管理API路由

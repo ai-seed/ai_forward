@@ -98,3 +98,35 @@ func (f *RepositoryFactory) MidjourneyJobRepository() repositories.MidjourneyJob
 func (f *RepositoryFactory) GormDB() *gorm.DB {
 	return f.gormDB
 }
+
+// 支付系统相关仓储
+
+// RechargeRecordRepository 获取充值记录仓储
+func (f *RepositoryFactory) RechargeRecordRepository() repositories.RechargeRecordRepository {
+	return NewRechargeRecordRepository(f.gormDB)
+}
+
+// GiftRecordRepository 获取赠送记录仓储
+func (f *RepositoryFactory) GiftRecordRepository() repositories.GiftRecordRepository {
+	return NewGiftRecordRepository(f.gormDB)
+}
+
+// TransactionRepository 获取交易流水仓储
+func (f *RepositoryFactory) TransactionRepository() repositories.TransactionRepository {
+	return NewTransactionRepository(f.gormDB)
+}
+
+// RechargeOptionRepository 获取充值选项仓储
+func (f *RepositoryFactory) RechargeOptionRepository() repositories.RechargeOptionRepository {
+	return NewRechargeOptionRepository(f.gormDB)
+}
+
+// GiftRuleRepository 获取赠送规则仓储
+func (f *RepositoryFactory) GiftRuleRepository() repositories.GiftRuleRepository {
+	return NewGiftRuleRepository(f.gormDB)
+}
+
+// PaymentMethodRepository 获取支付方式仓储
+func (f *RepositoryFactory) PaymentMethodRepository() repositories.PaymentMethodRepository {
+	return NewPaymentMethodRepositoryGorm(f.gormDB, f.cache)
+}

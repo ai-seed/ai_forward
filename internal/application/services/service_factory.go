@@ -410,3 +410,47 @@ func (f *ServiceFactory) getAsyncQuotaConfig() *async.QuotaConsumerConfig {
 		RetryDelay:    100 * time.Millisecond, // 100ms重试延迟
 	}
 }
+
+// 支付系统相关服务
+
+// PaymentService 获取支付服务
+func (f *ServiceFactory) PaymentService() services.PaymentService {
+	return NewPaymentService(
+		f.repoFactory.RechargeRecordRepository(),
+		f.repoFactory.RechargeOptionRepository(),
+		f.repoFactory.PaymentMethodRepository(),
+		f.repoFactory.TransactionRepository(),
+		f.repoFactory.UserRepository(),
+		f.TransactionService(),
+		f.logger,
+	)
+}
+
+// TransactionService 获取交易服务
+func (f *ServiceFactory) TransactionService() services.TransactionService {
+	return NewTransactionService(
+		f.repoFactory.TransactionRepository(),
+		f.repoFactory.UserRepository(),
+		f.repoFactory.GormDB(),
+		f.logger,
+	)
+}
+
+// GiftService 获取赠送服务
+func (f *ServiceFactory) GiftService() services.GiftService {
+	return NewGiftService(
+		f.repoFactory.GiftRecordRepository(),
+		f.repoFactory.GiftRuleRepository(),
+		f.repoFactory.UserRepository(),
+		f.TransactionService(),
+		f.logger,
+	)
+}
+
+// GiftRuleService 获取赠送规则管理服务
+func (f *ServiceFactory) GiftRuleService() services.GiftRuleService {
+	return NewGiftRuleService(
+		f.repoFactory.GiftRuleRepository(),
+		f.logger,
+	)
+}

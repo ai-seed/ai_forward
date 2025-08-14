@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"ai-api-gateway/internal/domain/entities"
 	appLogger "ai-api-gateway/internal/infrastructure/logger"
 
 	"gorm.io/driver/postgres"
@@ -65,7 +64,7 @@ func NewGormDB(config GormConfig) (*gorm.DB, error) {
 func AutoMigrate(db *gorm.DB) error {
 	// 定义所有需要迁移的模型
 	models := []interface{}{
-		&entities.User{}, // 启用用户表迁移以支持OAuth字段
+		// &entities.User{}, // 启用用户表迁移以支持OAuth字段
 		// &entities.APIKey{},
 		// &entities.Provider{},
 		// &entities.Model{},
@@ -77,9 +76,19 @@ func AutoMigrate(db *gorm.DB) error {
 		// &entities.BillingRecord{},
 		// &entities.Tool{},
 		// &entities.UserToolInstance{},
-		&entities.ToolModelSupport{}, // 添加工具-模型支持关联表
+		// &entities.ToolModelSupport{}, // 添加工具-模型支持关联表
 		// &entities.ToolUsageLog{},
 		// &entities.MidjourneyJob{},
+
+		// 支付系统相关实体
+		// &entities.PaymentProvider{}, // 支付服务商
+		// &entities.PaymentMethod{},   // 支付方式
+		// &entities.PaymentChannel{},  // 支付渠道
+		// &entities.RechargeRecord{},  // 充值记录
+		// &entities.GiftRecord{},      // 赠送记录
+		// &entities.Transaction{},     // 交易流水
+		// &entities.RechargeOption{},  // 充值金额选项
+		// &entities.GiftRule{},        // 赠送规则
 	}
 
 	// 执行自动迁移
@@ -120,6 +129,98 @@ func CreateIndexes(db *gorm.DB) error {
 		return fmt.Errorf("failed to create api_keys status index: %w", err)
 	}
 
+	// 支付系统相关索引
+	// 充值记录表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_recharge_records_user_id ON recharge_records(user_id)").Error; err != nil {
+		return fmt.Errorf("failed to create recharge_records user_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_recharge_records_status ON recharge_records(status)").Error; err != nil {
+		return fmt.Errorf("failed to create recharge_records status index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_recharge_records_created_at ON recharge_records(created_at)").Error; err != nil {
+		return fmt.Errorf("failed to create recharge_records created_at index: %w", err)
+	}
+
+	// 赠送记录表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_gift_records_user_id ON gift_records(user_id)").Error; err != nil {
+		return fmt.Errorf("failed to create gift_records user_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_gift_records_type ON gift_records(gift_type)").Error; err != nil {
+		return fmt.Errorf("failed to create gift_records gift_type index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_gift_records_status ON gift_records(status)").Error; err != nil {
+		return fmt.Errorf("failed to create gift_records status index: %w", err)
+	}
+
+	// 交易流水表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)").Error; err != nil {
+		return fmt.Errorf("failed to create transactions user_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)").Error; err != nil {
+		return fmt.Errorf("failed to create transactions type index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at)").Error; err != nil {
+		return fmt.Errorf("failed to create transactions created_at index: %w", err)
+	}
+
+	// 支付服务商表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_providers_code ON payment_providers(code)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_providers code index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_providers_status ON payment_providers(status)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_providers status index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_providers_type ON payment_providers(type)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_providers type index: %w", err)
+	}
+
+	// 支付方式表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_methods_code ON payment_methods(code)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_methods code index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_methods_status ON payment_methods(status)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_methods status index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_methods_provider_id ON payment_methods(provider_id)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_methods provider_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_methods_sort_order ON payment_methods(sort_order)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_methods sort_order index: %w", err)
+	}
+
+	// 支付渠道表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_channels_method_id ON payment_channels(method_id)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_channels method_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_channels_provider_id ON payment_channels(provider_id)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_channels provider_id index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_payment_channels_status ON payment_channels(status)").Error; err != nil {
+		return fmt.Errorf("failed to create payment_channels status index: %w", err)
+	}
+
+	// 赠送规则表索引
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_gift_rules_type ON gift_rules(type)").Error; err != nil {
+		return fmt.Errorf("failed to create gift_rules type index: %w", err)
+	}
+
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_gift_rules_status ON gift_rules(status)").Error; err != nil {
+		return fmt.Errorf("failed to create gift_rules status index: %w", err)
+	}
+
 	return nil
 }
 
@@ -131,9 +232,9 @@ func InitializeDatabase(db *gorm.DB, log appLogger.Logger) error {
 	}
 
 	// 创建基础索引
-	if err := CreateIndexes(db); err != nil {
-		return fmt.Errorf("create indexes failed: %w", err)
-	}
+	// if err := CreateIndexes(db); err != nil {
+	// 	return fmt.Errorf("create indexes failed: %w", err)
+	// }
 
 	// 创建性能优化索引
 	if err := CreatePerformanceIndexes(db, log); err != nil {

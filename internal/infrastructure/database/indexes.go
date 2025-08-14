@@ -171,7 +171,33 @@ var PerformanceIndexes = []IndexInfo{
 		Concurrent:  true,
 	},
 
-	// 8. 部分索引优化
+	// 8. 支付系统索引
+	{
+		Name:        "idx_payment_methods_active_sort",
+		Table:       "payment_methods",
+		Columns:     []string{"sort_order", "id"},
+		Condition:   "status = 'active'",
+		Description: "活跃支付方式按排序查询",
+		Concurrent:  true,
+	},
+	{
+		Name:        "idx_payment_providers_active_type",
+		Table:       "payment_providers",
+		Columns:     []string{"type", "priority DESC"},
+		Condition:   "status = 'active'",
+		Description: "活跃服务商按类型和优先级查询",
+		Concurrent:  true,
+	},
+	{
+		Name:        "idx_payment_channels_active_weight",
+		Table:       "payment_channels",
+		Columns:     []string{"method_id", "weight DESC"},
+		Condition:   "status = 'active'",
+		Description: "活跃支付渠道按权重查询",
+		Concurrent:  true,
+	},
+
+	// 9. 部分索引优化
 	{
 		Name:        "idx_api_keys_active_user_id",
 		Table:       "api_keys",
@@ -262,7 +288,7 @@ func CreatePerformanceIndexes(db *gorm.DB, log logger.Logger) error {
 // indexExists 检查索引是否存在
 func indexExists(db *gorm.DB, indexName string) (bool, error) {
 	var count int64
-	
+
 	// PostgreSQL
 	if isPostgreSQL(db) {
 		err := db.Raw(`
@@ -301,7 +327,7 @@ func indexExists(db *gorm.DB, indexName string) (bool, error) {
 // createIndex 创建索引
 func createIndex(ctx context.Context, db *gorm.DB, indexInfo IndexInfo, log logger.Logger) error {
 	sql := buildCreateIndexSQL(indexInfo)
-	
+
 	log.WithFields(map[string]interface{}{
 		"index_name": indexInfo.Name,
 		"sql":        sql,
@@ -314,15 +340,15 @@ func createIndex(ctx context.Context, db *gorm.DB, indexInfo IndexInfo, log logg
 // buildCreateIndexSQL 构建创建索引的SQL
 func buildCreateIndexSQL(indexInfo IndexInfo) string {
 	var sql strings.Builder
-	
+
 	sql.WriteString("CREATE")
-	
+
 	if indexInfo.Concurrent && isPostgreSQL(nil) {
 		sql.WriteString(" INDEX CONCURRENTLY")
 	} else {
 		sql.WriteString(" INDEX")
 	}
-	
+
 	sql.WriteString(" IF NOT EXISTS ")
 	sql.WriteString(indexInfo.Name)
 	sql.WriteString(" ON ")
@@ -330,7 +356,7 @@ func buildCreateIndexSQL(indexInfo IndexInfo) string {
 	sql.WriteString(" (")
 	sql.WriteString(strings.Join(indexInfo.Columns, ", "))
 	sql.WriteString(")")
-	
+
 	if indexInfo.Condition != "" {
 		sql.WriteString(" WHERE ")
 		sql.WriteString(indexInfo.Condition)
@@ -369,11 +395,11 @@ func AnalyzeIndexPerformance(db *gorm.DB, log logger.Logger) error {
 
 	// 获取索引使用统计
 	var indexStats []struct {
-		SchemaName   string `json:"schemaname"`
-		TableName    string `json:"tablename"`
-		IndexName    string `json:"indexname"`
-		IdxTupRead   int64  `json:"idx_tup_read"`
-		IdxTupFetch  int64  `json:"idx_tup_fetch"`
+		SchemaName  string `json:"schemaname"`
+		TableName   string `json:"tablename"`
+		IndexName   string `json:"indexname"`
+		IdxTupRead  int64  `json:"idx_tup_read"`
+		IdxTupFetch int64  `json:"idx_tup_fetch"`
 	}
 
 	err := db.Raw(`
@@ -397,21 +423,21 @@ func AnalyzeIndexPerformance(db *gorm.DB, log logger.Logger) error {
 	// 输出索引使用统计
 	for _, stat := range indexStats {
 		log.WithFields(map[string]interface{}{
-			"table":       stat.TableName,
-			"index":       stat.IndexName,
-			"tup_read":    stat.IdxTupRead,
-			"tup_fetch":   stat.IdxTupFetch,
+			"table":     stat.TableName,
+			"index":     stat.IndexName,
+			"tup_read":  stat.IdxTupRead,
+			"tup_fetch": stat.IdxTupFetch,
 		}).Info("Index usage statistics")
 	}
 
 	// 获取表扫描统计
 	var tableStats []struct {
-		SchemaName   string `json:"schemaname"`
-		TableName    string `json:"tablename"`
-		SeqScan      int64  `json:"seq_scan"`
-		SeqTupRead   int64  `json:"seq_tup_read"`
-		IdxScan      int64  `json:"idx_scan"`
-		IdxTupFetch  int64  `json:"idx_tup_fetch"`
+		SchemaName  string `json:"schemaname"`
+		TableName   string `json:"tablename"`
+		SeqScan     int64  `json:"seq_scan"`
+		SeqTupRead  int64  `json:"seq_tup_read"`
+		IdxScan     int64  `json:"idx_scan"`
+		IdxTupFetch int64  `json:"idx_tup_fetch"`
 	}
 
 	err = db.Raw(`
@@ -435,7 +461,7 @@ func AnalyzeIndexPerformance(db *gorm.DB, log logger.Logger) error {
 
 	// 输出表扫描统计
 	for _, stat := range tableStats {
-		scanRatio := float64(stat.IdxScan) / float64(stat.SeqScan + stat.IdxScan)
+		scanRatio := float64(stat.IdxScan) / float64(stat.SeqScan+stat.IdxScan)
 		log.WithFields(map[string]interface{}{
 			"table":         stat.TableName,
 			"seq_scan":      stat.SeqScan,
