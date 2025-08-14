@@ -51,12 +51,6 @@ type BalanceUpdateRequest struct {
 	Description string  `json:"description,omitempty"`
 }
 
-// UserRechargeRequest 用户充值请求
-type UserRechargeRequest struct {
-	Amount      float64 `json:"amount" validate:"required,gt=0"`
-	Description string  `json:"description,omitempty"`
-}
-
 // OAuthUserInfo OAuth用户信息
 type OAuthUserInfo struct {
 	ID       string  `json:"id"`

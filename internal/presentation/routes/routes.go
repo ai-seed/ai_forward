@@ -156,7 +156,7 @@ func (r *Router) SetupRoutes() {
 		{
 			authProtected.GET("/profile", authHandler.GetProfile)
 			authProtected.POST("/change-password", authHandler.ChangePassword)
-			authProtected.POST("/recharge", authHandler.Recharge)
+
 		}
 	}
 
