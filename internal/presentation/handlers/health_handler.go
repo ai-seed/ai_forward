@@ -33,7 +33,6 @@ func NewHealthHandler(logger logger.Logger) *HealthHandler {
 // @Failure 503 {object} dto.Response "健康检查失败"
 // @Router /health [get]
 func (h *HealthHandler) HealthCheck(c *gin.Context) {
-	// 简单的健康检查实现
 	result := map[string]interface{}{
 		"status":    "healthy",
 		"timestamp": time.Now(),

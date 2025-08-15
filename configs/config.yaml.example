@@ -20,6 +20,8 @@ database:
   max_open_conns: 25
   max_idle_conns: 5
   conn_max_lifetime: 300s
+  # 数据库连接保活间隔（定期执行SELECT 1来维护连接池）
+  keep_alive_interval: 30s
 
 logging:
   level: "info"

@@ -19,6 +19,7 @@ import (
 	"ai-api-gateway/internal/infrastructure/verification"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // ServiceFactory 服务工厂
@@ -454,4 +455,9 @@ func (f *ServiceFactory) GiftRuleService() services.GiftRuleService {
 		f.repoFactory.GiftRuleRepository(),
 		f.logger,
 	)
+}
+
+// GormDB 获取GORM数据库连接
+func (f *ServiceFactory) GormDB() *gorm.DB {
+	return f.repoFactory.GormDB()
 }

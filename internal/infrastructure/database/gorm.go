@@ -1,8 +1,10 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	appLogger "ai-api-gateway/internal/infrastructure/logger"
@@ -278,4 +280,65 @@ func GetDBStats(db *gorm.DB) (map[string]interface{}, error) {
 		"max_idle_time_closed": stats.MaxIdleTimeClosed,
 		"max_lifetime_closed":  stats.MaxLifetimeClosed,
 	}, nil
+}
+
+// ConnectionKeepAliveService 数据库连接保活服务
+type ConnectionKeepAliveService struct {
+	db       *gorm.DB
+	logger   appLogger.Logger
+	interval time.Duration
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+}
+
+// NewConnectionKeepAliveService 创建数据库连接保活服务
+func NewConnectionKeepAliveService(db *gorm.DB, logger appLogger.Logger, interval time.Duration) *ConnectionKeepAliveService {
+	if interval <= 0 {
+		interval = 30 * time.Second // 默认30秒
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	return &ConnectionKeepAliveService{
+		db:       db,
+		logger:   logger,
+		interval: interval,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+}
+
+// Start 启动连接保活服务
+func (s *ConnectionKeepAliveService) Start() {
+	s.wg.Add(1)
+	go s.keepAliveLoop()
+	s.logger.WithField("interval", s.interval).Info("Database connection keep-alive service started")
+}
+
+// Stop 停止连接保活服务
+func (s *ConnectionKeepAliveService) Stop() {
+	s.cancel()
+	s.wg.Wait()
+	s.logger.Info("Database connection keep-alive service stopped")
+}
+
+// keepAliveLoop 保活循环
+func (s *ConnectionKeepAliveService) keepAliveLoop() {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(s.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			// 执行简单的SELECT 1查询来保持连接活跃
+			var result int
+			if err := s.db.Raw("SELECT 1").Scan(&result).Error; err != nil {
+				s.logger.WithField("error", err.Error()).Error("Database keep-alive query failed")
+			}
+		}
+	}
 }

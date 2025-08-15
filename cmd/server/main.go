@@ -93,6 +93,10 @@ func main() {
 
 	log.Info("PostgreSQL connection established with GORM")
 
+	// 启动数据库连接保活服务
+	keepAliveService := database.NewConnectionKeepAliveService(gormDB, log, cfg.Database.KeepAliveInterval)
+	keepAliveService.Start()
+
 	// 创建Redis工厂（可选）
 	var redisFactory *redis.RedisFactory
 	var cacheService *redis.CacheService
@@ -161,6 +165,9 @@ func main() {
 	<-quit
 
 	log.Info("Shutting down server...")
+
+	// 停止数据库连接保活服务
+	keepAliveService.Stop()
 
 	// 停止 Midjourney 队列服务
 	if err := midjourneyQueueService.StopWorkers(); err != nil {

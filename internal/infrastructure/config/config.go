@@ -8,16 +8,17 @@ import (
 )
 
 type dbConfig struct {
-	Driver          string        `mapstructure:"driver"`
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	User            string        `mapstructure:"user"`
-	Password        string        `mapstructure:"password"`
-	DBName          string        `mapstructure:"dbname"`
-	SSLMode         string        `mapstructure:"sslmode"`
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	Driver            string        `mapstructure:"driver"`
+	Host              string        `mapstructure:"host"`
+	Port              int           `mapstructure:"port"`
+	User              string        `mapstructure:"user"`
+	Password          string        `mapstructure:"password"`
+	DBName            string        `mapstructure:"dbname"`
+	SSLMode           string        `mapstructure:"sslmode"`
+	MaxOpenConns      int           `mapstructure:"max_open_conns"`
+	MaxIdleConns      int           `mapstructure:"max_idle_conns"`
+	ConnMaxLifetime   time.Duration `mapstructure:"conn_max_lifetime"`
+	KeepAliveInterval time.Duration `mapstructure:"keep_alive_interval"` // 连接保活间隔
 }
 
 // Config 应用配置
@@ -217,6 +218,7 @@ func setDefaults() {
 	viper.SetDefault("database.max_open_conns", 25)
 	viper.SetDefault("database.max_idle_conns", 5)
 	viper.SetDefault("database.conn_max_lifetime", "300s")
+	viper.SetDefault("database.keep_alive_interval", "30s") // 默认30秒保活间隔
 
 	// 日志默认值
 	viper.SetDefault("logging.level", "info")
