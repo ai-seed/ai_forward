@@ -31,6 +31,18 @@ type ModelRepository interface {
 	// GetActiveModels 获取活跃的模型列表
 	GetActiveModels(ctx context.Context) ([]*entities.Model, error)
 
+	// GetActiveModelsWithPagination 获取活跃的模型列表（分页）
+	GetActiveModelsWithPagination(ctx context.Context, offset, limit int) ([]*entities.Model, error)
+
+	// CountActiveModels 获取活跃模型总数
+	CountActiveModels(ctx context.Context) (int64, error)
+
+	// GetActiveModelsWithPaginationAndFilters 获取活跃的模型列表（分页+筛选）
+	GetActiveModelsWithPaginationAndFilters(ctx context.Context, offset, limit int, filters map[string]interface{}) ([]*entities.Model, error)
+
+	// CountActiveModelsWithFilters 获取活跃模型总数（带筛选）
+	CountActiveModelsWithFilters(ctx context.Context, filters map[string]interface{}) (int64, error)
+
 	// GetModelsByType 根据类型获取模型列表
 	GetModelsByType(ctx context.Context, modelType entities.ModelType) ([]*entities.Model, error)
 

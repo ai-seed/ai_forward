@@ -214,6 +214,111 @@ func (r *modelRepositoryGorm) GetActiveModels(ctx context.Context) ([]*entities.
 	return models, nil
 }
 
+// GetActiveModelsWithPagination 获取活跃的模型列表（分页）
+func (r *modelRepositoryGorm) GetActiveModelsWithPagination(ctx context.Context, offset, limit int) ([]*entities.Model, error) {
+	var models []*entities.Model
+	if err := r.db.WithContext(ctx).
+		Where("status = ?", entities.ModelStatusActive).
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("failed to get active models with pagination: %w", err)
+	}
+
+	// 手动加载厂商信息
+	if err := r.loadProvidersForModels(ctx, models); err != nil {
+		return nil, fmt.Errorf("failed to load providers for models: %w", err)
+	}
+
+	return models, nil
+}
+
+// CountActiveModels 获取活跃模型总数
+func (r *modelRepositoryGorm) CountActiveModels(ctx context.Context) (int64, error) {
+	// 尝试从缓存获取活跃模型总数
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveModelsCount
+		var cachedCount int64
+		if err := r.cache.Get(ctx, cacheKey, &cachedCount); err == nil {
+			return cachedCount, nil
+		}
+	}
+
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&entities.Model{}).
+		Where("status = ?", entities.ModelStatusActive).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count active models: %w", err)
+	}
+
+	// 缓存活跃模型总数（模型数量变化不频繁，缓存15分钟）
+	if r.cache != nil {
+		cacheKey := CacheKeyActiveModelsCount
+		cacheManager := cache.GetCacheTTLManager()
+		ttl := cacheManager.GetModelListTTL()
+		r.cache.Set(ctx, cacheKey, count, ttl)
+	}
+
+	return count, nil
+}
+
+// GetActiveModelsWithPaginationAndFilters 获取活跃的模型列表（分页+筛选）
+func (r *modelRepositoryGorm) GetActiveModelsWithPaginationAndFilters(ctx context.Context, offset, limit int, filters map[string]interface{}) ([]*entities.Model, error) {
+	query := r.db.WithContext(ctx).Where("models.status = ?", entities.ModelStatusActive)
+
+	// 应用筛选条件
+	query = r.applyFilters(query, filters)
+
+	var models []*entities.Model
+	if err := query.Order("models.created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&models).Error; err != nil {
+		return nil, fmt.Errorf("failed to get active models with pagination and filters: %w", err)
+	}
+
+	// 手动加载厂商信息
+	if err := r.loadProvidersForModels(ctx, models); err != nil {
+		return nil, fmt.Errorf("failed to load providers for models: %w", err)
+	}
+
+	return models, nil
+}
+
+// CountActiveModelsWithFilters 获取活跃模型总数（带筛选）
+func (r *modelRepositoryGorm) CountActiveModelsWithFilters(ctx context.Context, filters map[string]interface{}) (int64, error) {
+	query := r.db.WithContext(ctx).Model(&entities.Model{}).Where("models.status = ?", entities.ModelStatusActive)
+
+	// 应用筛选条件
+	query = r.applyFilters(query, filters)
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count active models with filters: %w", err)
+	}
+
+	return count, nil
+}
+
+// applyFilters 应用筛选条件
+func (r *modelRepositoryGorm) applyFilters(query *gorm.DB, filters map[string]interface{}) *gorm.DB {
+	// 按厂商筛选
+	if provider, ok := filters["provider"].(string); ok && provider != "" {
+		// 需要join model_providers表
+		query = query.Joins("JOIN model_providers ON models.model_provider_id = model_providers.id").
+			Where("model_providers.display_name = ?", provider)
+	}
+
+	// 按类型筛选
+	if modelType, ok := filters["type"].(string); ok && modelType != "" {
+		query = query.Where("models.model_type = ?", modelType)
+	}
+
+	return query
+}
+
 // loadProvidersForModels 手动加载模型的厂商信息
 func (r *modelRepositoryGorm) loadProvidersForModels(ctx context.Context, models []*entities.Model) error {
 	if len(models) == 0 {

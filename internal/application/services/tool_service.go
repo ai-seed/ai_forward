@@ -1,6 +1,8 @@
 package services
 
 import (
+	"ai-api-gateway/internal/application/dto"
+	"ai-api-gateway/internal/application/utils"
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"context"
@@ -430,6 +432,259 @@ func (s *ToolService) GetAvailableModels(ctx context.Context) ([]map[string]inte
 	}
 
 	return result, nil
+}
+
+// GetAvailableModelsWithPagination 获取可用模型列表（分页）
+func (s *ToolService) GetAvailableModelsWithPagination(ctx context.Context, pagination *dto.PaginationRequest) (*dto.ListResponseBase, error) {
+	// 获取总数
+	total, err := s.modelRepo.CountActiveModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count active models: %w", err)
+	}
+
+	// 计算偏移量
+	offset := pagination.GetOffset()
+	limit := pagination.GetLimit()
+
+	// 获取分页的模型列表
+	models, err := s.modelRepo.GetActiveModelsWithPagination(ctx, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get models with pagination: %w", err)
+	}
+
+	// 收集所有模型ID
+	modelIDs := make([]int64, len(models))
+	for i, model := range models {
+		modelIDs[i] = model.ID
+	}
+
+	// 批量获取所有模型的价格信息
+	pricingMap, err := s.modelPricingRepo.GetCurrentPricingBatch(ctx, modelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pricing batch: %w", err)
+	}
+
+	var result []map[string]interface{}
+	for _, model := range models {
+		displayName := model.Name
+		if model.DisplayName != nil {
+			displayName = *model.DisplayName
+		}
+
+		description := ""
+		if model.Description != nil {
+			description = *model.Description
+		}
+
+		// 构建厂商信息（如果厂商信息存在）
+		var providerInfo map[string]interface{}
+		if model.ModelProvider != nil {
+			providerInfo = map[string]interface{}{
+				"id":           model.ModelProvider.ID,
+				"name":         model.ModelProvider.Name,
+				"display_name": model.ModelProvider.DisplayName,
+				"color":        model.ModelProvider.Color,
+				"sort_order":   model.ModelProvider.SortOrder,
+			}
+		} else {
+			// 如果厂商信息不存在，提供默认值
+			providerInfo = map[string]interface{}{
+				"id":           0,
+				"name":         "unknown",
+				"display_name": "Unknown",
+				"color":        "#6B7280",
+				"sort_order":   999,
+			}
+		}
+
+		// 从批量获取的数据中获取模型定价信息
+		pricingInfo := s.buildModelPricingInfo(pricingMap[model.ID])
+
+		result = append(result, map[string]interface{}{
+			"id":                 model.ID,
+			"name":               model.Name,
+			"slug":               model.Slug,
+			"display_name":       displayName,
+			"description":        description,
+			"description_en":     model.DescriptionEN,
+			"description_zh":     model.DescriptionZH,
+			"description_jp":     model.DescriptionJP,
+			"model_type":         model.ModelType,
+			"model_type_en":      model.ModelTypeEN,
+			"model_type_jp":      model.ModelTypeJP,
+			"model_type_zh":      model.ModelTypeZH,
+			"provider":           providerInfo,
+			"context_length":     model.ContextLength,
+			"max_tokens":         model.MaxTokens,
+			"supports_streaming": model.SupportsStreaming,
+			"supports_functions": model.SupportsFunctions,
+			"status":             model.Status,
+			"pricing":            pricingInfo["pricing"],
+			"rate_multiplier":    pricingInfo["rate_multiplier"],
+			"created_at":         model.CreatedAt,
+			"updated_at":         model.UpdatedAt,
+		})
+	}
+
+	// 使用分页助手构建响应
+	paginationHelper := utils.NewPaginationHelper()
+	return paginationHelper.BuildListResponse(result, total, pagination), nil
+}
+
+// GetAvailableModelsWithPaginationAndFilters 获取可用模型列表（分页+筛选）
+func (s *ToolService) GetAvailableModelsWithPaginationAndFilters(ctx context.Context, pagination *dto.PaginationRequest, filters map[string]interface{}) (*dto.ListResponseBase, error) {
+	// 获取总数（带筛选）
+	total, err := s.modelRepo.CountActiveModelsWithFilters(ctx, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count active models with filters: %w", err)
+	}
+
+	// 计算偏移量
+	offset := pagination.GetOffset()
+	limit := pagination.GetLimit()
+
+	// 获取分页的模型列表（带筛选）
+	models, err := s.modelRepo.GetActiveModelsWithPaginationAndFilters(ctx, offset, limit, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get models with pagination and filters: %w", err)
+	}
+
+	// 收集所有模型ID
+	modelIDs := make([]int64, len(models))
+	for i, model := range models {
+		modelIDs[i] = model.ID
+	}
+
+	// 批量获取所有模型的价格信息
+	pricingMap, err := s.modelPricingRepo.GetCurrentPricingBatch(ctx, modelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pricing batch: %w", err)
+	}
+
+	var result []map[string]interface{}
+	for _, model := range models {
+		displayName := model.Name
+		if model.DisplayName != nil {
+			displayName = *model.DisplayName
+		}
+
+		description := ""
+		if model.Description != nil {
+			description = *model.Description
+		}
+
+		// 构建厂商信息（如果厂商信息存在）
+		var providerInfo map[string]interface{}
+		if model.ModelProvider != nil {
+			providerInfo = map[string]interface{}{
+				"id":           model.ModelProvider.ID,
+				"name":         model.ModelProvider.Name,
+				"display_name": model.ModelProvider.DisplayName,
+				"color":        model.ModelProvider.Color,
+				"sort_order":   model.ModelProvider.SortOrder,
+			}
+		} else {
+			// 如果厂商信息不存在，提供默认值
+			providerInfo = map[string]interface{}{
+				"id":           0,
+				"name":         "unknown",
+				"display_name": "Unknown",
+				"color":        "#6B7280",
+				"sort_order":   999,
+			}
+		}
+
+		// 从批量获取的数据中获取模型定价信息
+		pricingInfo := s.buildModelPricingInfo(pricingMap[model.ID])
+
+		result = append(result, map[string]interface{}{
+			"id":                 model.ID,
+			"name":               model.Name,
+			"slug":               model.Slug,
+			"display_name":       displayName,
+			"description":        description,
+			"description_en":     model.DescriptionEN,
+			"description_zh":     model.DescriptionZH,
+			"description_jp":     model.DescriptionJP,
+			"model_type":         model.ModelType,
+			"model_type_en":      model.ModelTypeEN,
+			"model_type_jp":      model.ModelTypeJP,
+			"model_type_zh":      model.ModelTypeZH,
+			"provider":           providerInfo,
+			"context_length":     model.ContextLength,
+			"max_tokens":         model.MaxTokens,
+			"supports_streaming": model.SupportsStreaming,
+			"supports_functions": model.SupportsFunctions,
+			"status":             model.Status,
+			"pricing":            pricingInfo["pricing"],
+			"rate_multiplier":    pricingInfo["rate_multiplier"],
+			"created_at":         model.CreatedAt,
+			"updated_at":         model.UpdatedAt,
+		})
+	}
+
+	// 使用分页助手构建响应
+	paginationHelper := utils.NewPaginationHelper()
+	return paginationHelper.BuildListResponse(result, total, pagination), nil
+}
+
+// GetModelCategories 获取模型分类信息
+func (s *ToolService) GetModelCategories(ctx context.Context) (map[string]interface{}, error) {
+	// 获取所有活跃模型（用于提取厂商信息）
+	models, err := s.modelRepo.GetActiveModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active models: %w", err)
+	}
+
+	// 提取厂商信息
+	providerMap := make(map[int64]map[string]interface{})
+	typeSet := make(map[string]bool)
+
+	for _, model := range models {
+		// 收集厂商信息
+		if model.ModelProvider != nil {
+			providerMap[model.ModelProvider.ID] = map[string]interface{}{
+				"id":           model.ModelProvider.ID,
+				"name":         model.ModelProvider.Name,
+				"display_name": model.ModelProvider.DisplayName,
+				"color":        model.ModelProvider.Color,
+				"sort_order":   model.ModelProvider.SortOrder,
+			}
+		}
+
+		// 收集模型类型
+		if model.ModelType != "" {
+			typeSet[string(model.ModelType)] = true
+		}
+	}
+
+	// 转换厂商信息为数组并按sort_order排序
+	var providers []map[string]interface{}
+	for _, provider := range providerMap {
+		providers = append(providers, provider)
+	}
+
+	// 按sort_order排序厂商
+	for i := 0; i < len(providers)-1; i++ {
+		for j := i + 1; j < len(providers); j++ {
+			sortOrderI, okI := providers[i]["sort_order"].(int)
+			sortOrderJ, okJ := providers[j]["sort_order"].(int)
+			if okI && okJ && sortOrderI > sortOrderJ {
+				providers[i], providers[j] = providers[j], providers[i]
+			}
+		}
+	}
+
+	// 转换类型信息为数组
+	var types []string
+	for modelType := range typeSet {
+		types = append(types, modelType)
+	}
+
+	return map[string]interface{}{
+		"providers": providers,
+		"types":     types,
+	}, nil
 }
 
 // buildModelPricingInfo 构建模型定价信息（从已获取的定价数据）

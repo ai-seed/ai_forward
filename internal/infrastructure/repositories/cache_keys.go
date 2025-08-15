@@ -20,12 +20,13 @@ const (
 	CacheKeyActiveAPIKeys  = "apikeys:active:user:%d"
 
 	// 模型相关缓存key
-	CacheKeyModelByID        = "model:id:%d"
-	CacheKeyModelBySlug      = "model:slug:%s"
-	CacheKeyActiveModels     = "models:active"
-	CacheKeyAvailableModels  = "models:available"
-	CacheKeyModelsByType     = "models:type:%s"
-	CacheKeyModelsByProvider = "models:provider:%d"
+	CacheKeyModelByID         = "model:id:%d"
+	CacheKeyModelBySlug       = "model:slug:%s"
+	CacheKeyActiveModels      = "models:active"
+	CacheKeyActiveModelsCount = "models:active:count"
+	CacheKeyAvailableModels   = "models:available"
+	CacheKeyModelsByType      = "models:type:%s"
+	CacheKeyModelsByProvider  = "models:provider:%d"
 
 	// 提供商相关缓存key
 	CacheKeyProviderByID                = "provider:id:%d"

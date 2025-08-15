@@ -302,6 +302,7 @@ func (r *Router) SetupRoutes() {
 	{
 		publicTools.GET("/types", toolHandler.GetTools)
 		publicTools.GET("/models", toolHandler.GetModels)
+		publicTools.GET("/models/categories", toolHandler.GetModelCategories)
 		publicTools.GET("/public", toolHandler.GetPublicTools)
 		publicTools.GET("/share/:token", toolHandler.GetSharedToolInstance)
 		publicTools.GET("/by-code/:code", toolHandler.GetToolInstanceByCode) // 通过code获取工具信息

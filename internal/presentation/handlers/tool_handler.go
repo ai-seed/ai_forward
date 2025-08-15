@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/application/services"
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/infrastructure/logger"
@@ -441,16 +442,51 @@ func (h *ToolHandler) GetToolInstanceByCode(c *gin.Context) {
 
 // GetModels 获取可用模型列表
 // @Summary 获取AI模型列表
-// @Description 获取可用的AI模型列表，仅返回活跃状态的聊天模型
+// @Description 获取可用的AI模型列表，支持分页查询
 // @Tags models
 // @Accept json
 // @Produce json
-// @Success 200 {object} object{success=bool,data=[]entities.Model} "获取成功"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param provider query string false "厂商筛选"
+// @Param type query string false "类型筛选"
+// @Success 200 {object} object{success=bool,data=[]entities.Model,total=int64,page=int,page_size=int,total_pages=int} "获取成功"
+// @Failure 400 {object} object{success=bool,message=string,error=string} "请求参数错误"
 // @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
 // @Router /tools/models [get]
 func (h *ToolHandler) GetModels(c *gin.Context) {
-	// 获取聊天类型的活跃模型
-	models, err := h.toolService.GetAvailableModels(c.Request.Context())
+	// 解析分页参数
+	var pagination dto.PaginationRequest
+	if err := c.ShouldBindQuery(&pagination); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid pagination parameters",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 设置默认值
+	pagination.SetDefaults()
+	if pagination.PageSize > 50 { // 限制每页最大数量为50
+		pagination.PageSize = 50
+	}
+
+	// 获取筛选参数
+	provider := c.Query("provider")
+	modelType := c.Query("type")
+
+	// 构建筛选条件
+	filters := map[string]interface{}{}
+	if provider != "" && provider != "All" {
+		filters["provider"] = provider
+	}
+	if modelType != "" && modelType != "All" {
+		filters["type"] = modelType
+	}
+
+	// 获取分页的模型列表
+	result, err := h.toolService.GetAvailableModelsWithPaginationAndFilters(c.Request.Context(), &pagination, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -461,8 +497,39 @@ func (h *ToolHandler) GetModels(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"data":        result.Data,
+		"total":       result.Total,
+		"page":        result.Page,
+		"page_size":   result.PageSize,
+		"total_pages": result.TotalPages,
+	})
+}
+
+// GetModelCategories 获取模型分类列表
+// @Summary 获取模型分类列表
+// @Description 获取所有可用的模型厂商分类和类型分类
+// @Tags models
+// @Accept json
+// @Produce json
+// @Success 200 {object} object{success=bool,data=object{providers=[]object,types=[]string}} "获取成功"
+// @Failure 500 {object} object{success=bool,message=string,error=string} "服务器内部错误"
+// @Router /tools/models/categories [get]
+func (h *ToolHandler) GetModelCategories(c *gin.Context) {
+	// 获取模型分类信息
+	categories, err := h.toolService.GetModelCategories(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get model categories",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    models,
+		"data":    categories,
 	})
 }
 
