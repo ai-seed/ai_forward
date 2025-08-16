@@ -381,7 +381,7 @@ func (s *paymentServiceImpl) generatePaymentURL(record *entities.RechargeRecord,
 	switch paymentProvider.Code {
 	case "upay":
 		s.logger.WithField("provider_code", paymentProvider.Code).Info("Using UPay payment provider")
-		return s.generateUPayPaymentURL(record, req)
+		return s.generateUPayPaymentURL(record, req, paymentProvider.Config)
 	case "test":
 		// 测试服务商，返回前端测试页面
 		s.logger.WithField("provider_code", paymentProvider.Code).Info("Using test payment provider")
@@ -762,7 +762,7 @@ func (s *paymentServiceImpl) toPaymentMethodResponse(method *entities.PaymentMet
 }
 
 // generateUPayPaymentURL 生成UPay支付链接
-func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRecord, req *dto.CreateRechargeRequest) string {
+func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRecord, req *dto.CreateRechargeRequest, chain string) string {
 	ctx := context.Background()
 
 	// 获取或创建UPay客户端
@@ -774,11 +774,13 @@ func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRec
 		}).Error("Failed to get UPay client")
 		return s.generateDefaultPaymentURL(record)
 	}
-
+	if chain == "" {
+		chain = "1"
+	}
 	// 构建UPay创建订单请求
 	upayReq := &clients.CreateOrderRequest{
 		MerchantOrderNo: record.OrderNo,
-		ChainType:       clients.ChainType(s.config.UPay.DefaultChain),
+		ChainType:       clients.ChainType(chain),
 		FiatAmount:      fmt.Sprintf("%.2f", record.Amount),
 		FiatCurrency:    clients.FiatCurrency(s.config.UPay.DefaultCurrency),
 		ProductName:     "Account Recharge", // 使用英文避免编码问题
