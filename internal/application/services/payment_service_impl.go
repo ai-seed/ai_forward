@@ -798,7 +798,7 @@ func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRec
 
 	// 设置重定向URL（可选）
 	if s.config.OAuth.FrontendURL != "" {
-		redirectURL := fmt.Sprintf("%s/admin/pay/result?order_no=%s", s.config.OAuth.FrontendURL, record.OrderNo)
+		redirectURL := fmt.Sprintf("%s/admin", s.config.OAuth.FrontendURL)
 		upayReq.RedirectURL = redirectURL
 	}
 
