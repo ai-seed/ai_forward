@@ -440,7 +440,7 @@ func (s *paymentServiceImpl) generateDefaultPaymentURL(record *entities.Recharge
 	}
 
 	// 构建前端支付页面URL，包含订单信息
-	paymentURL := fmt.Sprintf("%s/admin/pay?order_no=%s&amount=%.2f&method=%s",
+	paymentURL := fmt.Sprintf("%s/pay?order_no=%s&amount=%.2f&method=%s",
 		frontendBaseURL, record.OrderNo, record.Amount, record.PaymentMethodCode)
 
 	s.logger.WithFields(map[string]interface{}{
@@ -800,7 +800,7 @@ func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRec
 
 	// 设置重定向URL（可选）
 	if s.config.OAuth.FrontendURL != "" {
-		redirectURL := fmt.Sprintf("%s/admin", s.config.OAuth.FrontendURL)
+		redirectURL := s.config.OAuth.FrontendURL
 		upayReq.RedirectURL = redirectURL
 	}
 
