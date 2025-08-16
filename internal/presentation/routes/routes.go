@@ -86,6 +86,18 @@ func (r *Router) SetupRoutes() {
 		r.serviceFactory.GiftService(),
 		r.logger,
 	)
+
+	// 创建UPay回调处理器（用于特定的UPay回调格式处理）
+	var upayCallbackHandler *handlers.UPayCallbackHandler
+	if r.config.UPay.Enabled {
+		// UPay回调处理器将使用支付服务中的动态客户端
+		// 这里传入nil，在处理器中通过支付服务获取客户端
+		upayCallbackHandler = handlers.NewUPayCallbackHandler(
+			r.serviceFactory.PaymentService(),
+			nil, // 客户端将在需要时动态获取
+			r.logger,
+		)
+	}
 	userHandler := handlers.NewUserHandler(r.serviceFactory.UserService(), r.logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(
 		r.serviceFactory.APIKeyService(),
@@ -214,7 +226,17 @@ func (r *Router) SetupRoutes() {
 		// 公开接口（无需认证）
 		payment.GET("/methods", paymentHandler.GetPaymentMethods)
 		payment.GET("/recharge-options", paymentHandler.GetRechargeOptions)
+
+		// 统一回调接口 - 新的统一格式：/api/v1/payment/callback/:orderNo
+		payment.POST("/callback/:orderNo", paymentHandler.ProcessUnifiedPaymentCallback)
+
+		// 兼容旧的回调接口（向后兼容）
 		payment.POST("/callback", paymentHandler.ProcessPaymentCallback)
+
+		// UPay特定回调接口（处理UPay特定格式，最终调用统一的回调处理逻辑）
+		if upayCallbackHandler != nil {
+			payment.POST("/upay/callback", upayCallbackHandler.HandleCallback)
+		}
 
 		// 支付页面接口（无需认证，模拟第三方支付页面）
 		payment.GET("/pay", paymentHandler.GetPaymentPage)

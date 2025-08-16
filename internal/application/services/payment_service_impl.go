@@ -3,12 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"ai-api-gateway/internal/application/dto"
 	"ai-api-gateway/internal/domain/entities"
 	"ai-api-gateway/internal/domain/repositories"
 	"ai-api-gateway/internal/domain/services"
+	"ai-api-gateway/internal/infrastructure/clients"
 	"ai-api-gateway/internal/infrastructure/config"
 	"ai-api-gateway/internal/infrastructure/logger"
 
@@ -17,14 +19,16 @@ import (
 
 // paymentServiceImpl 支付服务实现
 type paymentServiceImpl struct {
-	rechargeRepo       repositories.RechargeRecordRepository
-	rechargeOptionRepo repositories.RechargeOptionRepository
-	paymentMethodRepo  repositories.PaymentMethodRepository
-	transactionRepo    repositories.TransactionRepository
-	userRepo           repositories.UserRepository
-	transactionSvc     services.TransactionService
-	config             *config.Config
-	logger             logger.Logger
+	rechargeRepo        repositories.RechargeRecordRepository
+	rechargeOptionRepo  repositories.RechargeOptionRepository
+	paymentMethodRepo   repositories.PaymentMethodRepository
+	paymentProviderRepo repositories.PaymentProviderRepository
+	transactionRepo     repositories.TransactionRepository
+	userRepo            repositories.UserRepository
+	transactionSvc      services.TransactionService
+	config              *config.Config
+	logger              logger.Logger
+	upayClient          *clients.UPayClient
 }
 
 // NewPaymentService 创建支付服务实例
@@ -32,21 +36,27 @@ func NewPaymentService(
 	rechargeRepo repositories.RechargeRecordRepository,
 	rechargeOptionRepo repositories.RechargeOptionRepository,
 	paymentMethodRepo repositories.PaymentMethodRepository,
+	paymentProviderRepo repositories.PaymentProviderRepository,
 	transactionRepo repositories.TransactionRepository,
 	userRepo repositories.UserRepository,
 	transactionSvc services.TransactionService,
 	config *config.Config,
 	logger logger.Logger,
 ) services.PaymentService {
+	// UPay客户端将在需要时动态创建，因为需要从数据库获取API地址
+	var upayClient *clients.UPayClient = nil
+
 	return &paymentServiceImpl{
-		rechargeRepo:       rechargeRepo,
-		rechargeOptionRepo: rechargeOptionRepo,
-		paymentMethodRepo:  paymentMethodRepo,
-		transactionRepo:    transactionRepo,
-		userRepo:           userRepo,
-		transactionSvc:     transactionSvc,
-		config:             config,
-		logger:             logger,
+		rechargeRepo:        rechargeRepo,
+		rechargeOptionRepo:  rechargeOptionRepo,
+		paymentMethodRepo:   paymentMethodRepo,
+		paymentProviderRepo: paymentProviderRepo,
+		transactionRepo:     transactionRepo,
+		userRepo:            userRepo,
+		transactionSvc:      transactionSvc,
+		config:              config,
+		logger:              logger,
+		upayClient:          upayClient,
 	}
 }
 
@@ -153,14 +163,26 @@ func (s *paymentServiceImpl) ProcessPaymentCallback(ctx context.Context, req *dt
 		return nil // 已处理过，直接返回成功
 	}
 
-	// 验证签名（这里需要根据具体的支付提供商实现）
-	if !s.verifySignature(req) {
-		return fmt.Errorf("invalid signature")
+	// 获取支付方式信息
+	paymentMethod, err := s.paymentMethodRepo.GetByID(ctx, record.PaymentMethodID)
+	if err != nil {
+		return fmt.Errorf("payment method not found: %w", err)
 	}
 
-	// 验证金额
-	if req.Amount != record.Amount {
-		return fmt.Errorf("amount mismatch: expected=%.2f, actual=%.2f", record.Amount, req.Amount)
+	// 获取支付服务商信息
+	paymentProvider, err := s.paymentProviderRepo.GetByID(ctx, paymentMethod.ProviderID)
+	if err != nil {
+		return fmt.Errorf("payment provider not found: %w", err)
+	}
+
+	// 根据支付服务商验证签名
+	if !s.verifySignatureByProvider(req, paymentProvider.Code) {
+		return fmt.Errorf("invalid signature for provider: %s", paymentProvider.Code)
+	}
+
+	// 验证金额（对于某些支付服务商可能需要特殊处理）
+	if !s.validateCallbackAmount(req, record, paymentProvider.Code) {
+		return fmt.Errorf("amount validation failed for provider: %s", paymentProvider.Code)
 	}
 
 	// 更新充值记录状态
@@ -181,12 +203,13 @@ func (s *paymentServiceImpl) ProcessPaymentCallback(ctx context.Context, req *dt
 			entities.TransactionTypeRecharge,
 			stringPtr("recharge_record"),
 			&record.ID,
-			fmt.Sprintf("充值到账，订单号：%s", record.OrderNo),
+			fmt.Sprintf("充值到账，订单号：%s，支付服务商：%s", record.OrderNo, paymentProvider.Name),
 		); err != nil {
 			s.logger.WithFields(map[string]interface{}{
 				"order_no": req.OrderNo,
 				"user_id":  record.UserID,
 				"amount":   record.ActualAmount,
+				"provider": paymentProvider.Code,
 				"error":    err.Error(),
 			}).Error("Failed to update user balance")
 			return fmt.Errorf("failed to update user balance: %w", err)
@@ -196,6 +219,7 @@ func (s *paymentServiceImpl) ProcessPaymentCallback(ctx context.Context, req *dt
 			"order_no": req.OrderNo,
 			"user_id":  record.UserID,
 			"amount":   record.ActualAmount,
+			"provider": paymentProvider.Code,
 		}).Info("Recharge completed successfully")
 
 	} else {
@@ -321,6 +345,92 @@ func (s *paymentServiceImpl) calculateExpiredTime() *time.Time {
 
 // generatePaymentURL 生成支付链接
 func (s *paymentServiceImpl) generatePaymentURL(record *entities.RechargeRecord, req *dto.CreateRechargeRequest) string {
+	// 获取支付方式信息
+	ctx := context.Background()
+	paymentMethod, err := s.paymentMethodRepo.GetByID(ctx, record.PaymentMethodID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":             err.Error(),
+			"payment_method_id": record.PaymentMethodID,
+		}).Error("Failed to get payment method")
+		return s.generateDefaultPaymentURL(record)
+	}
+
+	// 获取支付服务商信息
+	paymentProvider, err := s.paymentProviderRepo.GetByID(ctx, paymentMethod.ProviderID)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"error":       err.Error(),
+			"provider_id": paymentMethod.ProviderID,
+		}).Error("Failed to get payment provider")
+		return s.generateDefaultPaymentURL(record)
+	}
+
+	// 记录调试信息
+	s.logger.WithFields(map[string]interface{}{
+		"order_no":            record.OrderNo,
+		"payment_method_id":   record.PaymentMethodID,
+		"payment_method_code": paymentMethod.Code,
+		"provider_id":         paymentProvider.ID,
+		"provider_code":       paymentProvider.Code,
+		"provider_name":       paymentProvider.Name,
+		"provider_api_url":    paymentProvider.ApiUrl,
+	}).Info("Generating payment URL for provider")
+
+	// 根据支付服务商生成支付链接
+	switch paymentProvider.Code {
+	case "upay":
+		s.logger.WithField("provider_code", paymentProvider.Code).Info("Using UPay payment provider")
+		return s.generateUPayPaymentURL(record, req)
+	case "test":
+		// 测试服务商，返回前端测试页面
+		s.logger.WithField("provider_code", paymentProvider.Code).Info("Using test payment provider")
+		return s.generateDefaultPaymentURL(record)
+	case "wechat":
+		// TODO: 实现微信支付链接生成
+		s.logger.Info("WeChat payment URL generation not implemented yet")
+		return s.generateDefaultPaymentURL(record)
+	case "alipay":
+		// TODO: 实现支付宝支付链接生成
+		s.logger.Info("Alipay payment URL generation not implemented yet")
+		return s.generateDefaultPaymentURL(record)
+	default:
+		s.logger.WithField("provider_code", paymentProvider.Code).Warn("Unknown payment provider, using default payment page")
+		return s.generateDefaultPaymentURL(record)
+	}
+}
+
+// generateUnifiedCallbackURL 生成统一格式的回调URL
+// 将基础回调URL转换为包含订单号的统一格式：/api/v1/payment/callback/:orderNo
+func (s *paymentServiceImpl) generateUnifiedCallbackURL(baseURL, orderNo string) string {
+	if baseURL == "" {
+		return ""
+	}
+
+	// 移除末尾的斜杠
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	// 处理不同的URL格式
+	if strings.Contains(baseURL, "/upay/callback") {
+		// UPay特定格式 -> 统一格式
+		return strings.Replace(baseURL, "/upay/callback", "/callback/"+orderNo, 1)
+	} else if strings.Contains(baseURL, "/wechat/callback") {
+		// 微信特定格式 -> 统一格式
+		return strings.Replace(baseURL, "/wechat/callback", "/callback/"+orderNo, 1)
+	} else if strings.Contains(baseURL, "/alipay/callback") {
+		// 支付宝特定格式 -> 统一格式
+		return strings.Replace(baseURL, "/alipay/callback", "/callback/"+orderNo, 1)
+	} else if strings.HasSuffix(baseURL, "/callback") {
+		// 已经是统一格式的基础URL
+		return baseURL + "/" + orderNo
+	} else {
+		// 其他格式，直接添加统一路径
+		return baseURL + "/api/v1/payment/callback/" + orderNo
+	}
+}
+
+// generateDefaultPaymentURL 生成默认支付链接（前端支付页面）
+func (s *paymentServiceImpl) generateDefaultPaymentURL(record *entities.RechargeRecord) string {
 	// 从配置中获取前端地址
 	frontendBaseURL := s.config.OAuth.FrontendURL
 	if frontendBaseURL == "" {
@@ -339,7 +449,7 @@ func (s *paymentServiceImpl) generatePaymentURL(record *entities.RechargeRecord,
 		"method":       record.PaymentMethodCode,
 		"frontend_url": frontendBaseURL,
 		"payment_url":  paymentURL,
-	}).Info("Generated payment URL")
+	}).Info("Generated default payment URL")
 
 	return paymentURL
 }
@@ -493,11 +603,71 @@ func (s *paymentServiceImpl) SimulatePaymentSuccess(ctx context.Context, orderNo
 	return s.ProcessPaymentCallback(ctx, callbackReq)
 }
 
-// verifySignature 验证签名
-func (s *paymentServiceImpl) verifySignature(req *dto.PaymentCallbackRequest) bool {
-	// 这里需要根据具体的支付提供商实现签名验证
-	// 暂时返回true
-	return true
+// verifySignatureByProvider 根据支付服务商验证签名
+func (s *paymentServiceImpl) verifySignatureByProvider(req *dto.PaymentCallbackRequest, providerCode string) bool {
+	switch providerCode {
+	case "upay":
+		// UPay支付签名验证
+		if req.ExtraData != nil {
+			// 获取UPay客户端
+			ctx := context.Background()
+			upayClient, err := s.getOrCreateUPayClient(ctx)
+			if err != nil {
+				s.logger.WithFields(map[string]interface{}{
+					"error": err.Error(),
+				}).Error("Failed to get UPay client for signature verification")
+				return false
+			}
+
+			// 安全地获取ExtraData中的值
+			appID, _ := req.ExtraData["app_id"].(string)
+			exchangeRate, _ := req.ExtraData["exchange_rate"].(string)
+			cryptoAmount, _ := req.ExtraData["crypto_amount"].(string)
+
+			// 构建UPay回调请求
+			upayCallback := &clients.CallbackRequest{
+				AppID:           appID,
+				OrderNo:         req.PaymentID, // UPay订单号
+				MerchantOrderNo: req.OrderNo,   // 商户订单号
+				ExchangeRate:    exchangeRate,
+				Crypto:          cryptoAmount,
+				Status:          req.Status,
+				Signature:       req.Signature,
+			}
+			return upayClient.VerifyCallback(upayCallback)
+		}
+		return false
+	default:
+		// 其他支付方式的签名验证
+		// 可以在这里添加更多支付服务商的验证逻辑
+		s.logger.WithField("provider_code", providerCode).Warn("No signature verification implemented for provider")
+		return true // 暂时返回true，避免阻塞其他支付方式
+	}
+}
+
+// validateCallbackAmount 验证回调金额
+func (s *paymentServiceImpl) validateCallbackAmount(req *dto.PaymentCallbackRequest, record *entities.RechargeRecord, providerCode string) bool {
+	switch providerCode {
+	case "upay":
+		// UPay支付的金额验证可能需要考虑汇率转换
+		// 这里简化处理，主要验证订单金额一致性
+		if req.Amount > 0 {
+			// 允许一定的汇率误差（1%）
+			tolerance := record.Amount * 0.01
+			diff := req.Amount - record.Amount
+			if diff < 0 {
+				diff = -diff
+			}
+			return diff <= tolerance
+		}
+		return true // 如果没有金额信息，跳过验证
+	case "wechat", "alipay":
+		// 微信支付和支付宝的标准金额验证
+		return req.Amount == record.Amount
+	default:
+		// 其他支付服务商的标准金额验证
+		return req.Amount == record.Amount
+	}
 }
 
 // toRechargeResponse 转换为充值响应
@@ -589,4 +759,106 @@ func (s *paymentServiceImpl) toPaymentMethodResponse(method *entities.PaymentMet
 	}
 
 	return response
+}
+
+// generateUPayPaymentURL 生成UPay支付链接
+func (s *paymentServiceImpl) generateUPayPaymentURL(record *entities.RechargeRecord, req *dto.CreateRechargeRequest) string {
+	ctx := context.Background()
+
+	// 获取或创建UPay客户端
+	upayClient, err := s.getOrCreateUPayClient(ctx)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"order_no": record.OrderNo,
+			"error":    err.Error(),
+		}).Error("Failed to get UPay client")
+		return s.generateDefaultPaymentURL(record)
+	}
+
+	// 构建UPay创建订单请求
+	upayReq := &clients.CreateOrderRequest{
+		MerchantOrderNo: record.OrderNo,
+		ChainType:       clients.ChainType(s.config.UPay.DefaultChain),
+		FiatAmount:      fmt.Sprintf("%.2f", record.Amount),
+		FiatCurrency:    clients.FiatCurrency(s.config.UPay.DefaultCurrency),
+		ProductName:     "Account Recharge", // 使用英文避免编码问题
+	}
+
+	// 动态生成包含订单号的统一回调URL
+	if s.config.UPay.NotifyURL != "" {
+		unifiedCallbackURL := s.generateUnifiedCallbackURL(s.config.UPay.NotifyURL, record.OrderNo)
+		upayReq.NotifyURL = unifiedCallbackURL
+
+		s.logger.WithFields(map[string]interface{}{
+			"order_no":         record.OrderNo,
+			"original_notify":  s.config.UPay.NotifyURL,
+			"generated_notify": unifiedCallbackURL,
+		}).Info("Generated unified callback URL for UPay order")
+	}
+
+	// 设置重定向URL（可选）
+	if s.config.OAuth.FrontendURL != "" {
+		redirectURL := fmt.Sprintf("%s/admin/pay/result?order_no=%s", s.config.OAuth.FrontendURL, record.OrderNo)
+		upayReq.RedirectURL = redirectURL
+	}
+
+	// 调用UPay API创建订单
+	upayResp, err := upayClient.CreateOrder(ctx, upayReq)
+	if err != nil {
+		s.logger.WithFields(map[string]interface{}{
+			"order_no": record.OrderNo,
+			"amount":   record.Amount,
+			"error":    err.Error(),
+		}).Error("Failed to create UPay order")
+
+		// 如果UPay订单创建失败，返回前端支付页面
+		return s.generateDefaultPaymentURL(record)
+	}
+
+	s.logger.WithFields(map[string]interface{}{
+		"order_no":      record.OrderNo,
+		"upay_order_no": upayResp.Data.OrderNo,
+		"exchange_rate": upayResp.Data.ExchangeRate,
+		"crypto_amount": upayResp.Data.Crypto,
+		"pay_url":       upayResp.Data.PayURL,
+	}).Info("UPay order created successfully")
+
+	// 返回UPay收银台链接
+	return upayResp.Data.PayURL
+}
+
+// GetUPayClient 获取UPay客户端（用于回调处理）
+func (s *paymentServiceImpl) GetUPayClient() *clients.UPayClient {
+	return s.upayClient
+}
+
+// getOrCreateUPayClient 获取或创建UPay客户端
+func (s *paymentServiceImpl) getOrCreateUPayClient(ctx context.Context) (*clients.UPayClient, error) {
+	// 如果已经创建过，直接返回
+	if s.upayClient != nil {
+		return s.upayClient, nil
+	}
+
+	// 检查是否启用UPay
+	if !s.config.UPay.Enabled {
+		return nil, fmt.Errorf("UPay payment is not enabled")
+	}
+
+	// 从数据库获取UPay服务商信息
+	upayProvider, err := s.paymentProviderRepo.GetByCode(ctx, "upay")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get UPay provider: %w", err)
+	}
+
+	// 创建UPay客户端配置
+	upayConfig := clients.UPayConfig{
+		AppID:      s.config.UPay.AppID,
+		AppSecret:  s.config.UPay.AppSecret,
+		APIBaseURL: upayProvider.ApiUrl, // 从数据库获取API地址
+		NotifyURL:  s.config.UPay.NotifyURL,
+	}
+
+	// 创建并缓存UPay客户端
+	s.upayClient = clients.NewUPayClient(upayConfig, s.logger)
+	return s.upayClient, nil
 }

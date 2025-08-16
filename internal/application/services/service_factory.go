@@ -420,6 +420,7 @@ func (f *ServiceFactory) PaymentService() services.PaymentService {
 		f.repoFactory.RechargeRecordRepository(),
 		f.repoFactory.RechargeOptionRepository(),
 		f.repoFactory.PaymentMethodRepository(),
+		f.repoFactory.PaymentProviderRepository(),
 		f.repoFactory.TransactionRepository(),
 		f.repoFactory.UserRepository(),
 		f.TransactionService(),

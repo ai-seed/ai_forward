@@ -36,6 +36,7 @@ type Config struct {
 	Thinking     ThinkingConfig     `mapstructure:"thinking"`
 	S3           S3Config           `mapstructure:"s3"`
 	Midjourney   MidjourneyConfig   `mapstructure:"midjourney"`
+	UPay         UPayConfig         `mapstructure:"upay"`
 }
 
 // ServerConfig 服务器配置
@@ -167,6 +168,19 @@ type MidjourneyConfig struct {
 	PollInterval int `mapstructure:"poll_interval"` // 轮询间隔（秒）
 }
 
+// UPayConfig UPay支付配置
+type UPayConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`    // 是否启用UPay支付
+	AppID     string `mapstructure:"app_id"`     // UPay应用ID
+	AppSecret string `mapstructure:"app_secret"` // UPay应用密钥
+
+	NotifyURL       string  `mapstructure:"notify_url"`       // 支付回调通知URL
+	DefaultChain    string  `mapstructure:"default_chain"`    // 默认链路类型 (1:TRC20, 2:ERC20, 3:PYUSD)
+	DefaultCurrency string  `mapstructure:"default_currency"` // 默认法币类型
+	MinAmount       float64 `mapstructure:"min_amount"`       // 最小支付金额
+	MaxAmount       float64 `mapstructure:"max_amount"`       // 最大支付金额
+}
+
 // LoadConfig 加载配置
 func LoadConfig(configPath string) (*Config, error) {
 	viper.SetConfigName("config")
@@ -283,6 +297,16 @@ func setDefaults() {
 	viper.SetDefault("midjourney.worker_count", 3)
 	viper.SetDefault("midjourney.max_retries", 60)
 	viper.SetDefault("midjourney.poll_interval", 5)
+
+	// UPay默认值
+	viper.SetDefault("upay.enabled", false)
+	viper.SetDefault("upay.app_id", "")
+	viper.SetDefault("upay.app_secret", "")
+	viper.SetDefault("upay.notify_url", "")
+	viper.SetDefault("upay.default_chain", "1")      // 默认TRC20
+	viper.SetDefault("upay.default_currency", "USD") // 默认美元
+	viper.SetDefault("upay.min_amount", 1.0)
+	viper.SetDefault("upay.max_amount", 10000.0)
 }
 
 // validateConfig 验证配置

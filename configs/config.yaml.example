@@ -253,3 +253,25 @@ s3:
     - "image/webp"
     - "application/pdf"
     - "text/plain"
+
+# UPay数字货币支付配置
+upay:
+  # 是否启用UPay支付
+  enabled: false
+  # UPay应用ID
+  app_id: "your-upay-app-id"
+  # UPay应用密钥
+  app_secret: "your-upay-app-secret"
+  # 支付回调通知URL基础地址（系统会自动添加订单号生成统一格式）
+  # 例如：配置 "https://your-domain.com/api/v1/payment/callback"
+  # 系统会自动生成：https://your-domain.com/api/v1/payment/callback/ORDER123
+  notify_url: "https://your-domain.com/api/v1/payment/callback"
+  # 默认链路类型 (1:TRC20, 2:ERC20, 3:PYUSD)
+  default_chain: "1"
+  # 默认法币类型
+  default_currency: "USD"
+  # 最小支付金额
+  min_amount: 1.0
+  # 最大支付金额
+  max_amount: 10000.0
+  # 注意：API地址从数据库的payment_providers表中获取，无需在此配置

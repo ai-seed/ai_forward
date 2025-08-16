@@ -257,7 +257,69 @@ func (h *PaymentHandler) GetRechargeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.SuccessResponse(options, "Recharge options retrieved successfully"))
 }
 
-// ProcessPaymentCallback 处理支付回调
+// ProcessUnifiedPaymentCallback 处理统一格式的支付回调
+// @Summary 处理统一格式的支付回调
+// @Description 处理第三方支付的回调通知，使用统一的URL格式 /callback/:orderNo
+// @Tags 支付
+// @Accept json
+// @Produce json
+// @Param orderNo path string true "商户订单号"
+// @Param request body dto.PaymentCallbackRequest true "支付回调请求"
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/payment/callback/{orderNo} [post]
+func (h *PaymentHandler) ProcessUnifiedPaymentCallback(c *gin.Context) {
+	// 从URL路径中获取订单号
+	orderNo := c.Param("orderNo")
+	if orderNo == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number is required in URL path", nil))
+		return
+	}
+
+	var req dto.PaymentCallbackRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Invalid callback format", map[string]interface{}{"error": err.Error()}))
+		return
+	}
+
+	// 如果请求体中没有订单号，使用URL中的订单号
+	if req.OrderNo == "" {
+		req.OrderNo = orderNo
+	}
+
+	// 验证URL中的订单号与请求体中的订单号是否一致（如果请求体中有的话）
+	if req.OrderNo != orderNo {
+		h.logger.WithFields(map[string]interface{}{
+			"url_order_no":  orderNo,
+			"body_order_no": req.OrderNo,
+		}).Warn("Order number mismatch between URL and request body")
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_REQUEST", "Order number mismatch", nil))
+		return
+	}
+
+	err := h.paymentSvc.ProcessPaymentCallback(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.WithFields(map[string]interface{}{
+			"order_no":   req.OrderNo,
+			"payment_id": req.PaymentID,
+			"status":     req.Status,
+			"error":      err.Error(),
+		}).Error("Failed to process unified payment callback")
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse("CALLBACK_FAILED", "Failed to process payment callback", nil))
+		return
+	}
+
+	h.logger.WithFields(map[string]interface{}{
+		"order_no":   req.OrderNo,
+		"payment_id": req.PaymentID,
+		"status":     req.Status,
+	}).Info("Unified payment callback processed successfully")
+
+	c.JSON(http.StatusOK, dto.SuccessResponse(nil, "Payment callback processed successfully"))
+}
+
+// ProcessPaymentCallback 处理支付回调（兼容旧格式）
 // @Summary 处理支付回调
 // @Description 处理第三方支付的回调通知
 // @Tags 支付

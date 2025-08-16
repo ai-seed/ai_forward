@@ -130,3 +130,8 @@ func (f *RepositoryFactory) GiftRuleRepository() repositories.GiftRuleRepository
 func (f *RepositoryFactory) PaymentMethodRepository() repositories.PaymentMethodRepository {
 	return NewPaymentMethodRepositoryGorm(f.gormDB, f.cache)
 }
+
+// PaymentProviderRepository 获取支付服务商仓储
+func (f *RepositoryFactory) PaymentProviderRepository() repositories.PaymentProviderRepository {
+	return NewPaymentProviderRepositoryGorm(f.gormDB, f.cache)
+}
